@@ -6,6 +6,7 @@ using System.Net.Security;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -29,7 +30,7 @@ namespace Sonarr.Http.Authentication
         private static readonly Regex CookieNameRegex =
             new Regex(@"[^a-z0-9]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        private static readonly object BackchannelHttpHandlerLock = new object();
+        private static readonly Lock BackchannelHttpHandlerLock = new();
 
         private static SocketsHttpHandler _backchannelHttpHandler;
 
@@ -206,11 +207,6 @@ namespace Sonarr.Http.Authentication
 
         private static SocketsHttpHandler GetBackchannelHttpHandler(ICertificateValidationService certificateValidationService)
         {
-            if (_backchannelHttpHandler != null)
-            {
-                return _backchannelHttpHandler;
-            }
-
             lock (BackchannelHttpHandlerLock)
             {
                 return _backchannelHttpHandler ??= new SocketsHttpHandler

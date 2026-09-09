@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Configuration;
 
@@ -29,7 +28,7 @@ namespace NzbDrone.Core.Authentication
 
         public static string[] GetOidcScopes(string scopes)
         {
-            return scopes?.Split(new[] { ' ', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? Array.Empty<string>();
+            return scopes?.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
         }
 
         public static AuthenticationType EffectiveAuthenticationMethod(this IConfigFileProvider configFileProvider)
