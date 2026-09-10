@@ -8,6 +8,7 @@ using NzbDrone.Core.Datastore.SpacetimeDb;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.ImportLists;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Profiles.Delay;
 using NzbDrone.Core.Profiles.Releases;
@@ -31,12 +32,14 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
     [Explicit("Requires a live SpacetimeDB server - see class remarks")]
     public class SpacetimeTagRepositoryFixture : CoreTest<TagService>
     {
+        private ISpacetimeDbConnection _connection;
         private SpacetimeTagRepository _repo;
 
         [SetUp]
         public void Setup()
         {
-            _repo = new SpacetimeTagRepository("http://127.0.0.1:3000", "sonarr-spacetime-dev");
+            _connection = new SpacetimeDbConnection("http://127.0.0.1:3000", "sonarr-spacetime-dev");
+            _repo = new SpacetimeTagRepository(_connection, Mocker.GetMock<IEventAggregator>().Object);
             Mocker.SetConstant<ITagRepository>(_repo);
 
             // TagService.Delete() calls Details(), which fans out to every other tag-aware
@@ -55,7 +58,7 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
         [TearDown]
         public void TearDown()
         {
-            _repo?.Dispose();
+            (_connection as IDisposable)?.Dispose();
         }
 
         [Test]

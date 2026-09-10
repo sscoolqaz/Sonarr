@@ -27,6 +27,7 @@ namespace SpacetimeDB.Types
     {
         public RemoteTables(DbConnection conn)
         {
+            AddTable(RootFolder = new(conn));
             AddTable(Tag = new(conn));
         }
     }
@@ -524,6 +525,7 @@ namespace SpacetimeDB.Types
 
         internal static string[] AllTablesSqlQueries() => new string[]
         {
+            new QueryBuilder().From.RootFolder().ToSql(),
             new QueryBuilder().From.Tag().ToSql(),
         }
         ;
@@ -531,6 +533,7 @@ namespace SpacetimeDB.Types
 
     public sealed class From
     {
+        public global::SpacetimeDB.Table<RootFolder, RootFolderCols, RootFolderIxCols> RootFolder() => new("root_folder", new RootFolderCols("root_folder"), new RootFolderIxCols("root_folder"));
         public global::SpacetimeDB.Table<Tag, TagCols, TagIxCols> Tag() => new("tag", new TagCols("tag"), new TagIxCols("tag"));
     }
 
@@ -613,8 +616,11 @@ namespace SpacetimeDB.Types
             var eventContext = (ReducerEventContext)context;
             return reducer switch
             {
+                Reducer.DeleteRootFolder args => Reducers.InvokeDeleteRootFolder(eventContext, args),
                 Reducer.DeleteTag args => Reducers.InvokeDeleteTag(eventContext, args),
+                Reducer.InsertRootFolder args => Reducers.InvokeInsertRootFolder(eventContext, args),
                 Reducer.InsertTag args => Reducers.InvokeInsertTag(eventContext, args),
+                Reducer.UpdateRootFolder args => Reducers.InvokeUpdateRootFolder(eventContext, args),
                 Reducer.UpdateTag args => Reducers.InvokeUpdateTag(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };

@@ -1,23 +1,25 @@
 using DryIoc;
+using NzbDrone.Core.RootFolders;
 using NzbDrone.Core.Tags;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
 {
     /// <summary>
-    /// Phase 2: opt-in override that swaps the normal SQL-backed ITagRepository for the
-    /// SpacetimeDB-backed one, gated behind config so the rest of the app (all other
-    /// repositories, still SQLite/Postgres-backed) is unaffected unless explicitly enabled.
-    /// This is intentionally narrow - proving the container topology and end-to-end wiring
-    /// for one entity, not a real backend switch (that's Phase 3+).
+    /// Opt-in override that swaps a growing set of SQL-backed repositories for their
+    /// SpacetimeDB-backed equivalents, gated behind config so the rest of the app is unaffected
+    /// unless explicitly enabled. Phase 4 adds one entity at a time to AddSpacetimeDbRepositories
+    /// as each is ported - everything not yet listed here still uses the normal SQLite path.
     /// </summary>
     public static class CompositionExtensions
     {
-        public static IContainer AddSpacetimeDbTagRepository(this IContainer container, string host, string database)
+        public static IContainer AddSpacetimeDbRepositories(this IContainer container, string host, string database)
         {
-            container.RegisterDelegate<ITagRepository>(
-                _ => new SpacetimeTagRepository(host, database),
-                Reuse.Singleton,
+            container.RegisterInstance<ISpacetimeDbConnection>(
+                new SpacetimeDbConnection(host, database),
                 ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            container.Register<ITagRepository, SpacetimeTagRepository>(Reuse.Singleton, ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.Register<IRootFolderRepository, SpacetimeRootFolderRepository>(Reuse.Singleton, ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
             return container;
         }

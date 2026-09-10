@@ -43,7 +43,7 @@ services:
     depends_on:
       - spacetimedb
     environment:
-      - SONARR__SPACETIMEDB__TAGREPOSITORYENABLED=true
+      - SONARR__SPACETIMEDB__ENABLED=true
       - SONARR__SPACETIMEDB__HOST=http://spacetimedb:3000
       - SONARR__SPACETIMEDB__DATABASE=sonarr-spacetime-dev
     ports:

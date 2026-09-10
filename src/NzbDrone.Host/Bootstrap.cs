@@ -182,13 +182,13 @@ namespace NzbDrone.Host
                         c.AddDummyLogDatabase();
                     }
 
-                    if (config.GetValue("Sonarr:SpacetimeDb:TagRepositoryEnabled", false))
+                    if (config.GetValue("Sonarr:SpacetimeDb:Enabled", false))
                     {
                         var spacetimeDbHost = config.GetValue("Sonarr:SpacetimeDb:Host", "http://127.0.0.1:3000");
                         var spacetimeDbDatabase = config.GetValue("Sonarr:SpacetimeDb:Database", "sonarr-spacetime-dev");
 
-                        Logger.Info("SpacetimeDB Tag repository enabled: {0} / {1}", spacetimeDbHost, spacetimeDbDatabase);
-                        c.AddSpacetimeDbTagRepository(spacetimeDbHost, spacetimeDbDatabase);
+                        Logger.Info("SpacetimeDB repositories enabled: {0} / {1}", spacetimeDbHost, spacetimeDbDatabase);
+                        c.AddSpacetimeDbRepositories(spacetimeDbHost, spacetimeDbDatabase);
                     }
                 })
                 .ConfigureServices(services =>
