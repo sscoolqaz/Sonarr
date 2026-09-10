@@ -25,6 +25,7 @@ using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Common.Options;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore.Extensions;
+using NzbDrone.Core.Datastore.SpacetimeDb;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 using PostgresOptions = NzbDrone.Core.Datastore.PostgresOptions;
@@ -179,6 +180,15 @@ namespace NzbDrone.Host
                     else
                     {
                         c.AddDummyLogDatabase();
+                    }
+
+                    if (config.GetValue("Sonarr:SpacetimeDb:TagRepositoryEnabled", false))
+                    {
+                        var spacetimeDbHost = config.GetValue("Sonarr:SpacetimeDb:Host", "http://127.0.0.1:3000");
+                        var spacetimeDbDatabase = config.GetValue("Sonarr:SpacetimeDb:Database", "sonarr-spacetime-dev");
+
+                        Logger.Info("SpacetimeDB Tag repository enabled: {0} / {1}", spacetimeDbHost, spacetimeDbDatabase);
+                        c.AddSpacetimeDbTagRepository(spacetimeDbHost, spacetimeDbDatabase);
                     }
                 })
                 .ConfigureServices(services =>

@@ -1,0 +1,30 @@
+# Phase 2 dev container: backend-only build (no frontend/UI bundle) - this proves the
+# containerized .NET backend can run with the SpacetimeDB-backed ITagRepository wired in via
+# DI and reachable over its real REST API, which is what Phase 2 needs to validate. Building
+# the full React/TypeScript frontend is deferred to Phase 4's production containerization -
+# it's a separate, well-understood toolchain step that doesn't change anything about whether
+# the SpacetimeDB wiring works, so it isn't worth the extra build time here.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /build
+# .editorconfig lives at the repo root, one level above src/, and downgrades a large set of
+# StyleCop rules that are otherwise build errors. Roslyn resolves .editorconfig by walking up
+# from each source file, so it must be copied into the same relative position - copying only
+# src/ (without its parent) turns every one of those into a real build failure across the
+# entire pre-existing codebase, not just this port's changes.
+COPY .editorconfig .
+COPY Logo/ Logo/
+COPY src/ src/
+WORKDIR /build/src
+# Not `dotnet publish` on the console project alone - NzbDrone.Mono/NzbDrone.Windows are
+# loaded dynamically by AssemblyLoader based on OS detection, not referenced statically, so a
+# project-scoped publish leaves them out. `dotnet build` already places every assembly
+# (platform variants included) together in _output/net10.0/, which is what the app expects to
+# find at runtime - use that directly instead.
+RUN dotnet build Sonarr.sln -c Debug
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+COPY --from=build /build/_output/net10.0/ .
+RUN mkdir -p /config
+EXPOSE 8989
+ENTRYPOINT ["dotnet", "Sonarr.dll", "-nobrowser", "-data=/config"]

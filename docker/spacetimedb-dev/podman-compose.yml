@@ -1,14 +1,19 @@
 version: "3.8"
 
-# Local development SpacetimeDB server for the Sonarr-on-SpacetimeDB port. Not the
-# production two-service topology (that's Phase 2/4 work) - this is just a standalone
-# server for iterating on Sonarr.SpacetimeModule and running the Phase 1+ spike tests
-# against a real podman-hosted instance.
+# Phase 2 dev topology: two services on a shared podman network with hostname-based DNS
+# resolution (not host networking), mirroring the conventions of the existing Arr Stack pod.
+# This is a dev/proof pod, not the production topology (that's Phase 4) - it exists to prove
+# the containerized Sonarr backend can reach a separate containerized SpacetimeDB service and
+# round-trip the Tag flow end to end.
 #
-# JWT signing keys are mounted from ./keys so they survive container restarts - without
+# JWT signing keys are mounted from ./keys so they survive spacetimedb restarts - without
 # this, every restart regenerates ephemeral keys and silently invalidates every
-# previously-issued spacetime CLI identity token (manifests client-side as a "broken
-# pipe" error on the next publish/call, not a clean auth error - see plan risk register).
+# previously-issued identity token (manifests as a "broken pipe" error, not a clean auth
+# error - see the plan's Phase 1 risk register for how this was found and confirmed fixed).
+#
+# The module itself is NOT auto-published on container start - see publish-module.sh. This
+# host runs rootless podman with no unqualified-image-name resolution configured, so every
+# image reference below is fully qualified.
 services:
   spacetimedb:
     image: docker.io/clockworklabs/spacetime:latest
@@ -27,6 +32,24 @@ services:
     volumes:
       - ./data:/stdb-data
       - ./keys:/stdb-keys
+    networks:
+      - sonarr-spacetimedb-dev-net
+
+  sonarr:
+    build:
+      context: ../..
+      dockerfile: docker/spacetimedb-dev/Dockerfile.sonarr
+    container_name: sonarr-spacetimedb-dev-app
+    depends_on:
+      - spacetimedb
+    environment:
+      - SONARR__SPACETIMEDB__TAGREPOSITORYENABLED=true
+      - SONARR__SPACETIMEDB__HOST=http://spacetimedb:3000
+      - SONARR__SPACETIMEDB__DATABASE=sonarr-spacetime-dev
+    ports:
+      - "8989:8989"
+    volumes:
+      - ./sonarr-config:/config
     networks:
       - sonarr-spacetimedb-dev-net
 

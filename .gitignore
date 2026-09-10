@@ -173,6 +173,7 @@ src/.idea/
 # keypair (private key!) and data/ holds the actual database contents. Neither belongs in git.
 docker/spacetimedb-dev/data/
 docker/spacetimedb-dev/keys/
+docker/spacetimedb-dev/sonarr-config/
 
 # SpacetimeDB module build output (mirrors the src/**/[Bb]in and [Oo]bj patterns above, which
 # don't match since this project lives outside src/ - see plan risk register for why)
