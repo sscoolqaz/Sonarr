@@ -1,0 +1,35 @@
+version: "3.8"
+
+# Local development SpacetimeDB server for the Sonarr-on-SpacetimeDB port. Not the
+# production two-service topology (that's Phase 2/4 work) - this is just a standalone
+# server for iterating on Sonarr.SpacetimeModule and running the Phase 1+ spike tests
+# against a real podman-hosted instance.
+#
+# JWT signing keys are mounted from ./keys so they survive container restarts - without
+# this, every restart regenerates ephemeral keys and silently invalidates every
+# previously-issued spacetime CLI identity token (manifests client-side as a "broken
+# pipe" error on the next publish/call, not a clean auth error - see plan risk register).
+services:
+  spacetimedb:
+    image: docker.io/clockworklabs/spacetime:latest
+    container_name: sonarr-spacetimedb-dev
+    command:
+      - start
+      - --data-dir
+      - /stdb-data
+      - --jwt-pub-key-path
+      - /stdb-keys/id_ecdsa.pub
+      - --jwt-priv-key-path
+      - /stdb-keys/id_ecdsa
+      - --non-interactive
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/stdb-data
+      - ./keys:/stdb-keys
+    networks:
+      - sonarr-spacetimedb-dev-net
+
+networks:
+  sonarr-spacetimedb-dev-net:
+    driver: bridge

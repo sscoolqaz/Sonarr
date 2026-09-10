@@ -168,3 +168,13 @@ src/.idea/
 
 # SpacetimeDB-port dev scratch space (throwaway spikes, local toolchain tests) - not part of the port itself
 .dev-scratch/
+
+# SpacetimeDB dev server runtime state - the keys/ dir holds an auto-generated JWT signing
+# keypair (private key!) and data/ holds the actual database contents. Neither belongs in git.
+docker/spacetimedb-dev/data/
+docker/spacetimedb-dev/keys/
+
+# SpacetimeDB module build output (mirrors the src/**/[Bb]in and [Oo]bj patterns above, which
+# don't match since this project lives outside src/ - see plan risk register for why)
+Sonarr.SpacetimeModule/spacetimedb/bin/
+Sonarr.SpacetimeModule/spacetimedb/obj/
