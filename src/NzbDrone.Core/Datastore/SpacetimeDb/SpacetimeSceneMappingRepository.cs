@@ -36,33 +36,33 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override int GetRowId(StdbSceneMapping row) => row.Id;
 
         protected override void InvokeInsertReducer(SceneMapping model) => Conn.Connection.Reducers.InsertSceneMapping(
-            model.MappingId,
-            model.Title,
-            model.ParseTerm,
-            model.SearchTerm,
+            model.MappingId ?? string.Empty,
+            model.Title ?? string.Empty,
+            model.ParseTerm ?? string.Empty,
+            model.SearchTerm ?? string.Empty,
             model.TvdbId,
             model.SeasonNumber,
             model.SceneSeasonNumber,
-            model.SceneOrigin,
+            model.SceneOrigin ?? string.Empty,
             (int?)model.SearchMode,
-            model.Comment,
-            model.FilterRegex,
-            model.Type);
+            model.Comment ?? string.Empty,
+            model.FilterRegex ?? string.Empty,
+            model.Type ?? string.Empty);
 
         protected override void InvokeUpdateReducer(SceneMapping model) => Conn.Connection.Reducers.UpdateSceneMapping(
             model.Id,
-            model.MappingId,
-            model.Title,
-            model.ParseTerm,
-            model.SearchTerm,
+            model.MappingId ?? string.Empty,
+            model.Title ?? string.Empty,
+            model.ParseTerm ?? string.Empty,
+            model.SearchTerm ?? string.Empty,
             model.TvdbId,
             model.SeasonNumber,
             model.SceneSeasonNumber,
-            model.SceneOrigin,
+            model.SceneOrigin ?? string.Empty,
             (int?)model.SearchMode,
-            model.Comment,
-            model.FilterRegex,
-            model.Type);
+            model.Comment ?? string.Empty,
+            model.FilterRegex ?? string.Empty,
+            model.Type ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteSceneMapping(id);
 

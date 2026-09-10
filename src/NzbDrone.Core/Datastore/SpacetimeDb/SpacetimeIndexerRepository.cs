@@ -1,0 +1,43 @@
+using System.Linq;
+using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Messaging.Events;
+using StdbIndexerDefinition = SpacetimeDB.Types.IndexerDefinition;
+
+namespace NzbDrone.Core.Datastore.SpacetimeDb
+{
+    public class SpacetimeIndexerRepository : SpacetimeProviderRepository<IndexerDefinition, StdbIndexerDefinition>, IIndexerRepository
+    {
+        public SpacetimeIndexerRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
+            : base(connection, eventAggregator)
+        {
+        }
+
+        protected override StdbIndexerDefinition[] RemoteQuery(string whereClauseWithoutPrefix) =>
+            Conn.Connection.Db.IndexerDefinition.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+
+        protected override IndexerDefinition ToModel(StdbIndexerDefinition row) => new IndexerDefinition
+        {
+            Id = row.Id,
+            Name = row.Name,
+            Implementation = row.Implementation,
+            ConfigContract = row.ConfigContract,
+            Settings = DeserializeSettings(row.ConfigContract, row.SettingsJson),
+            Enable = row.Enable,
+            Tags = DeserializeTags(row.TagsJson),
+            Message = DeserializeMessage(row.MessageJson)
+        };
+
+        protected override int GetRowId(StdbIndexerDefinition row) => row.Id;
+
+        protected override void InvokeInsertReducer(IndexerDefinition model) => Conn.Connection.Reducers.InsertIndexerDefinition(
+            model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
+
+        protected override void InvokeUpdateReducer(IndexerDefinition model) => Conn.Connection.Reducers.UpdateIndexerDefinition(
+            model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
+
+        protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteIndexerDefinition(id);
+
+        public IndexerDefinition FindByName(string name) =>
+            RemoteQuery($"WHERE Name = '{EscapeSqlString(name)}'").Select(ToModel).SingleOrDefault();
+    }
+}

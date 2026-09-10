@@ -33,7 +33,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override int GetRowId(StdbReleaseProfile row) => row.Id;
 
         protected override void InvokeInsertReducer(ReleaseProfile model) => Conn.Connection.Reducers.InsertReleaseProfile(
-            model.Name,
+            model.Name ?? string.Empty,
             model.Enabled,
             SpacetimeJson.Serialize(model.Required),
             SpacetimeJson.Serialize(model.Ignored),
@@ -46,7 +46,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeUpdateReducer(ReleaseProfile model) => Conn.Connection.Reducers.UpdateReleaseProfile(
             model.Id,
-            model.Name,
+            model.Name ?? string.Empty,
             model.Enabled,
             SpacetimeJson.Serialize(model.Required),
             SpacetimeJson.Serialize(model.Ignored),

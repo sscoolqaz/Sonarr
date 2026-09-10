@@ -20,10 +20,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override int GetRowId(StdbCustomFilter row) => row.Id;
 
         protected override void InvokeInsertReducer(CustomFilter model) =>
-            Conn.Connection.Reducers.InsertCustomFilter(model.Type, model.Label, model.Filters);
+            Conn.Connection.Reducers.InsertCustomFilter(model.Type ?? string.Empty, model.Label ?? string.Empty, model.Filters ?? string.Empty);
 
         protected override void InvokeUpdateReducer(CustomFilter model) =>
-            Conn.Connection.Reducers.UpdateCustomFilter(model.Id, model.Type, model.Label, model.Filters);
+            Conn.Connection.Reducers.UpdateCustomFilter(model.Id, model.Type ?? string.Empty, model.Label ?? string.Empty, model.Filters ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteCustomFilter(id);
     }

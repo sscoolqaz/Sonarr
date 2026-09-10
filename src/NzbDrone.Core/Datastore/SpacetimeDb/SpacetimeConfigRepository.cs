@@ -19,9 +19,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override int GetRowId(StdbConfig row) => row.Id;
 
-        protected override void InvokeInsertReducer(Config model) => Conn.Connection.Reducers.InsertConfig(model.Key, model.Value);
+        protected override void InvokeInsertReducer(Config model) => Conn.Connection.Reducers.InsertConfig(model.Key ?? string.Empty, model.Value ?? string.Empty);
 
-        protected override void InvokeUpdateReducer(Config model) => Conn.Connection.Reducers.UpdateConfig(model.Id, model.Key, model.Value);
+        protected override void InvokeUpdateReducer(Config model) => Conn.Connection.Reducers.UpdateConfig(model.Id, model.Key ?? string.Empty, model.Value ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteConfig(id);
 

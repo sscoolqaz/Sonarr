@@ -26,10 +26,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override int GetRowId(StdbQualityDefinition row) => row.Id;
 
         protected override void InvokeInsertReducer(QualityDefinition model) =>
-            Conn.Connection.Reducers.InsertQualityDefinition(SpacetimeJson.Serialize(model.Quality), model.Title);
+            Conn.Connection.Reducers.InsertQualityDefinition(SpacetimeJson.Serialize(model.Quality), model.Title ?? string.Empty);
 
         protected override void InvokeUpdateReducer(QualityDefinition model) =>
-            Conn.Connection.Reducers.UpdateQualityDefinition(model.Id, SpacetimeJson.Serialize(model.Quality), model.Title);
+            Conn.Connection.Reducers.UpdateQualityDefinition(model.Id, SpacetimeJson.Serialize(model.Quality), model.Title ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteQualityDefinition(id);
     }

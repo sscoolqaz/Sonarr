@@ -29,7 +29,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override int GetRowId(StdbScheduledTask row) => row.Id;
 
         protected override void InvokeInsertReducer(ScheduledTask model) => Conn.Connection.Reducers.InsertScheduledTask(
-            model.TypeName,
+            model.TypeName ?? string.Empty,
             model.Interval,
             SpacetimeDateTime.ToTimestamp(model.LastExecution),
             (int)model.Priority,
@@ -37,7 +37,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeUpdateReducer(ScheduledTask model) => Conn.Connection.Reducers.UpdateScheduledTask(
             model.Id,
-            model.TypeName,
+            model.TypeName ?? string.Empty,
             model.Interval,
             SpacetimeDateTime.ToTimestamp(model.LastExecution),
             (int)model.Priority,

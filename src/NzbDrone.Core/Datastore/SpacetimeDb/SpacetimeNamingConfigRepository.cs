@@ -36,28 +36,28 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.RenameEpisodes,
             model.ReplaceIllegalCharacters,
             (int)model.ColonReplacementFormat,
-            model.CustomColonReplacementFormat,
+            model.CustomColonReplacementFormat ?? string.Empty,
             (int)model.MultiEpisodeStyle,
-            model.StandardEpisodeFormat,
-            model.DailyEpisodeFormat,
-            model.AnimeEpisodeFormat,
-            model.SeriesFolderFormat,
-            model.SeasonFolderFormat,
-            model.SpecialsFolderFormat);
+            model.StandardEpisodeFormat ?? string.Empty,
+            model.DailyEpisodeFormat ?? string.Empty,
+            model.AnimeEpisodeFormat ?? string.Empty,
+            model.SeriesFolderFormat ?? string.Empty,
+            model.SeasonFolderFormat ?? string.Empty,
+            model.SpecialsFolderFormat ?? string.Empty);
 
         protected override void InvokeUpdateReducer(NamingConfig model) => Conn.Connection.Reducers.UpdateNamingConfig(
             model.Id,
             model.RenameEpisodes,
             model.ReplaceIllegalCharacters,
             (int)model.ColonReplacementFormat,
-            model.CustomColonReplacementFormat,
+            model.CustomColonReplacementFormat ?? string.Empty,
             (int)model.MultiEpisodeStyle,
-            model.StandardEpisodeFormat,
-            model.DailyEpisodeFormat,
-            model.AnimeEpisodeFormat,
-            model.SeriesFolderFormat,
-            model.SeasonFolderFormat,
-            model.SpecialsFolderFormat);
+            model.StandardEpisodeFormat ?? string.Empty,
+            model.DailyEpisodeFormat ?? string.Empty,
+            model.AnimeEpisodeFormat ?? string.Empty,
+            model.SeriesFolderFormat ?? string.Empty,
+            model.SeasonFolderFormat ?? string.Empty,
+            model.SpecialsFolderFormat ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteNamingConfig(id);
     }

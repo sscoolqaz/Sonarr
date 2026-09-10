@@ -29,10 +29,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override int GetRowId(StdbUser row) => row.Id;
 
         protected override void InvokeInsertReducer(User model) =>
-            Conn.Connection.Reducers.InsertUser(model.Identifier.ToString(), model.Username, model.Password, model.Salt, model.Iterations);
+            Conn.Connection.Reducers.InsertUser(model.Identifier.ToString(), model.Username ?? string.Empty, model.Password ?? string.Empty, model.Salt ?? string.Empty, model.Iterations);
 
         protected override void InvokeUpdateReducer(User model) =>
-            Conn.Connection.Reducers.UpdateUser(model.Id, model.Identifier.ToString(), model.Username, model.Password, model.Salt, model.Iterations);
+            Conn.Connection.Reducers.UpdateUser(model.Id, model.Identifier.ToString(), model.Username ?? string.Empty, model.Password ?? string.Empty, model.Salt ?? string.Empty, model.Iterations);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteUser(id);
 
