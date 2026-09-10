@@ -165,3 +165,6 @@ src/.idea/
 
 # Ignore Jetbrains IntelliJ Workspace Directories
 .idea/
+
+# SpacetimeDB-port dev scratch space (throwaway spikes, local toolchain tests) - not part of the port itself
+.dev-scratch/
