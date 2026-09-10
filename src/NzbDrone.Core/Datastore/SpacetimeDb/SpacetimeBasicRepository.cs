@@ -180,12 +180,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 throw new InvalidOperationException("Attempted to update model without ID");
             }
 
-            lock (_writeLock)
+            // InvokeUpdateReducer always replaces the whole row (SpacetimeDB has no equivalent
+            // of a SQL partial-column UPDATE via a simple parameterized reducer) - unlike
+            // SQL's SetFields, which only touches the named columns. model here is typically
+            // only partially populated by the caller (see e.g. ScheduledTask.SetLastExecutionTime),
+            // so merge the named properties onto the current full row before replacing it,
+            // rather than clobbering every other column with its default value.
+            var current = Get(model.Id);
+
+            foreach (var property in properties.Select(p => p.GetMemberName()))
             {
-                InvokeUpdateReducer(model);
+                property.SetValue(current, property.GetValue(model));
             }
 
-            PublishModelEvent(model, ModelAction.Updated);
+            lock (_writeLock)
+            {
+                InvokeUpdateReducer(current);
+            }
+
+            PublishModelEvent(current, ModelAction.Updated);
         }
 
         public void SetFields(IList<TModel> models, params Expression<Func<TModel, object>>[] properties)

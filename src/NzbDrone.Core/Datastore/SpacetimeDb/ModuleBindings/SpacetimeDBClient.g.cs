@@ -27,8 +27,20 @@ namespace SpacetimeDB.Types
     {
         public RemoteTables(DbConnection conn)
         {
+            AddTable(Config = new(conn));
+            AddTable(CustomFilter = new(conn));
+            AddTable(DelayProfile = new(conn));
+            AddTable(ImportListExclusion = new(conn));
+            AddTable(NamingConfig = new(conn));
+            AddTable(QualityDefinition = new(conn));
+            AddTable(QualityProfileQualityRank = new(conn));
+            AddTable(ReleaseProfile = new(conn));
+            AddTable(RemotePathMapping = new(conn));
             AddTable(RootFolder = new(conn));
+            AddTable(SceneMapping = new(conn));
+            AddTable(ScheduledTask = new(conn));
             AddTable(Tag = new(conn));
+            AddTable(User = new(conn));
         }
     }
 
@@ -525,16 +537,40 @@ namespace SpacetimeDB.Types
 
         internal static string[] AllTablesSqlQueries() => new string[]
         {
+            new QueryBuilder().From.Config().ToSql(),
+            new QueryBuilder().From.CustomFilter().ToSql(),
+            new QueryBuilder().From.DelayProfile().ToSql(),
+            new QueryBuilder().From.ImportListExclusion().ToSql(),
+            new QueryBuilder().From.NamingConfig().ToSql(),
+            new QueryBuilder().From.QualityDefinition().ToSql(),
+            new QueryBuilder().From.QualityProfileQualityRank().ToSql(),
+            new QueryBuilder().From.ReleaseProfile().ToSql(),
+            new QueryBuilder().From.RemotePathMapping().ToSql(),
             new QueryBuilder().From.RootFolder().ToSql(),
+            new QueryBuilder().From.SceneMapping().ToSql(),
+            new QueryBuilder().From.ScheduledTask().ToSql(),
             new QueryBuilder().From.Tag().ToSql(),
+            new QueryBuilder().From.User().ToSql(),
         }
         ;
     }
 
     public sealed class From
     {
+        public global::SpacetimeDB.Table<Config, ConfigCols, ConfigIxCols> Config() => new("config", new ConfigCols("config"), new ConfigIxCols("config"));
+        public global::SpacetimeDB.Table<CustomFilter, CustomFilterCols, CustomFilterIxCols> CustomFilter() => new("custom_filter", new CustomFilterCols("custom_filter"), new CustomFilterIxCols("custom_filter"));
+        public global::SpacetimeDB.Table<DelayProfile, DelayProfileCols, DelayProfileIxCols> DelayProfile() => new("delay_profile", new DelayProfileCols("delay_profile"), new DelayProfileIxCols("delay_profile"));
+        public global::SpacetimeDB.Table<ImportListExclusion, ImportListExclusionCols, ImportListExclusionIxCols> ImportListExclusion() => new("import_list_exclusion", new ImportListExclusionCols("import_list_exclusion"), new ImportListExclusionIxCols("import_list_exclusion"));
+        public global::SpacetimeDB.Table<NamingConfig, NamingConfigCols, NamingConfigIxCols> NamingConfig() => new("naming_config", new NamingConfigCols("naming_config"), new NamingConfigIxCols("naming_config"));
+        public global::SpacetimeDB.Table<QualityDefinition, QualityDefinitionCols, QualityDefinitionIxCols> QualityDefinition() => new("quality_definition", new QualityDefinitionCols("quality_definition"), new QualityDefinitionIxCols("quality_definition"));
+        public global::SpacetimeDB.Table<QualityProfileQualityRank, QualityProfileQualityRankCols, QualityProfileQualityRankIxCols> QualityProfileQualityRank() => new("quality_profile_quality_rank", new QualityProfileQualityRankCols("quality_profile_quality_rank"), new QualityProfileQualityRankIxCols("quality_profile_quality_rank"));
+        public global::SpacetimeDB.Table<ReleaseProfile, ReleaseProfileCols, ReleaseProfileIxCols> ReleaseProfile() => new("release_profile", new ReleaseProfileCols("release_profile"), new ReleaseProfileIxCols("release_profile"));
+        public global::SpacetimeDB.Table<RemotePathMapping, RemotePathMappingCols, RemotePathMappingIxCols> RemotePathMapping() => new("remote_path_mapping", new RemotePathMappingCols("remote_path_mapping"), new RemotePathMappingIxCols("remote_path_mapping"));
         public global::SpacetimeDB.Table<RootFolder, RootFolderCols, RootFolderIxCols> RootFolder() => new("root_folder", new RootFolderCols("root_folder"), new RootFolderIxCols("root_folder"));
+        public global::SpacetimeDB.Table<SceneMapping, SceneMappingCols, SceneMappingIxCols> SceneMapping() => new("scene_mapping", new SceneMappingCols("scene_mapping"), new SceneMappingIxCols("scene_mapping"));
+        public global::SpacetimeDB.Table<ScheduledTask, ScheduledTaskCols, ScheduledTaskIxCols> ScheduledTask() => new("scheduled_task", new ScheduledTaskCols("scheduled_task"), new ScheduledTaskIxCols("scheduled_task"));
         public global::SpacetimeDB.Table<Tag, TagCols, TagIxCols> Tag() => new("tag", new TagCols("tag"), new TagIxCols("tag"));
+        public global::SpacetimeDB.Table<User, UserCols, UserIxCols> User() => new("user", new UserCols("user"), new UserIxCols("user"));
     }
 
     public sealed class TypedSubscriptionBuilder
@@ -616,12 +652,49 @@ namespace SpacetimeDB.Types
             var eventContext = (ReducerEventContext)context;
             return reducer switch
             {
+                Reducer.DeleteConfig args => Reducers.InvokeDeleteConfig(eventContext, args),
+                Reducer.DeleteCustomFilter args => Reducers.InvokeDeleteCustomFilter(eventContext, args),
+                Reducer.DeleteDelayProfile args => Reducers.InvokeDeleteDelayProfile(eventContext, args),
+                Reducer.DeleteImportListExclusion args => Reducers.InvokeDeleteImportListExclusion(eventContext, args),
+                Reducer.DeleteNamingConfig args => Reducers.InvokeDeleteNamingConfig(eventContext, args),
+                Reducer.DeleteQualityDefinition args => Reducers.InvokeDeleteQualityDefinition(eventContext, args),
+                Reducer.DeleteQualityProfileQualityRank args => Reducers.InvokeDeleteQualityProfileQualityRank(eventContext, args),
+                Reducer.DeleteReleaseProfile args => Reducers.InvokeDeleteReleaseProfile(eventContext, args),
+                Reducer.DeleteRemotePathMapping args => Reducers.InvokeDeleteRemotePathMapping(eventContext, args),
                 Reducer.DeleteRootFolder args => Reducers.InvokeDeleteRootFolder(eventContext, args),
+                Reducer.DeleteSceneMapping args => Reducers.InvokeDeleteSceneMapping(eventContext, args),
+                Reducer.DeleteScheduledTask args => Reducers.InvokeDeleteScheduledTask(eventContext, args),
                 Reducer.DeleteTag args => Reducers.InvokeDeleteTag(eventContext, args),
+                Reducer.DeleteUser args => Reducers.InvokeDeleteUser(eventContext, args),
+                Reducer.InsertConfig args => Reducers.InvokeInsertConfig(eventContext, args),
+                Reducer.InsertCustomFilter args => Reducers.InvokeInsertCustomFilter(eventContext, args),
+                Reducer.InsertDelayProfile args => Reducers.InvokeInsertDelayProfile(eventContext, args),
+                Reducer.InsertImportListExclusion args => Reducers.InvokeInsertImportListExclusion(eventContext, args),
+                Reducer.InsertNamingConfig args => Reducers.InvokeInsertNamingConfig(eventContext, args),
+                Reducer.InsertQualityDefinition args => Reducers.InvokeInsertQualityDefinition(eventContext, args),
+                Reducer.InsertQualityProfileQualityRank args => Reducers.InvokeInsertQualityProfileQualityRank(eventContext, args),
+                Reducer.InsertReleaseProfile args => Reducers.InvokeInsertReleaseProfile(eventContext, args),
+                Reducer.InsertRemotePathMapping args => Reducers.InvokeInsertRemotePathMapping(eventContext, args),
                 Reducer.InsertRootFolder args => Reducers.InvokeInsertRootFolder(eventContext, args),
+                Reducer.InsertSceneMapping args => Reducers.InvokeInsertSceneMapping(eventContext, args),
+                Reducer.InsertScheduledTask args => Reducers.InvokeInsertScheduledTask(eventContext, args),
                 Reducer.InsertTag args => Reducers.InvokeInsertTag(eventContext, args),
+                Reducer.InsertUser args => Reducers.InvokeInsertUser(eventContext, args),
+                Reducer.ReplaceQualityProfileQualityRanks args => Reducers.InvokeReplaceQualityProfileQualityRanks(eventContext, args),
+                Reducer.UpdateConfig args => Reducers.InvokeUpdateConfig(eventContext, args),
+                Reducer.UpdateCustomFilter args => Reducers.InvokeUpdateCustomFilter(eventContext, args),
+                Reducer.UpdateDelayProfile args => Reducers.InvokeUpdateDelayProfile(eventContext, args),
+                Reducer.UpdateImportListExclusion args => Reducers.InvokeUpdateImportListExclusion(eventContext, args),
+                Reducer.UpdateNamingConfig args => Reducers.InvokeUpdateNamingConfig(eventContext, args),
+                Reducer.UpdateQualityDefinition args => Reducers.InvokeUpdateQualityDefinition(eventContext, args),
+                Reducer.UpdateQualityProfileQualityRank args => Reducers.InvokeUpdateQualityProfileQualityRank(eventContext, args),
+                Reducer.UpdateReleaseProfile args => Reducers.InvokeUpdateReleaseProfile(eventContext, args),
+                Reducer.UpdateRemotePathMapping args => Reducers.InvokeUpdateRemotePathMapping(eventContext, args),
                 Reducer.UpdateRootFolder args => Reducers.InvokeUpdateRootFolder(eventContext, args),
+                Reducer.UpdateSceneMapping args => Reducers.InvokeUpdateSceneMapping(eventContext, args),
+                Reducer.UpdateScheduledTask args => Reducers.InvokeUpdateScheduledTask(eventContext, args),
                 Reducer.UpdateTag args => Reducers.InvokeUpdateTag(eventContext, args),
+                Reducer.UpdateUser args => Reducers.InvokeUpdateUser(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };
         }

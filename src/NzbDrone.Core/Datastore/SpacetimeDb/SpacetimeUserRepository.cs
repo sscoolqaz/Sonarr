@@ -1,0 +1,45 @@
+using System;
+using System.Linq;
+using NzbDrone.Core.Authentication;
+using NzbDrone.Core.Messaging.Events;
+using StdbUser = SpacetimeDB.Types.User;
+
+namespace NzbDrone.Core.Datastore.SpacetimeDb
+{
+    public class SpacetimeUserRepository : SpacetimeBasicRepository<User, StdbUser>, IUserRepository
+    {
+        public SpacetimeUserRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
+            : base(connection, eventAggregator)
+        {
+        }
+
+        protected override StdbUser[] RemoteQuery(string whereClauseWithoutPrefix) =>
+            Conn.Connection.Db.User.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+
+        protected override User ToModel(StdbUser row) => new User
+        {
+            Id = row.Id,
+            Identifier = Guid.Parse(row.Identifier),
+            Username = row.Username,
+            Password = row.Password,
+            Salt = row.Salt,
+            Iterations = row.Iterations
+        };
+
+        protected override int GetRowId(StdbUser row) => row.Id;
+
+        protected override void InvokeInsertReducer(User model) =>
+            Conn.Connection.Reducers.InsertUser(model.Identifier.ToString(), model.Username, model.Password, model.Salt, model.Iterations);
+
+        protected override void InvokeUpdateReducer(User model) =>
+            Conn.Connection.Reducers.UpdateUser(model.Id, model.Identifier.ToString(), model.Username, model.Password, model.Salt, model.Iterations);
+
+        protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteUser(id);
+
+        public User FindUser(string username) =>
+            RemoteQuery($"WHERE Username = '{EscapeSqlString(username)}'").Select(ToModel).SingleOrDefault();
+
+        public User FindUser(Guid identifier) =>
+            RemoteQuery($"WHERE Identifier = '{identifier}'").Select(ToModel).SingleOrDefault();
+    }
+}
