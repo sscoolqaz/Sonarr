@@ -28,6 +28,7 @@ namespace SpacetimeDB.Types
         public RemoteTables(DbConnection conn)
         {
             AddTable(AutoTag = new(conn));
+            AddTable(Blocklist = new(conn));
             AddTable(Command = new(conn));
             AddTable(Config = new(conn));
             AddTable(CustomFilter = new(conn));
@@ -36,7 +37,9 @@ namespace SpacetimeDB.Types
             AddTable(DownloadClientDefinition = new(conn));
             AddTable(DownloadClientStatus = new(conn));
             AddTable(DownloadHistory = new(conn));
+            AddTable(Episode = new(conn));
             AddTable(EpisodeFile = new(conn));
+            AddTable(EpisodeHistory = new(conn));
             AddTable(ImportListDefinition = new(conn));
             AddTable(ImportListExclusion = new(conn));
             AddTable(ImportListItem = new(conn));
@@ -561,6 +564,7 @@ namespace SpacetimeDB.Types
         internal static string[] AllTablesSqlQueries() => new string[]
         {
             new QueryBuilder().From.AutoTag().ToSql(),
+            new QueryBuilder().From.Blocklist().ToSql(),
             new QueryBuilder().From.Command().ToSql(),
             new QueryBuilder().From.Config().ToSql(),
             new QueryBuilder().From.CustomFilter().ToSql(),
@@ -569,7 +573,9 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.DownloadClientDefinition().ToSql(),
             new QueryBuilder().From.DownloadClientStatus().ToSql(),
             new QueryBuilder().From.DownloadHistory().ToSql(),
+            new QueryBuilder().From.Episode().ToSql(),
             new QueryBuilder().From.EpisodeFile().ToSql(),
+            new QueryBuilder().From.EpisodeHistory().ToSql(),
             new QueryBuilder().From.ImportListDefinition().ToSql(),
             new QueryBuilder().From.ImportListExclusion().ToSql(),
             new QueryBuilder().From.ImportListItem().ToSql(),
@@ -604,6 +610,7 @@ namespace SpacetimeDB.Types
     public sealed class From
     {
         public global::SpacetimeDB.Table<AutoTag, AutoTagCols, AutoTagIxCols> AutoTag() => new("auto_tag", new AutoTagCols("auto_tag"), new AutoTagIxCols("auto_tag"));
+        public global::SpacetimeDB.Table<Blocklist, BlocklistCols, BlocklistIxCols> Blocklist() => new("blocklist", new BlocklistCols("blocklist"), new BlocklistIxCols("blocklist"));
         public global::SpacetimeDB.Table<CommandRow, CommandCols, CommandIxCols> Command() => new("command", new CommandCols("command"), new CommandIxCols("command"));
         public global::SpacetimeDB.Table<Config, ConfigCols, ConfigIxCols> Config() => new("config", new ConfigCols("config"), new ConfigIxCols("config"));
         public global::SpacetimeDB.Table<CustomFilter, CustomFilterCols, CustomFilterIxCols> CustomFilter() => new("custom_filter", new CustomFilterCols("custom_filter"), new CustomFilterIxCols("custom_filter"));
@@ -612,7 +619,9 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<DownloadClientDefinition, DownloadClientDefinitionCols, DownloadClientDefinitionIxCols> DownloadClientDefinition() => new("download_client_definition", new DownloadClientDefinitionCols("download_client_definition"), new DownloadClientDefinitionIxCols("download_client_definition"));
         public global::SpacetimeDB.Table<DownloadClientStatus, DownloadClientStatusCols, DownloadClientStatusIxCols> DownloadClientStatus() => new("download_client_status", new DownloadClientStatusCols("download_client_status"), new DownloadClientStatusIxCols("download_client_status"));
         public global::SpacetimeDB.Table<DownloadHistory, DownloadHistoryCols, DownloadHistoryIxCols> DownloadHistory() => new("download_history", new DownloadHistoryCols("download_history"), new DownloadHistoryIxCols("download_history"));
+        public global::SpacetimeDB.Table<Episode, EpisodeCols, EpisodeIxCols> Episode() => new("episode", new EpisodeCols("episode"), new EpisodeIxCols("episode"));
         public global::SpacetimeDB.Table<EpisodeFile, EpisodeFileCols, EpisodeFileIxCols> EpisodeFile() => new("episode_file", new EpisodeFileCols("episode_file"), new EpisodeFileIxCols("episode_file"));
+        public global::SpacetimeDB.Table<EpisodeHistory, EpisodeHistoryCols, EpisodeHistoryIxCols> EpisodeHistory() => new("episode_history", new EpisodeHistoryCols("episode_history"), new EpisodeHistoryIxCols("episode_history"));
         public global::SpacetimeDB.Table<ImportListDefinition, ImportListDefinitionCols, ImportListDefinitionIxCols> ImportListDefinition() => new("import_list_definition", new ImportListDefinitionCols("import_list_definition"), new ImportListDefinitionIxCols("import_list_definition"));
         public global::SpacetimeDB.Table<ImportListExclusion, ImportListExclusionCols, ImportListExclusionIxCols> ImportListExclusion() => new("import_list_exclusion", new ImportListExclusionCols("import_list_exclusion"), new ImportListExclusionIxCols("import_list_exclusion"));
         public global::SpacetimeDB.Table<ImportListItem, ImportListItemCols, ImportListItemIxCols> ImportListItem() => new("import_list_item", new ImportListItemCols("import_list_item"), new ImportListItemIxCols("import_list_item"));
@@ -722,6 +731,7 @@ namespace SpacetimeDB.Types
             return reducer switch
             {
                 Reducer.DeleteAutoTag args => Reducers.InvokeDeleteAutoTag(eventContext, args),
+                Reducer.DeleteBlocklist args => Reducers.InvokeDeleteBlocklist(eventContext, args),
                 Reducer.DeleteCommand args => Reducers.InvokeDeleteCommand(eventContext, args),
                 Reducer.DeleteConfig args => Reducers.InvokeDeleteConfig(eventContext, args),
                 Reducer.DeleteCustomFilter args => Reducers.InvokeDeleteCustomFilter(eventContext, args),
@@ -730,7 +740,9 @@ namespace SpacetimeDB.Types
                 Reducer.DeleteDownloadClientDefinition args => Reducers.InvokeDeleteDownloadClientDefinition(eventContext, args),
                 Reducer.DeleteDownloadClientStatus args => Reducers.InvokeDeleteDownloadClientStatus(eventContext, args),
                 Reducer.DeleteDownloadHistory args => Reducers.InvokeDeleteDownloadHistory(eventContext, args),
+                Reducer.DeleteEpisode args => Reducers.InvokeDeleteEpisode(eventContext, args),
                 Reducer.DeleteEpisodeFile args => Reducers.InvokeDeleteEpisodeFile(eventContext, args),
+                Reducer.DeleteEpisodeHistory args => Reducers.InvokeDeleteEpisodeHistory(eventContext, args),
                 Reducer.DeleteImportListDefinition args => Reducers.InvokeDeleteImportListDefinition(eventContext, args),
                 Reducer.DeleteImportListExclusion args => Reducers.InvokeDeleteImportListExclusion(eventContext, args),
                 Reducer.DeleteImportListItem args => Reducers.InvokeDeleteImportListItem(eventContext, args),
@@ -758,6 +770,7 @@ namespace SpacetimeDB.Types
                 Reducer.DeleteUpdateHistory args => Reducers.InvokeDeleteUpdateHistory(eventContext, args),
                 Reducer.DeleteUser args => Reducers.InvokeDeleteUser(eventContext, args),
                 Reducer.InsertAutoTag args => Reducers.InvokeInsertAutoTag(eventContext, args),
+                Reducer.InsertBlocklist args => Reducers.InvokeInsertBlocklist(eventContext, args),
                 Reducer.InsertCommand args => Reducers.InvokeInsertCommand(eventContext, args),
                 Reducer.InsertConfig args => Reducers.InvokeInsertConfig(eventContext, args),
                 Reducer.InsertCustomFilter args => Reducers.InvokeInsertCustomFilter(eventContext, args),
@@ -766,7 +779,9 @@ namespace SpacetimeDB.Types
                 Reducer.InsertDownloadClientDefinition args => Reducers.InvokeInsertDownloadClientDefinition(eventContext, args),
                 Reducer.InsertDownloadClientStatus args => Reducers.InvokeInsertDownloadClientStatus(eventContext, args),
                 Reducer.InsertDownloadHistory args => Reducers.InvokeInsertDownloadHistory(eventContext, args),
+                Reducer.InsertEpisode args => Reducers.InvokeInsertEpisode(eventContext, args),
                 Reducer.InsertEpisodeFile args => Reducers.InvokeInsertEpisodeFile(eventContext, args),
+                Reducer.InsertEpisodeHistory args => Reducers.InvokeInsertEpisodeHistory(eventContext, args),
                 Reducer.InsertImportListDefinition args => Reducers.InvokeInsertImportListDefinition(eventContext, args),
                 Reducer.InsertImportListExclusion args => Reducers.InvokeInsertImportListExclusion(eventContext, args),
                 Reducer.InsertImportListItem args => Reducers.InvokeInsertImportListItem(eventContext, args),
@@ -797,6 +812,7 @@ namespace SpacetimeDB.Types
                 Reducer.ReplaceQualityProfileQualityRanks args => Reducers.InvokeReplaceQualityProfileQualityRanks(eventContext, args),
                 Reducer.ReplaceSeriesTags args => Reducers.InvokeReplaceSeriesTags(eventContext, args),
                 Reducer.UpdateAutoTag args => Reducers.InvokeUpdateAutoTag(eventContext, args),
+                Reducer.UpdateBlocklist args => Reducers.InvokeUpdateBlocklist(eventContext, args),
                 Reducer.UpdateCommand args => Reducers.InvokeUpdateCommand(eventContext, args),
                 Reducer.UpdateConfig args => Reducers.InvokeUpdateConfig(eventContext, args),
                 Reducer.UpdateCustomFilter args => Reducers.InvokeUpdateCustomFilter(eventContext, args),
@@ -805,7 +821,9 @@ namespace SpacetimeDB.Types
                 Reducer.UpdateDownloadClientDefinition args => Reducers.InvokeUpdateDownloadClientDefinition(eventContext, args),
                 Reducer.UpdateDownloadClientStatus args => Reducers.InvokeUpdateDownloadClientStatus(eventContext, args),
                 Reducer.UpdateDownloadHistory args => Reducers.InvokeUpdateDownloadHistory(eventContext, args),
+                Reducer.UpdateEpisode args => Reducers.InvokeUpdateEpisode(eventContext, args),
                 Reducer.UpdateEpisodeFile args => Reducers.InvokeUpdateEpisodeFile(eventContext, args),
+                Reducer.UpdateEpisodeHistory args => Reducers.InvokeUpdateEpisodeHistory(eventContext, args),
                 Reducer.UpdateImportListDefinition args => Reducers.InvokeUpdateImportListDefinition(eventContext, args),
                 Reducer.UpdateImportListExclusion args => Reducers.InvokeUpdateImportListExclusion(eventContext, args),
                 Reducer.UpdateImportListItem args => Reducers.InvokeUpdateImportListItem(eventContext, args),

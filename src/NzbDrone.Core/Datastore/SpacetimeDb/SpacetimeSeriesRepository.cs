@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Languages;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Tv;
 using StdbSeries = SpacetimeDB.Types.Series;
 
@@ -9,9 +10,12 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 {
     public class SpacetimeSeriesRepository : SpacetimeBasicRepository<Series, StdbSeries>, ISeriesRepository
     {
-        public SpacetimeSeriesRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
+        private readonly IQualityProfileRepository _qualityProfileRepository;
+
+        public SpacetimeSeriesRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator, IQualityProfileRepository qualityProfileRepository)
             : base(connection, eventAggregator)
         {
+            _qualityProfileRepository = qualityProfileRepository;
         }
 
         protected override StdbSeries[] RemoteQuery(string whereClauseWithoutPrefix) =>
@@ -21,10 +25,15 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Conn.Connection.Db.SeriesTag.RemoteQuery($"WHERE SeriesId = {seriesId}").GetAwaiter().GetResult()
                 .Select(t => t.TagId).ToList();
 
-        // QualityProfile is LazyLoaded (only QualityProfileId is a real column) - same convention
-        // as EpisodeFile's LazyLoaded Series/Episodes, left unpopulated here. RootFolderPath is
-        // Ignore()'d in the real TableMapping (computed post-load elsewhere), so it's left at its
-        // model default too - there is no column to read it from.
+        // QualityProfile is LazyLoaded (only QualityProfileId is a real column). The real
+        // TableMapping's .HasOne(s => s.QualityProfile, ...) join means every Series it returns
+        // already carries a populated QualityProfile - HistoryResourceMapper relies on this,
+        // reading model.Series.QualityProfile.Value directly instead of re-fetching by id. There's
+        // no Spacetime join to mirror that with, so it's fetched by hand here instead (same
+        // eager-attach approach as TagIdsFor below); a bare null LazyLoaded<T> field NREs on
+        // .Value access, so this can't be left unpopulated the way RootFolderPath below can.
+        // RootFolderPath itself is Ignore()'d in the real TableMapping (computed post-load
+        // elsewhere), so it's left at its model default - there is no column to read it from.
         protected override Series ToModel(StdbSeries row) => new Series
         {
             Id = row.Id,
@@ -44,6 +53,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Monitored = row.Monitored,
             MonitorNewItems = (NewItemMonitorTypes)row.MonitorNewItems,
             QualityProfileId = row.QualityProfileId,
+            QualityProfile = new LazyLoaded<QualityProfile>(_qualityProfileRepository.Find(row.QualityProfileId)),
             SeasonFolder = row.SeasonFolder,
             LastInfoSync = SpacetimeDateTime.ToDateTime(row.LastInfoSync),
             Runtime = row.Runtime,

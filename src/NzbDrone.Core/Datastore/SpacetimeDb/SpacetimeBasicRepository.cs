@@ -270,6 +270,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// </summary>
         protected virtual object GetSortKey(TModel model) => model.Id;
 
+        // Mirrors BasicRepository.ModelUpdated - lets a subclass force an update event to publish
+        // for a specific call even when PublishModelEvents is false for the entity as a whole
+        // (e.g. the real EpisodeRepository does this for SetMonitoredFlat/SetFileId/ClearFileId).
+        protected void ModelUpdated(TModel model, bool forcePublish = false) => PublishModelEvent(model, ModelAction.Updated, forcePublish);
+
         protected static string EscapeSqlString(string value) => value?.Replace("'", "''");
 
         private static string IdOrChain(IEnumerable<int> ids) => string.Join(" OR ", ids.Select(id => $"Id = {id}"));

@@ -1,6 +1,7 @@
 using DryIoc;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.AutoTagging;
+using NzbDrone.Core.Blocklisting;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.CustomFilters;
 using NzbDrone.Core.CustomFormats;
@@ -12,6 +13,7 @@ using NzbDrone.Core.Extras.Metadata;
 using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.Extras.Others;
 using NzbDrone.Core.Extras.Subtitles;
+using NzbDrone.Core.History;
 using NzbDrone.Core.ImportLists;
 using NzbDrone.Core.ImportLists.Exclusions;
 using NzbDrone.Core.ImportLists.ImportListItems;
@@ -86,6 +88,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Register<IMetadataRepository, SpacetimeMetadataRepository>(container);
             Register<IQualityProfileRepository, SpacetimeQualityProfileRepository>(container);
             Register<ISeriesRepository, SpacetimeSeriesRepository>(container);
+
+            // Tier 2
+            Register<IEpisodeRepository, SpacetimeEpisodeRepository>(container);
+            Register<IHistoryRepository, SpacetimeHistoryRepository>(container);
+            Register<IBlocklistRepository, SpacetimeBlocklistRepository>(container);
 
             return container;
         }
