@@ -38,14 +38,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override StdbEpisode[] RemoteQuery(string whereClauseWithoutPrefix) =>
             Conn.Connection.Db.Episode.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
 
-        // SeriesTitle/Series/HasFile/AbsoluteEpisodeNumberAdded are Ignore()'d (or LazyLoaded for
-        // EpisodeFile) in the real TableMapping - no columns for them here either.
+        // SeriesTitle/Series/AbsoluteEpisodeNumberAdded are Ignore()'d in the real TableMapping -
+        // no columns for them here either. EpisodeFile is LazyLoaded there too, but unlike
+        // RootFolderPath-style Ignore()'d fields it's not safe to leave unpopulated:
+        // EpisodeControllerWithSignalR.MapToResource reads episode.EpisodeFile.Value directly
+        // whenever includeEpisodeFile && EpisodeFileId != 0 (the default for most episode list/
+        // detail requests), and a bare null LazyLoaded<T> NREs on .Value access - the same failure
+        // mode QualityProfile had on SpacetimeSeriesRepository (see that file's comment).
         protected override Episode ToModel(StdbEpisode row) => new Episode
         {
             Id = row.Id,
             SeriesId = row.SeriesId,
             TvdbId = row.TvdbId,
             EpisodeFileId = row.EpisodeFileId,
+            EpisodeFile = row.EpisodeFileId != 0 ? new LazyLoaded<EpisodeFile>(_mediaFileRepository.Find(row.EpisodeFileId)) : null,
             SeasonNumber = row.SeasonNumber,
             EpisodeNumber = row.EpisodeNumber,
             Title = row.Title,
@@ -174,11 +180,26 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
             var refined = All()
                 .Where(e => e.EpisodeFileId == 0 && e.SeasonNumber >= startingSeasonNumber)
-                .Where(e => seriesById.TryGetValue(e.SeriesId, out var series)
-                    && e.AirDateUtc.HasValue
-                    && e.AirDateUtc.Value.AddMinutes(series.Runtime) <= now
-                    && (seriesTags == null || seriesTags.Count == 0 || seriesTags.Overlaps(series.Tags ?? new HashSet<int>())))
+                .Where(e => seriesById.ContainsKey(e.SeriesId))
+                .Select(e =>
+                {
+                    e.Series = seriesById[e.SeriesId];
+                    return e;
+                })
+                .Where(e => e.AirDateUtc.HasValue
+                    && e.AirDateUtc.Value.AddMinutes(e.Series.Runtime) <= now
+                    && (seriesTags == null || seriesTags.Count == 0 || seriesTags.Overlaps(e.Series.Tags ?? new HashSet<int>())))
                 .ToList();
+
+            // MissingController/CutoffController add a Monitored/Series.Monitored filter onto
+            // pagingSpec.FilterExpressions and rely on GetPaged to apply it - the base class's
+            // default GetPaged does this, but this method (like EpisodesWhereCutoffUnmet below)
+            // replaces that base implementation entirely, so it has to reapply the same step
+            // itself. Series must be attached first (above) since that filter reads v.Series.
+            foreach (var filter in pagingSpec.FilterExpressions)
+            {
+                refined = refined.Where(filter.Compile()).ToList();
+            }
 
             pagingSpec.TotalRecords = refined.Count;
             pagingSpec.Records = Paginate(refined, pagingSpec);
@@ -226,6 +247,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
                 episode.Series = series;
                 refined.Add(episode);
+            }
+
+            // See EpisodesWithoutFiles above - same reapplication of pagingSpec.FilterExpressions
+            // needed here since this method also replaces the base class's default GetPaged.
+            foreach (var filter in pagingSpec.FilterExpressions)
+            {
+                refined = refined.Where(filter.Compile()).ToList();
             }
 
             pagingSpec.TotalRecords = refined.Count;

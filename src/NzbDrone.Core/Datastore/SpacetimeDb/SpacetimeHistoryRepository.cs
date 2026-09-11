@@ -138,11 +138,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             var seriesById = _seriesRepository.All().ToDictionary(s => s.Id);
             var episodesById = _episodeRepository.All().ToDictionary(e => e.Id);
 
+            // Series is required, not optional - HistoryResourceMapper.ToResource reads
+            // model.Series.QualityProfile.Value unconditionally (not gated by includeSeries).
+            // The real repository's Series join is an inner join (Join<EpisodeHistory, Series>,
+            // not LeftJoin), so a row whose series has since been deleted is excluded from
+            // results entirely rather than mapped with a null Series - match that here too.
             return All()
                 .Where(h => h.Date >= date && (!eventType.HasValue || h.EventType == eventType.Value))
+                .Where(h => seriesById.ContainsKey(h.SeriesId))
                 .Select(h =>
                 {
-                    h.Series = seriesById.GetValueOrDefault(h.SeriesId);
+                    h.Series = seriesById[h.SeriesId];
                     h.Episode = episodesById.GetValueOrDefault(h.EpisodeId);
                     return h;
                 })
@@ -157,16 +163,28 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             var seriesById = _seriesRepository.All().ToDictionary(s => s.Id);
             var episodesById = _episodeRepository.All().ToDictionary(e => e.Id);
 
+            // Series is required (see Since's comment above) - excluded here the same way,
+            // matching the real repository's inner join instead of leaving a null Series behind.
             var filtered = All()
                 .Where(h => languages == null || languages.Length == 0 || (h.Languages != null && h.Languages.Any(l => languages.Contains(l.Id))))
                 .Where(h => qualities == null || qualities.Length == 0 || qualities.Contains(h.Quality?.Quality?.Id ?? -1))
+                .Where(h => seriesById.ContainsKey(h.SeriesId))
                 .Select(h =>
                 {
-                    h.Series = seriesById.GetValueOrDefault(h.SeriesId);
+                    h.Series = seriesById[h.SeriesId];
                     h.Episode = episodesById.GetValueOrDefault(h.EpisodeId);
                     return h;
                 })
                 .ToList();
+
+            // HistoryController compiles eventTypes/episodeId/downloadId/seriesIds query-param
+            // filters into pagingSpec.FilterExpressions and relies on GetPaged to apply them - the
+            // base class's default GetPaged does this, but this override replaces that base
+            // implementation entirely, so it has to reapply the same step itself.
+            foreach (var filter in pagingSpec.FilterExpressions)
+            {
+                filtered = filtered.Where(filter.Compile()).ToList();
+            }
 
             pagingSpec.TotalRecords = filtered.Count;
 

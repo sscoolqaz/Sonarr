@@ -123,13 +123,27 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
             var seriesById = _seriesRepository.All().ToDictionary(s => s.Id);
 
+            // BlocklistResource.Series = model.Series.ToResource() is unconditional, and the real
+            // repository's Series join is an inner join (Join<Blocklist, Series>, not LeftJoin) -
+            // a row whose series has since been deleted is excluded from results entirely rather
+            // than mapped with a null Series, matching that behavior here too.
             var all = All()
+                .Where(b => seriesById.ContainsKey(b.SeriesId))
                 .Select(b =>
                 {
-                    b.Series = seriesById.GetValueOrDefault(b.SeriesId);
+                    b.Series = seriesById[b.SeriesId];
                     return b;
                 })
                 .ToList();
+
+            // BlocklistController adds seriesIds/protocols filters onto pagingSpec.FilterExpressions
+            // and relies on GetPaged to apply them - the base class's default GetPaged does this,
+            // but this override replaces that base implementation entirely, so it has to reapply
+            // the same step itself or those filters silently do nothing.
+            foreach (var filter in pagingSpec.FilterExpressions)
+            {
+                all = all.Where(filter.Compile()).ToList();
+            }
 
             pagingSpec.TotalRecords = all.Count;
 
