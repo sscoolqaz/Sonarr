@@ -51,12 +51,15 @@ namespace SpacetimeDB.Types
             AddTable(OtherExtraFile = new(conn));
             AddTable(PendingRelease = new(conn));
             AddTable(QualityDefinition = new(conn));
+            AddTable(QualityProfile = new(conn));
             AddTable(QualityProfileQualityRank = new(conn));
             AddTable(ReleaseProfile = new(conn));
             AddTable(RemotePathMapping = new(conn));
             AddTable(RootFolder = new(conn));
             AddTable(SceneMapping = new(conn));
             AddTable(ScheduledTask = new(conn));
+            AddTable(Series = new(conn));
+            AddTable(SeriesTag = new(conn));
             AddTable(SubtitleFile = new(conn));
             AddTable(Tag = new(conn));
             AddTable(UpdateHistory = new(conn));
@@ -581,12 +584,15 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.OtherExtraFile().ToSql(),
             new QueryBuilder().From.PendingRelease().ToSql(),
             new QueryBuilder().From.QualityDefinition().ToSql(),
+            new QueryBuilder().From.QualityProfile().ToSql(),
             new QueryBuilder().From.QualityProfileQualityRank().ToSql(),
             new QueryBuilder().From.ReleaseProfile().ToSql(),
             new QueryBuilder().From.RemotePathMapping().ToSql(),
             new QueryBuilder().From.RootFolder().ToSql(),
             new QueryBuilder().From.SceneMapping().ToSql(),
             new QueryBuilder().From.ScheduledTask().ToSql(),
+            new QueryBuilder().From.Series().ToSql(),
+            new QueryBuilder().From.SeriesTag().ToSql(),
             new QueryBuilder().From.SubtitleFile().ToSql(),
             new QueryBuilder().From.Tag().ToSql(),
             new QueryBuilder().From.UpdateHistory().ToSql(),
@@ -621,12 +627,15 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<OtherExtraFile, OtherExtraFileCols, OtherExtraFileIxCols> OtherExtraFile() => new("other_extra_file", new OtherExtraFileCols("other_extra_file"), new OtherExtraFileIxCols("other_extra_file"));
         public global::SpacetimeDB.Table<PendingRelease, PendingReleaseCols, PendingReleaseIxCols> PendingRelease() => new("pending_release", new PendingReleaseCols("pending_release"), new PendingReleaseIxCols("pending_release"));
         public global::SpacetimeDB.Table<QualityDefinition, QualityDefinitionCols, QualityDefinitionIxCols> QualityDefinition() => new("quality_definition", new QualityDefinitionCols("quality_definition"), new QualityDefinitionIxCols("quality_definition"));
+        public global::SpacetimeDB.Table<QualityProfile, QualityProfileCols, QualityProfileIxCols> QualityProfile() => new("quality_profile", new QualityProfileCols("quality_profile"), new QualityProfileIxCols("quality_profile"));
         public global::SpacetimeDB.Table<QualityProfileQualityRank, QualityProfileQualityRankCols, QualityProfileQualityRankIxCols> QualityProfileQualityRank() => new("quality_profile_quality_rank", new QualityProfileQualityRankCols("quality_profile_quality_rank"), new QualityProfileQualityRankIxCols("quality_profile_quality_rank"));
         public global::SpacetimeDB.Table<ReleaseProfile, ReleaseProfileCols, ReleaseProfileIxCols> ReleaseProfile() => new("release_profile", new ReleaseProfileCols("release_profile"), new ReleaseProfileIxCols("release_profile"));
         public global::SpacetimeDB.Table<RemotePathMapping, RemotePathMappingCols, RemotePathMappingIxCols> RemotePathMapping() => new("remote_path_mapping", new RemotePathMappingCols("remote_path_mapping"), new RemotePathMappingIxCols("remote_path_mapping"));
         public global::SpacetimeDB.Table<RootFolder, RootFolderCols, RootFolderIxCols> RootFolder() => new("root_folder", new RootFolderCols("root_folder"), new RootFolderIxCols("root_folder"));
         public global::SpacetimeDB.Table<SceneMapping, SceneMappingCols, SceneMappingIxCols> SceneMapping() => new("scene_mapping", new SceneMappingCols("scene_mapping"), new SceneMappingIxCols("scene_mapping"));
         public global::SpacetimeDB.Table<ScheduledTask, ScheduledTaskCols, ScheduledTaskIxCols> ScheduledTask() => new("scheduled_task", new ScheduledTaskCols("scheduled_task"), new ScheduledTaskIxCols("scheduled_task"));
+        public global::SpacetimeDB.Table<Series, SeriesCols, SeriesIxCols> Series() => new("series", new SeriesCols("series"), new SeriesIxCols("series"));
+        public global::SpacetimeDB.Table<SeriesTag, SeriesTagCols, SeriesTagIxCols> SeriesTag() => new("series_tag", new SeriesTagCols("series_tag"), new SeriesTagIxCols("series_tag"));
         public global::SpacetimeDB.Table<SubtitleFile, SubtitleFileCols, SubtitleFileIxCols> SubtitleFile() => new("subtitle_file", new SubtitleFileCols("subtitle_file"), new SubtitleFileIxCols("subtitle_file"));
         public global::SpacetimeDB.Table<Tag, TagCols, TagIxCols> Tag() => new("tag", new TagCols("tag"), new TagIxCols("tag"));
         public global::SpacetimeDB.Table<UpdateHistory, UpdateHistoryCols, UpdateHistoryIxCols> UpdateHistory() => new("update_history", new UpdateHistoryCols("update_history"), new UpdateHistoryIxCols("update_history"));
@@ -736,12 +745,14 @@ namespace SpacetimeDB.Types
                 Reducer.DeleteOtherExtraFile args => Reducers.InvokeDeleteOtherExtraFile(eventContext, args),
                 Reducer.DeletePendingRelease args => Reducers.InvokeDeletePendingRelease(eventContext, args),
                 Reducer.DeleteQualityDefinition args => Reducers.InvokeDeleteQualityDefinition(eventContext, args),
+                Reducer.DeleteQualityProfile args => Reducers.InvokeDeleteQualityProfile(eventContext, args),
                 Reducer.DeleteQualityProfileQualityRank args => Reducers.InvokeDeleteQualityProfileQualityRank(eventContext, args),
                 Reducer.DeleteReleaseProfile args => Reducers.InvokeDeleteReleaseProfile(eventContext, args),
                 Reducer.DeleteRemotePathMapping args => Reducers.InvokeDeleteRemotePathMapping(eventContext, args),
                 Reducer.DeleteRootFolder args => Reducers.InvokeDeleteRootFolder(eventContext, args),
                 Reducer.DeleteSceneMapping args => Reducers.InvokeDeleteSceneMapping(eventContext, args),
                 Reducer.DeleteScheduledTask args => Reducers.InvokeDeleteScheduledTask(eventContext, args),
+                Reducer.DeleteSeries args => Reducers.InvokeDeleteSeries(eventContext, args),
                 Reducer.DeleteSubtitleFile args => Reducers.InvokeDeleteSubtitleFile(eventContext, args),
                 Reducer.DeleteTag args => Reducers.InvokeDeleteTag(eventContext, args),
                 Reducer.DeleteUpdateHistory args => Reducers.InvokeDeleteUpdateHistory(eventContext, args),
@@ -770,18 +781,21 @@ namespace SpacetimeDB.Types
                 Reducer.InsertOtherExtraFile args => Reducers.InvokeInsertOtherExtraFile(eventContext, args),
                 Reducer.InsertPendingRelease args => Reducers.InvokeInsertPendingRelease(eventContext, args),
                 Reducer.InsertQualityDefinition args => Reducers.InvokeInsertQualityDefinition(eventContext, args),
+                Reducer.InsertQualityProfile args => Reducers.InvokeInsertQualityProfile(eventContext, args),
                 Reducer.InsertQualityProfileQualityRank args => Reducers.InvokeInsertQualityProfileQualityRank(eventContext, args),
                 Reducer.InsertReleaseProfile args => Reducers.InvokeInsertReleaseProfile(eventContext, args),
                 Reducer.InsertRemotePathMapping args => Reducers.InvokeInsertRemotePathMapping(eventContext, args),
                 Reducer.InsertRootFolder args => Reducers.InvokeInsertRootFolder(eventContext, args),
                 Reducer.InsertSceneMapping args => Reducers.InvokeInsertSceneMapping(eventContext, args),
                 Reducer.InsertScheduledTask args => Reducers.InvokeInsertScheduledTask(eventContext, args),
+                Reducer.InsertSeries args => Reducers.InvokeInsertSeries(eventContext, args),
                 Reducer.InsertSubtitleFile args => Reducers.InvokeInsertSubtitleFile(eventContext, args),
                 Reducer.InsertTag args => Reducers.InvokeInsertTag(eventContext, args),
                 Reducer.InsertUpdateHistory args => Reducers.InvokeInsertUpdateHistory(eventContext, args),
                 Reducer.InsertUser args => Reducers.InvokeInsertUser(eventContext, args),
                 Reducer.OrphanStartedCommands args => Reducers.InvokeOrphanStartedCommands(eventContext, args),
                 Reducer.ReplaceQualityProfileQualityRanks args => Reducers.InvokeReplaceQualityProfileQualityRanks(eventContext, args),
+                Reducer.ReplaceSeriesTags args => Reducers.InvokeReplaceSeriesTags(eventContext, args),
                 Reducer.UpdateAutoTag args => Reducers.InvokeUpdateAutoTag(eventContext, args),
                 Reducer.UpdateCommand args => Reducers.InvokeUpdateCommand(eventContext, args),
                 Reducer.UpdateConfig args => Reducers.InvokeUpdateConfig(eventContext, args),
@@ -806,12 +820,14 @@ namespace SpacetimeDB.Types
                 Reducer.UpdateOtherExtraFile args => Reducers.InvokeUpdateOtherExtraFile(eventContext, args),
                 Reducer.UpdatePendingRelease args => Reducers.InvokeUpdatePendingRelease(eventContext, args),
                 Reducer.UpdateQualityDefinition args => Reducers.InvokeUpdateQualityDefinition(eventContext, args),
+                Reducer.UpdateQualityProfile args => Reducers.InvokeUpdateQualityProfile(eventContext, args),
                 Reducer.UpdateQualityProfileQualityRank args => Reducers.InvokeUpdateQualityProfileQualityRank(eventContext, args),
                 Reducer.UpdateReleaseProfile args => Reducers.InvokeUpdateReleaseProfile(eventContext, args),
                 Reducer.UpdateRemotePathMapping args => Reducers.InvokeUpdateRemotePathMapping(eventContext, args),
                 Reducer.UpdateRootFolder args => Reducers.InvokeUpdateRootFolder(eventContext, args),
                 Reducer.UpdateSceneMapping args => Reducers.InvokeUpdateSceneMapping(eventContext, args),
                 Reducer.UpdateScheduledTask args => Reducers.InvokeUpdateScheduledTask(eventContext, args),
+                Reducer.UpdateSeries args => Reducers.InvokeUpdateSeries(eventContext, args),
                 Reducer.UpdateSubtitleFile args => Reducers.InvokeUpdateSubtitleFile(eventContext, args),
                 Reducer.UpdateTag args => Reducers.InvokeUpdateTag(eventContext, args),
                 Reducer.UpdateUpdateHistory args => Reducers.InvokeUpdateUpdateHistory(eventContext, args),

@@ -28,6 +28,7 @@ using NzbDrone.Core.Qualities;
 using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.RootFolders;
 using NzbDrone.Core.Tags;
+using NzbDrone.Core.Tv;
 using NzbDrone.Core.Update.History;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -83,6 +84,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Register<INotificationRepository, SpacetimeNotificationRepository>(container);
             Register<IDownloadClientRepository, SpacetimeDownloadClientRepository>(container);
             Register<IMetadataRepository, SpacetimeMetadataRepository>(container);
+            Register<IQualityProfileRepository, SpacetimeQualityProfileRepository>(container);
+            Register<ISeriesRepository, SpacetimeSeriesRepository>(container);
 
             return container;
         }
