@@ -173,6 +173,17 @@ namespace NzbDrone.Host
                         .AddDatabase()
                         .AddStartupContext(context);
 
+                    // Both calls unconditional regardless of the SpacetimeDb flag below -
+                    // AutoAddServices' reflection scan just registered every Spacetime-backed
+                    // repository/housekeeping-task class unconditionally too (they're public
+                    // classes like any other), and without this, resolution for every entity with
+                    // both a real and a Spacetime-backed implementation is ambiguous and
+                    // order-dependent rather than deterministically the real one when SpacetimeDb
+                    // mode is off. Only AddSpacetimeDbRepositories flips things back to the
+                    // Spacetime side, and only when that flag is actually on.
+                    c.PinRealRepositoriesByDefault();
+                    c.RemoveAutoRegisteredHousekeepingTasks();
+
                     if (logDbEnabled)
                     {
                         c.AddLogDatabase();
