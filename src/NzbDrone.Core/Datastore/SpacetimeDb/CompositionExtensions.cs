@@ -29,6 +29,7 @@ using NzbDrone.Core.Profiles.Releases;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.RootFolders;
+using NzbDrone.Core.SeriesStats;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Tv;
 using NzbDrone.Core.Update.History;
@@ -93,6 +94,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Register<IEpisodeRepository, SpacetimeEpisodeRepository>(container);
             Register<IHistoryRepository, SpacetimeHistoryRepository>(container);
             Register<IBlocklistRepository, SpacetimeBlocklistRepository>(container);
+
+            // Outside the entity survey (doesn't inherit SpacetimeBasicRepository<T> - see
+            // SpacetimeSeriesStatisticsRepository's own comment)
+            Register<ISeriesStatisticsRepository, SpacetimeSeriesStatisticsRepository>(container);
 
             return container;
         }
