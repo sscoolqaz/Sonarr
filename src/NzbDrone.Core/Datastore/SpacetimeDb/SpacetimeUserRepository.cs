@@ -31,6 +31,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(User model) =>
             Conn.Connection.Reducers.InsertUser(model.Identifier.ToString(), model.Username ?? string.Empty, model.Password ?? string.Empty, model.Salt ?? string.Empty, model.Iterations);
 
+        public override void MigrateInsert(User model) =>
+            Conn.Connection.Reducers.MigrateInsertUser(model.Id, model.Identifier.ToString(), model.Username ?? string.Empty, model.Password ?? string.Empty, model.Salt ?? string.Empty, model.Iterations);
+
         protected override void InvokeUpdateReducer(User model) =>
             Conn.Connection.Reducers.UpdateUser(model.Id, model.Identifier.ToString(), model.Username ?? string.Empty, model.Password ?? string.Empty, model.Salt ?? string.Empty, model.Iterations);
 

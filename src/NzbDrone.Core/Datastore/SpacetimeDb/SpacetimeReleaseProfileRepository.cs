@@ -44,6 +44,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.Tags),
             SpacetimeJson.Serialize(model.ExcludedTags));
 
+        public override void MigrateInsert(ReleaseProfile model) => Conn.Connection.Reducers.MigrateInsertReleaseProfile(
+            model.Id,
+            model.Name ?? string.Empty,
+            model.Enabled,
+            SpacetimeJson.Serialize(model.Required),
+            SpacetimeJson.Serialize(model.Ignored),
+            model.AirDateRestriction,
+            model.AirDateGracePeriod,
+            model.AllowSeasonPackWithoutAllEpisodesAired,
+            SpacetimeJson.Serialize(model.IndexerIds),
+            SpacetimeJson.Serialize(model.Tags),
+            SpacetimeJson.Serialize(model.ExcludedTags));
+
         protected override void InvokeUpdateReducer(ReleaseProfile model) => Conn.Connection.Reducers.UpdateReleaseProfile(
             model.Id,
             model.Name ?? string.Empty,

@@ -22,6 +22,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(CustomFilter model) =>
             Conn.Connection.Reducers.InsertCustomFilter(model.Type ?? string.Empty, model.Label ?? string.Empty, model.Filters ?? string.Empty);
 
+        public override void MigrateInsert(CustomFilter model) =>
+            Conn.Connection.Reducers.MigrateInsertCustomFilter(model.Id, model.Type ?? string.Empty, model.Label ?? string.Empty, model.Filters ?? string.Empty);
+
         protected override void InvokeUpdateReducer(CustomFilter model) =>
             Conn.Connection.Reducers.UpdateCustomFilter(model.Id, model.Type ?? string.Empty, model.Label ?? string.Empty, model.Filters ?? string.Empty);
 

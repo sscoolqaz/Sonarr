@@ -128,4 +128,250 @@ public static partial class Module
             TorrentInfoHash = torrentInfoHash, LanguagesJson = languagesJson
         });
     }
+
+    // Second migration pass - extends the same id-preserving pattern above to the rest of the
+    // port's entities, in dependency order (config/singletons and reference tables first,
+    // provider definitions next since Status tables aren't migrated - see the migration tool's
+    // own comment for what's deliberately left out and why - then per-series extra file tables).
+    [Reducer]
+    public static void MigrateInsertCustomFormat(ReducerContext ctx, int id, string name, bool includeCustomFormatWhenRenaming, string specificationsJson)
+    {
+        ctx.Db.CustomFormat.Insert(new CustomFormat { Id = id, Name = name, IncludeCustomFormatWhenRenaming = includeCustomFormatWhenRenaming, SpecificationsJson = specificationsJson });
+    }
+
+    [Reducer]
+    public static void MigrateInsertConfig(ReducerContext ctx, int id, string key, string value)
+    {
+        ctx.Db.Config.Insert(new Config { Id = id, Key = key, Value = value });
+    }
+
+    [Reducer]
+    public static void MigrateInsertNamingConfig(
+        ReducerContext ctx, int id, bool renameEpisodes, bool replaceIllegalCharacters, int colonReplacementFormat,
+        string customColonReplacementFormat, int multiEpisodeStyle, string standardEpisodeFormat, string dailyEpisodeFormat,
+        string animeEpisodeFormat, string seriesFolderFormat, string seasonFolderFormat, string specialsFolderFormat)
+    {
+        ctx.Db.NamingConfig.Insert(new NamingConfig
+        {
+            Id = id, RenameEpisodes = renameEpisodes, ReplaceIllegalCharacters = replaceIllegalCharacters,
+            ColonReplacementFormat = colonReplacementFormat, CustomColonReplacementFormat = customColonReplacementFormat,
+            MultiEpisodeStyle = multiEpisodeStyle, StandardEpisodeFormat = standardEpisodeFormat,
+            DailyEpisodeFormat = dailyEpisodeFormat, AnimeEpisodeFormat = animeEpisodeFormat,
+            SeriesFolderFormat = seriesFolderFormat, SeasonFolderFormat = seasonFolderFormat,
+            SpecialsFolderFormat = specialsFolderFormat
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertRootFolder(ReducerContext ctx, int id, string path)
+    {
+        ctx.Db.RootFolder.Insert(new RootFolder { Id = id, Path = path });
+    }
+
+    [Reducer]
+    public static void MigrateInsertRemotePathMapping(ReducerContext ctx, int id, string host, string remotePath, string localPath)
+    {
+        ctx.Db.RemotePathMapping.Insert(new RemotePathMapping { Id = id, Host = host, RemotePath = remotePath, LocalPath = localPath });
+    }
+
+    [Reducer]
+    public static void MigrateInsertCustomFilter(ReducerContext ctx, int id, string type, string label, string filters)
+    {
+        ctx.Db.CustomFilter.Insert(new CustomFilter { Id = id, Type = type, Label = label, Filters = filters });
+    }
+
+    [Reducer]
+    public static void MigrateInsertDelayProfile(
+        ReducerContext ctx, int id, bool enableUsenet, bool enableTorrent, int preferredProtocol, int usenetDelay,
+        int torrentDelay, int order, bool bypassIfHighestQuality, bool bypassIfAboveCustomFormatScore,
+        int minimumCustomFormatScore, string tagsJson)
+    {
+        ctx.Db.DelayProfile.Insert(new DelayProfile
+        {
+            Id = id, EnableUsenet = enableUsenet, EnableTorrent = enableTorrent, PreferredProtocol = preferredProtocol,
+            UsenetDelay = usenetDelay, TorrentDelay = torrentDelay, Order = order, BypassIfHighestQuality = bypassIfHighestQuality,
+            BypassIfAboveCustomFormatScore = bypassIfAboveCustomFormatScore, MinimumCustomFormatScore = minimumCustomFormatScore,
+            TagsJson = tagsJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertReleaseProfile(
+        ReducerContext ctx, int id, string name, bool enabled, string requiredJson, string ignoredJson,
+        bool airDateRestriction, int airDateGracePeriod, bool allowSeasonPackWithoutAllEpisodesAired,
+        string indexerIdsJson, string tagsJson, string excludedTagsJson)
+    {
+        ctx.Db.ReleaseProfile.Insert(new ReleaseProfile
+        {
+            Id = id, Name = name, Enabled = enabled, RequiredJson = requiredJson, IgnoredJson = ignoredJson,
+            AirDateRestriction = airDateRestriction, AirDateGracePeriod = airDateGracePeriod,
+            AllowSeasonPackWithoutAllEpisodesAired = allowSeasonPackWithoutAllEpisodesAired,
+            IndexerIdsJson = indexerIdsJson, TagsJson = tagsJson, ExcludedTagsJson = excludedTagsJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertIndexerDefinition(
+        ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
+        bool enable, string tagsJson, string messageJson)
+    {
+        ctx.Db.IndexerDefinition.Insert(new IndexerDefinition
+        {
+            Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
+            SettingsJson = settingsJson, Enable = enable, TagsJson = tagsJson, MessageJson = messageJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertDownloadClientDefinition(
+        ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
+        bool enable, string tagsJson, string messageJson)
+    {
+        ctx.Db.DownloadClientDefinition.Insert(new DownloadClientDefinition
+        {
+            Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
+            SettingsJson = settingsJson, Enable = enable, TagsJson = tagsJson, MessageJson = messageJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertImportListDefinition(
+        ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
+        bool enable, string tagsJson, string messageJson)
+    {
+        ctx.Db.ImportListDefinition.Insert(new ImportListDefinition
+        {
+            Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
+            SettingsJson = settingsJson, Enable = enable, TagsJson = tagsJson, MessageJson = messageJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertNotificationDefinition(
+        ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
+        bool enable, string tagsJson, string messageJson)
+    {
+        ctx.Db.NotificationDefinition.Insert(new NotificationDefinition
+        {
+            Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
+            SettingsJson = settingsJson, Enable = enable, TagsJson = tagsJson, MessageJson = messageJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertMetadataDefinition(
+        ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
+        bool enable, string tagsJson, string messageJson)
+    {
+        ctx.Db.MetadataDefinition.Insert(new MetadataDefinition
+        {
+            Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
+            SettingsJson = settingsJson, Enable = enable, TagsJson = tagsJson, MessageJson = messageJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertImportListExclusion(ReducerContext ctx, int id, int tvdbId, string title)
+    {
+        ctx.Db.ImportListExclusion.Insert(new ImportListExclusion { Id = id, TvdbId = tvdbId, Title = title });
+    }
+
+    [Reducer]
+    public static void MigrateInsertQualityDefinition(ReducerContext ctx, int id, string qualityJson, string title)
+    {
+        ctx.Db.QualityDefinition.Insert(new QualityDefinition { Id = id, QualityJson = qualityJson, Title = title });
+    }
+
+    [Reducer]
+    public static void MigrateInsertAutoTag(
+        ReducerContext ctx, int id, string name, string specificationsJson, bool removeTagsAutomatically, string tagsJson)
+    {
+        ctx.Db.AutoTag.Insert(new AutoTag { Id = id, Name = name, SpecificationsJson = specificationsJson, RemoveTagsAutomatically = removeTagsAutomatically, TagsJson = tagsJson });
+    }
+
+    [Reducer]
+    public static void MigrateInsertUser(ReducerContext ctx, int id, string identifier, string username, string password, string salt, int iterations)
+    {
+        ctx.Db.User.Insert(new User { Id = id, Identifier = identifier, Username = username, Password = password, Salt = salt, Iterations = iterations });
+    }
+
+    [Reducer]
+    public static void MigrateInsertUpdateHistory(ReducerContext ctx, int id, Timestamp date, string version, int eventType)
+    {
+        ctx.Db.UpdateHistory.Insert(new UpdateHistory { Id = id, Date = date, Version = version, EventType = eventType });
+    }
+
+    [Reducer]
+    public static void MigrateInsertPendingRelease(
+        ReducerContext ctx, int id, int seriesId, string title, Timestamp added, string parsedEpisodeInfoJson,
+        string releaseJson, int reason, string additionalInfoJson)
+    {
+        ctx.Db.PendingRelease.Insert(new PendingRelease
+        {
+            Id = id, SeriesId = seriesId, Title = title, Added = added, ParsedEpisodeInfoJson = parsedEpisodeInfoJson,
+            ReleaseJson = releaseJson, Reason = reason, AdditionalInfoJson = additionalInfoJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertDownloadHistory(
+        ReducerContext ctx, int id, int eventType, int seriesId, string downloadId, string sourceTitle, Timestamp date,
+        int protocol, int indexerId, int downloadClientId, string releaseJson, string dataJson)
+    {
+        ctx.Db.DownloadHistory.Insert(new DownloadHistory
+        {
+            Id = id, EventType = eventType, SeriesId = seriesId, DownloadId = downloadId, SourceTitle = sourceTitle,
+            Date = date, Protocol = protocol, IndexerId = indexerId, DownloadClientId = downloadClientId,
+            ReleaseJson = releaseJson, DataJson = dataJson
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertMetadataFile(
+        ReducerContext ctx, int id, int seriesId, int? episodeFileId, int? seasonNumber, string relativePath,
+        Timestamp added, Timestamp lastUpdated, string extension, string hash, string consumer, int type)
+    {
+        ctx.Db.MetadataFile.Insert(new MetadataFile
+        {
+            Id = id, SeriesId = seriesId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
+            RelativePath = relativePath, Added = added, LastUpdated = lastUpdated, Extension = extension,
+            Hash = hash, Consumer = consumer, Type = type
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertSubtitleFile(
+        ReducerContext ctx, int id, int seriesId, int? episodeFileId, int? seasonNumber, string relativePath,
+        Timestamp added, Timestamp lastUpdated, string extension, string languageJson, int copy, string languageTagsJson, string title)
+    {
+        ctx.Db.SubtitleFile.Insert(new SubtitleFile
+        {
+            Id = id, SeriesId = seriesId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
+            RelativePath = relativePath, Added = added, LastUpdated = lastUpdated, Extension = extension,
+            LanguageJson = languageJson, Copy = copy, LanguageTagsJson = languageTagsJson, Title = title
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertOtherExtraFile(
+        ReducerContext ctx, int id, int seriesId, int? episodeFileId, int? seasonNumber, string relativePath,
+        Timestamp added, Timestamp lastUpdated, string extension)
+    {
+        ctx.Db.OtherExtraFile.Insert(new OtherExtraFile
+        {
+            Id = id, SeriesId = seriesId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
+            RelativePath = relativePath, Added = added, LastUpdated = lastUpdated, Extension = extension
+        });
+    }
+
+    [Reducer]
+    public static void MigrateInsertScheduledTask(
+        ReducerContext ctx, int id, string typeName, int interval, Timestamp lastExecution, int priority, Timestamp lastStartTime)
+    {
+        ctx.Db.ScheduledTask.Insert(new ScheduledTask
+        {
+            Id = id, TypeName = typeName, Interval = interval, LastExecution = lastExecution, Priority = priority,
+            LastStartTime = lastStartTime
+        });
+    }
 }

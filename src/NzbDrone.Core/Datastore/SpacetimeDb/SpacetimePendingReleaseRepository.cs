@@ -40,6 +40,16 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             (int)model.Reason,
             SpacetimeJson.Serialize(model.AdditionalInfo));
 
+        public override void MigrateInsert(PendingRelease model) => Conn.Connection.Reducers.MigrateInsertPendingRelease(
+            model.Id,
+            model.SeriesId,
+            model.Title ?? string.Empty,
+            SpacetimeDateTime.ToTimestamp(model.Added),
+            SpacetimeJson.Serialize(model.ParsedEpisodeInfo),
+            SpacetimeJson.Serialize(model.Release),
+            (int)model.Reason,
+            SpacetimeJson.Serialize(model.AdditionalInfo));
+
         protected override void InvokeUpdateReducer(PendingRelease model) => Conn.Connection.Reducers.UpdatePendingRelease(
             model.Id,
             model.SeriesId,

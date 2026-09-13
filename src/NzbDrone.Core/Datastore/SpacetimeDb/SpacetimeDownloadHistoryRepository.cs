@@ -47,6 +47,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.Release),
             SpacetimeJson.Serialize(model.Data));
 
+        public override void MigrateInsert(DownloadHistory model) => Conn.Connection.Reducers.MigrateInsertDownloadHistory(
+            model.Id,
+            (int)model.EventType,
+            model.SeriesId,
+            model.DownloadId ?? string.Empty,
+            model.SourceTitle ?? string.Empty,
+            SpacetimeDateTime.ToTimestamp(model.Date),
+            (int)model.Protocol,
+            model.IndexerId,
+            model.DownloadClientId,
+            SpacetimeJson.Serialize(model.Release),
+            SpacetimeJson.Serialize(model.Data));
+
         protected override void InvokeUpdateReducer(DownloadHistory model) => Conn.Connection.Reducers.UpdateDownloadHistory(
             model.Id,
             (int)model.EventType,

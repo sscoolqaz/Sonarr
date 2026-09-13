@@ -24,6 +24,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(RemotePathMapping model) =>
             Conn.Connection.Reducers.InsertRemotePathMapping(model.Host ?? string.Empty, model.RemotePath ?? string.Empty, model.LocalPath ?? string.Empty);
 
+        public override void MigrateInsert(RemotePathMapping model) =>
+            Conn.Connection.Reducers.MigrateInsertRemotePathMapping(model.Id, model.Host ?? string.Empty, model.RemotePath ?? string.Empty, model.LocalPath ?? string.Empty);
+
         protected override void InvokeUpdateReducer(RemotePathMapping model) =>
             Conn.Connection.Reducers.UpdateRemotePathMapping(model.Id, model.Host ?? string.Empty, model.RemotePath ?? string.Empty, model.LocalPath ?? string.Empty);
 

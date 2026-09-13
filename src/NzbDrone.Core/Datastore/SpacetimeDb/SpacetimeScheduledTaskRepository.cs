@@ -35,6 +35,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             (int)model.Priority,
             SpacetimeDateTime.ToTimestamp(model.LastStartTime));
 
+        public override void MigrateInsert(ScheduledTask model) => Conn.Connection.Reducers.MigrateInsertScheduledTask(
+            model.Id,
+            model.TypeName ?? string.Empty,
+            model.Interval,
+            SpacetimeDateTime.ToTimestamp(model.LastExecution),
+            (int)model.Priority,
+            SpacetimeDateTime.ToTimestamp(model.LastStartTime));
+
         protected override void InvokeUpdateReducer(ScheduledTask model) => Conn.Connection.Reducers.UpdateScheduledTask(
             model.Id,
             model.TypeName ?? string.Empty,

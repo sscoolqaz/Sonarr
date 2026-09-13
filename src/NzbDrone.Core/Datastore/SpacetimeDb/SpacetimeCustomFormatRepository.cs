@@ -42,6 +42,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(CustomFormat model) => Conn.Connection.Reducers.InsertCustomFormat(
             model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options));
 
+        public override void MigrateInsert(CustomFormat model) => Conn.Connection.Reducers.MigrateInsertCustomFormat(
+            model.Id, model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options));
+
         protected override void InvokeUpdateReducer(CustomFormat model) => Conn.Connection.Reducers.UpdateCustomFormat(
             model.Id, model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options));
 

@@ -31,6 +31,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(OtherExtraFile model) => Conn.Connection.Reducers.InsertOtherExtraFile(
             model.SeriesId, model.EpisodeFileId, model.SeasonNumber, model.RelativePath ?? string.Empty, SpacetimeDateTime.ToTimestamp(model.Added), SpacetimeDateTime.ToTimestamp(model.LastUpdated), model.Extension ?? string.Empty);
 
+        public override void MigrateInsert(OtherExtraFile model) => Conn.Connection.Reducers.MigrateInsertOtherExtraFile(
+            model.Id, model.SeriesId, model.EpisodeFileId, model.SeasonNumber, model.RelativePath ?? string.Empty, SpacetimeDateTime.ToTimestamp(model.Added), SpacetimeDateTime.ToTimestamp(model.LastUpdated), model.Extension ?? string.Empty);
+
         protected override void InvokeUpdateReducer(OtherExtraFile model) => Conn.Connection.Reducers.UpdateOtherExtraFile(
             model.Id, model.SeriesId, model.EpisodeFileId, model.SeasonNumber, model.RelativePath ?? string.Empty, SpacetimeDateTime.ToTimestamp(model.Added), SpacetimeDateTime.ToTimestamp(model.LastUpdated), model.Extension ?? string.Empty);
 

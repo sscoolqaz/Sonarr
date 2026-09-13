@@ -47,6 +47,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.LanguageTags),
             model.Title ?? string.Empty);
 
+        public override void MigrateInsert(SubtitleFile model) => Conn.Connection.Reducers.MigrateInsertSubtitleFile(
+            model.Id,
+            model.SeriesId,
+            model.EpisodeFileId,
+            model.SeasonNumber,
+            model.RelativePath ?? string.Empty,
+            SpacetimeDateTime.ToTimestamp(model.Added),
+            SpacetimeDateTime.ToTimestamp(model.LastUpdated),
+            model.Extension ?? string.Empty,
+            SpacetimeJson.Serialize(model.Language),
+            model.Copy,
+            SpacetimeJson.Serialize(model.LanguageTags),
+            model.Title ?? string.Empty);
+
         protected override void InvokeUpdateReducer(SubtitleFile model) => Conn.Connection.Reducers.UpdateSubtitleFile(
             model.Id,
             model.SeriesId,

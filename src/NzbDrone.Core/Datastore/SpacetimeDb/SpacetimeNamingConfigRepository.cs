@@ -45,6 +45,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.SeasonFolderFormat ?? string.Empty,
             model.SpecialsFolderFormat ?? string.Empty);
 
+        public override void MigrateInsert(NamingConfig model) => Conn.Connection.Reducers.MigrateInsertNamingConfig(
+            model.Id,
+            model.RenameEpisodes,
+            model.ReplaceIllegalCharacters,
+            (int)model.ColonReplacementFormat,
+            model.CustomColonReplacementFormat ?? string.Empty,
+            (int)model.MultiEpisodeStyle,
+            model.StandardEpisodeFormat ?? string.Empty,
+            model.DailyEpisodeFormat ?? string.Empty,
+            model.AnimeEpisodeFormat ?? string.Empty,
+            model.SeriesFolderFormat ?? string.Empty,
+            model.SeasonFolderFormat ?? string.Empty,
+            model.SpecialsFolderFormat ?? string.Empty);
+
         protected override void InvokeUpdateReducer(NamingConfig model) => Conn.Connection.Reducers.UpdateNamingConfig(
             model.Id,
             model.RenameEpisodes,

@@ -22,6 +22,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(RootFolder model) => Conn.Connection.Reducers.InsertRootFolder(model.Path ?? string.Empty);
 
+        public override void MigrateInsert(RootFolder model) => Conn.Connection.Reducers.MigrateInsertRootFolder(model.Id, model.Path ?? string.Empty);
+
         protected override void InvokeUpdateReducer(RootFolder model) => Conn.Connection.Reducers.UpdateRootFolder(model.Id, model.Path ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteRootFolder(id);

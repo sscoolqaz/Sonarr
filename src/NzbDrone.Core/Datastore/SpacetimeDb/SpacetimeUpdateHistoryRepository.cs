@@ -30,6 +30,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(UpdateHistory model) => Conn.Connection.Reducers.InsertUpdateHistory(
             SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType);
 
+        public override void MigrateInsert(UpdateHistory model) => Conn.Connection.Reducers.MigrateInsertUpdateHistory(
+            model.Id, SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType);
+
         protected override void InvokeUpdateReducer(UpdateHistory model) => Conn.Connection.Reducers.UpdateUpdateHistory(
             model.Id, SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType);
 

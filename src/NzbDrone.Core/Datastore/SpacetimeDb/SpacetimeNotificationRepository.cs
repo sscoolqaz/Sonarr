@@ -31,6 +31,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(NotificationDefinition model) => Conn.Connection.Reducers.InsertNotificationDefinition(
             model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
 
+        public override void MigrateInsert(NotificationDefinition model) => Conn.Connection.Reducers.MigrateInsertNotificationDefinition(
+            model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
+
         protected override void InvokeUpdateReducer(NotificationDefinition model) => Conn.Connection.Reducers.UpdateNotificationDefinition(
             model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
 

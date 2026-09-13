@@ -44,6 +44,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.Consumer ?? string.Empty,
             (int)model.Type);
 
+        public override void MigrateInsert(MetadataFile model) => Conn.Connection.Reducers.MigrateInsertMetadataFile(
+            model.Id,
+            model.SeriesId,
+            model.EpisodeFileId,
+            model.SeasonNumber,
+            model.RelativePath ?? string.Empty,
+            SpacetimeDateTime.ToTimestamp(model.Added),
+            SpacetimeDateTime.ToTimestamp(model.LastUpdated),
+            model.Extension ?? string.Empty,
+            model.Hash ?? string.Empty,
+            model.Consumer ?? string.Empty,
+            (int)model.Type);
+
         protected override void InvokeUpdateReducer(MetadataFile model) => Conn.Connection.Reducers.UpdateMetadataFile(
             model.Id,
             model.SeriesId,

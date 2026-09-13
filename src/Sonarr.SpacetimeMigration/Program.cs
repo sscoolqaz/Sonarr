@@ -4,22 +4,68 @@ using System.Linq;
 using System.Threading;
 using NLog;
 using NzbDrone.Common.Cache;
+using NzbDrone.Core.Authentication;
+using NzbDrone.Core.AutoTagging;
 using NzbDrone.Core.Blocklisting;
+using NzbDrone.Core.Configuration;
+using NzbDrone.Core.CustomFilters;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.SpacetimeDb;
+using NzbDrone.Core.Download;
+using NzbDrone.Core.Download.History;
+using NzbDrone.Core.Download.Pending;
+using NzbDrone.Core.Extras.Metadata;
+using NzbDrone.Core.Extras.Metadata.Files;
+using NzbDrone.Core.Extras.Others;
+using NzbDrone.Core.Extras.Subtitles;
 using NzbDrone.Core.History;
+using NzbDrone.Core.ImportLists;
+using NzbDrone.Core.ImportLists.Exclusions;
+using NzbDrone.Core.Indexers;
+using NzbDrone.Core.Jobs;
 using NzbDrone.Core.MediaFiles;
+using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Organizer;
+using NzbDrone.Core.Profiles.Delay;
 using NzbDrone.Core.Profiles.Qualities;
+using NzbDrone.Core.Profiles.Releases;
+using NzbDrone.Core.Qualities;
+using NzbDrone.Core.RemotePathMappings;
+using NzbDrone.Core.RootFolders;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Tv;
+using NzbDrone.Core.Update.History;
 
 namespace Sonarr.SpacetimeMigration
 {
     // One-time tool for cutting an existing SQLite-backed Sonarr install over to SpacetimeDB.
-    // First-pass scope: Tag, QualityProfile, Series (+ tags), EpisodeFile, Episode,
-    // EpisodeHistory, Blocklist - the "core" entities, extend the same pattern to the rest of
-    // the port's ~40 entities later.
+    // Second-pass scope adds every remaining entity except the entities deliberately left out of
+    // the Spacetime housekeeping-task audit's "safe to leave SQL-only" bucket for the same
+    // ephemeral/recreatable reasons: ImportListItem (repopulated on next list sync), SceneMapping
+    // (repopulated from its external source), QualityProfileQualityRank (a derived cache -
+    // QualityProfileRankService.SeedAll computes and persists one for any profile that doesn't
+    // already have it at every ApplicationStartedEvent, and UpdateRanksForProfile recomputes it
+    // again on every subsequent profile save), and the four provider Status tables
+    // (IndexerStatus/DownloadClientStatus/ImportListStatus/NotificationStatus - transient
+    // health/backoff tracking that self-heals within a health-check cycle).
+    //
+    // Command is migrated nowhere (no MigrateInsert override, no reducer) - instead
+    // RequireNoPendingCommands below refuses to proceed if the source has any Queued or Started
+    // command. This isn't the same "safe to skip" reasoning as the entities above:
+    // CommandQueueManager.Requeue() reloads every still-Queued command from the repository at
+    // every ApplicationStartedEvent (a normal Sonarr restart does NOT drain the queue), so a
+    // command genuinely in flight at migration time would be silently lost, not recreated. The
+    // fix is operational, not code - let the source instance's queue drain (check its Activity/
+    // Queue page) before migrating, rather than teaching this tool to migrate a job queue.
+    //
+    // UpdateHistory is migrated only when --source-log is given - unlike every other entity here,
+    // it lives in the source's separate logs.db file (its own real repository is constructed
+    // with ILogDatabase, not IMainDatabase), and SCHEMA_DESIGN.md is explicit that dropping it is
+    // a real feature regression (previous-version detection, installed-update annotations), not a
+    // cost-free one - so unlike Command/ImportListItem/etc. this is deliberately opt-in rather
+    // than silently skipped: the tool tells you plainly whether it did or didn't migrate it.
     //
     // Deliberately reuses the real, already-tested repository classes to read (guaranteeing
     // correct interpretation of every custom JSON/int-converter shape already in the source
@@ -68,6 +114,40 @@ namespace Sonarr.SpacetimeMigration
             var historyRepository = new HistoryRepository(source, eventAggregator);
             var blocklistRepository = new BlocklistRepository(source, eventAggregator);
 
+            var configRepository = new ConfigRepository(source, eventAggregator);
+            var namingConfigRepository = new NamingConfigRepository(source, eventAggregator);
+            var rootFolderRepository = new RootFolderRepository(source, eventAggregator);
+            var remotePathMappingRepository = new RemotePathMappingRepository(source, eventAggregator);
+            var customFilterRepository = new CustomFilterRepository(source, eventAggregator);
+            var delayProfileRepository = new DelayProfileRepository(source, eventAggregator);
+            var releaseProfileRepository = new ReleaseProfileRepository(source, eventAggregator);
+            var indexerRepository = new IndexerRepository(source, eventAggregator);
+            var downloadClientRepository = new DownloadClientRepository(source, eventAggregator);
+            var importListRepository = new ImportListRepository(source, eventAggregator);
+            var notificationRepository = new NotificationRepository(source, eventAggregator);
+            var metadataRepository = new MetadataRepository(source, eventAggregator);
+            var importListExclusionRepository = new ImportListExclusionRepository(source, eventAggregator);
+            var qualityDefinitionRepository = new QualityDefinitionRepository(source, eventAggregator);
+            var autoTaggingRepository = new AutoTaggingRepository(source, eventAggregator);
+            var userRepository = new UserRepository(source, eventAggregator);
+            var pendingReleaseRepository = new PendingReleaseRepository(source, eventAggregator);
+            var downloadHistoryRepository = new DownloadHistoryRepository(source, eventAggregator);
+            var metadataFileRepository = new MetadataFileRepository(source, eventAggregator);
+            var subtitleFileRepository = new SubtitleFileRepository(source, eventAggregator);
+            var otherExtraFileRepository = new OtherExtraFileRepository(source, eventAggregator);
+            var scheduledTaskRepository = new ScheduledTaskRepository(source, eventAggregator);
+
+            var commandRepository = new CommandRepository(source, eventAggregator);
+            RequireNoPendingCommands(commandRepository);
+
+            var sourceLog = string.IsNullOrEmpty(options.SourceLogSqlitePath) ? null : OpenReadOnlyLogSource(options.SourceLogSqlitePath);
+            var updateHistoryRepository = sourceLog == null ? null : new UpdateHistoryRepository(sourceLog, eventAggregator);
+
+            if (sourceLog == null)
+            {
+                Console.WriteLine("UpdateHistory: skipped (no --source-log given) - see README.md if you want previous-version detection preserved across the cutover.");
+            }
+
             Console.WriteLine(options.DryRun
                 ? "Dry run - reading source data only, nothing will be written to SpacetimeDB."
                 : $"Migrating into SpacetimeDB database '{options.TargetDatabase}' at {options.TargetHost}.");
@@ -76,7 +156,7 @@ namespace Sonarr.SpacetimeMigration
 
             if (target != null)
             {
-                RequireEmptyTarget(target);
+                RequireEmptyTarget(target, checkUpdateHistory: sourceLog != null);
             }
 
             var targetTags = target == null ? null : new SpacetimeTagRepository(target, eventAggregator);
@@ -90,6 +170,31 @@ namespace Sonarr.SpacetimeMigration
             var targetEpisodes = target == null ? null : new SpacetimeEpisodeRepository(target, eventAggregator, targetMediaFiles, targetSeries, null);
             var targetHistory = target == null ? null : new SpacetimeHistoryRepository(target, eventAggregator, targetSeries, targetEpisodes, null);
             var targetBlocklist = target == null ? null : new SpacetimeBlocklistRepository(target, eventAggregator, targetSeries, null);
+
+            var targetCustomFormats = target == null ? null : new SpacetimeCustomFormatRepository(target, eventAggregator);
+            var targetConfig = target == null ? null : new SpacetimeConfigRepository(target, eventAggregator);
+            var targetNamingConfig = target == null ? null : new SpacetimeNamingConfigRepository(target, eventAggregator);
+            var targetRootFolders = target == null ? null : new SpacetimeRootFolderRepository(target, eventAggregator);
+            var targetRemotePathMappings = target == null ? null : new SpacetimeRemotePathMappingRepository(target, eventAggregator);
+            var targetCustomFilters = target == null ? null : new SpacetimeCustomFilterRepository(target, eventAggregator);
+            var targetDelayProfiles = target == null ? null : new SpacetimeDelayProfileRepository(target, eventAggregator);
+            var targetReleaseProfiles = target == null ? null : new SpacetimeReleaseProfileRepository(target, eventAggregator);
+            var targetIndexers = target == null ? null : new SpacetimeIndexerRepository(target, eventAggregator);
+            var targetDownloadClients = target == null ? null : new SpacetimeDownloadClientRepository(target, eventAggregator);
+            var targetImportLists = target == null ? null : new SpacetimeImportListRepository(target, eventAggregator);
+            var targetNotifications = target == null ? null : new SpacetimeNotificationRepository(target, eventAggregator);
+            var targetMetadata = target == null ? null : new SpacetimeMetadataRepository(target, eventAggregator);
+            var targetImportListExclusions = target == null ? null : new SpacetimeImportListExclusionRepository(target, eventAggregator);
+            var targetQualityDefinitions = target == null ? null : new SpacetimeQualityDefinitionRepository(target, eventAggregator);
+            var targetAutoTagging = target == null ? null : new SpacetimeAutoTaggingRepository(target, eventAggregator);
+            var targetUsers = target == null ? null : new SpacetimeUserRepository(target, eventAggregator);
+            var targetPendingReleases = target == null ? null : new SpacetimePendingReleaseRepository(target, eventAggregator);
+            var targetDownloadHistory = target == null ? null : new SpacetimeDownloadHistoryRepository(target, eventAggregator);
+            var targetMetadataFiles = target == null ? null : new SpacetimeMetadataFileRepository(target, eventAggregator);
+            var targetSubtitleFiles = target == null ? null : new SpacetimeSubtitleFileRepository(target, eventAggregator);
+            var targetOtherExtraFiles = target == null ? null : new SpacetimeOtherExtraFileRepository(target, eventAggregator);
+            var targetScheduledTasks = target == null ? null : new SpacetimeScheduledTaskRepository(target, eventAggregator);
+            var targetUpdateHistory = target == null || sourceLog == null ? null : new SpacetimeUpdateHistoryRepository(target, eventAggregator);
 
             MigrateEntity(
                 "Tags",
@@ -162,6 +267,182 @@ namespace Sonarr.SpacetimeMigration
                 options,
                 model => targetBlocklist?.MigrateInsert(model),
                 () => targetBlocklist.Count());
+
+            // Second migration pass - everything else this port has ported, except UpdateHistory
+            // and the deliberately-excluded entities (see this file's own top-of-file comment for
+            // why). No foreign-key enforcement exists on the SpacetimeDB side, so unlike Series/
+            // SeriesTag above there's no ordering requirement between any of these - grouped here
+            // roughly by real-app subsystem rather than by dependency.
+            MigrateEntity(
+                "CustomFormats",
+                customFormatRepository.All(),
+                options,
+                model => targetCustomFormats?.MigrateInsert(model),
+                () => targetCustomFormats.Count());
+
+            MigrateEntity(
+                "Config",
+                configRepository.All(),
+                options,
+                model => targetConfig?.MigrateInsert(model),
+                () => targetConfig.Count());
+
+            MigrateEntity(
+                "NamingConfig",
+                namingConfigRepository.All(),
+                options,
+                model => targetNamingConfig?.MigrateInsert(model),
+                () => targetNamingConfig.Count());
+
+            MigrateEntity(
+                "RootFolders",
+                rootFolderRepository.All(),
+                options,
+                model => targetRootFolders?.MigrateInsert(model),
+                () => targetRootFolders.Count());
+
+            MigrateEntity(
+                "RemotePathMappings",
+                remotePathMappingRepository.All(),
+                options,
+                model => targetRemotePathMappings?.MigrateInsert(model),
+                () => targetRemotePathMappings.Count());
+
+            MigrateEntity(
+                "CustomFilters",
+                customFilterRepository.All(),
+                options,
+                model => targetCustomFilters?.MigrateInsert(model),
+                () => targetCustomFilters.Count());
+
+            MigrateEntity(
+                "DelayProfiles",
+                delayProfileRepository.All(),
+                options,
+                model => targetDelayProfiles?.MigrateInsert(model),
+                () => targetDelayProfiles.Count());
+
+            MigrateEntity(
+                "ReleaseProfiles",
+                releaseProfileRepository.All(),
+                options,
+                model => targetReleaseProfiles?.MigrateInsert(model),
+                () => targetReleaseProfiles.Count());
+
+            MigrateEntity(
+                "Indexers",
+                indexerRepository.All(),
+                options,
+                model => targetIndexers?.MigrateInsert(model),
+                () => targetIndexers.Count());
+
+            MigrateEntity(
+                "DownloadClients",
+                downloadClientRepository.All(),
+                options,
+                model => targetDownloadClients?.MigrateInsert(model),
+                () => targetDownloadClients.Count());
+
+            MigrateEntity(
+                "ImportLists",
+                importListRepository.All(),
+                options,
+                model => targetImportLists?.MigrateInsert(model),
+                () => targetImportLists.Count());
+
+            MigrateEntity(
+                "Notifications",
+                notificationRepository.All(),
+                options,
+                model => targetNotifications?.MigrateInsert(model),
+                () => targetNotifications.Count());
+
+            MigrateEntity(
+                "MetadataProviders",
+                metadataRepository.All(),
+                options,
+                model => targetMetadata?.MigrateInsert(model),
+                () => targetMetadata.Count());
+
+            MigrateEntity(
+                "ImportListExclusions",
+                importListExclusionRepository.All(),
+                options,
+                model => targetImportListExclusions?.MigrateInsert(model),
+                () => targetImportListExclusions.Count());
+
+            MigrateEntity(
+                "QualityDefinitions",
+                qualityDefinitionRepository.All(),
+                options,
+                model => targetQualityDefinitions?.MigrateInsert(model),
+                () => targetQualityDefinitions.Count());
+
+            MigrateEntity(
+                "AutoTagging",
+                autoTaggingRepository.All(),
+                options,
+                model => targetAutoTagging?.MigrateInsert(model),
+                () => targetAutoTagging.Count());
+
+            MigrateEntity(
+                "Users",
+                userRepository.All(),
+                options,
+                model => targetUsers?.MigrateInsert(model),
+                () => targetUsers.Count());
+
+            MigrateEntity(
+                "PendingReleases",
+                pendingReleaseRepository.All(),
+                options,
+                model => targetPendingReleases?.MigrateInsert(model),
+                () => targetPendingReleases.Count());
+
+            MigrateEntity(
+                "DownloadHistory",
+                downloadHistoryRepository.All(),
+                options,
+                model => targetDownloadHistory?.MigrateInsert(model),
+                () => targetDownloadHistory.Count());
+
+            MigrateEntity(
+                "MetadataFiles",
+                metadataFileRepository.All(),
+                options,
+                model => targetMetadataFiles?.MigrateInsert(model),
+                () => targetMetadataFiles.Count());
+
+            MigrateEntity(
+                "SubtitleFiles",
+                subtitleFileRepository.All(),
+                options,
+                model => targetSubtitleFiles?.MigrateInsert(model),
+                () => targetSubtitleFiles.Count());
+
+            MigrateEntity(
+                "OtherExtraFiles",
+                otherExtraFileRepository.All(),
+                options,
+                model => targetOtherExtraFiles?.MigrateInsert(model),
+                () => targetOtherExtraFiles.Count());
+
+            MigrateEntity(
+                "ScheduledTasks",
+                scheduledTaskRepository.All(),
+                options,
+                model => targetScheduledTasks?.MigrateInsert(model),
+                () => targetScheduledTasks.Count());
+
+            if (sourceLog != null)
+            {
+                MigrateEntity(
+                    "UpdateHistory",
+                    updateHistoryRepository.All(),
+                    options,
+                    model => targetUpdateHistory?.MigrateInsert(model),
+                    () => targetUpdateHistory.Count());
+            }
 
             Console.WriteLine("Done.");
 
@@ -244,7 +525,7 @@ namespace Sonarr.SpacetimeMigration
         // started" apart from "our N inserts landed"). Every entity this tool covers must start
         // genuinely empty - point --target-db at a fresh database, not one that's been migrated
         // into before or that has any other data in it.
-        private static void RequireEmptyTarget(SpacetimeDbConnection target)
+        private static void RequireEmptyTarget(SpacetimeDbConnection target, bool checkUpdateHistory)
         {
             void CheckEmpty(string name, Func<int> count)
             {
@@ -267,6 +548,35 @@ namespace Sonarr.SpacetimeMigration
             CheckEmpty("Episode", () => target.Connection.Db.Episode.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("EpisodeHistory", () => target.Connection.Db.EpisodeHistory.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("Blocklist", () => target.Connection.Db.Blocklist.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+
+            CheckEmpty("CustomFormat", () => target.Connection.Db.CustomFormat.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("Config", () => target.Connection.Db.Config.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("NamingConfig", () => target.Connection.Db.NamingConfig.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("RootFolder", () => target.Connection.Db.RootFolder.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("RemotePathMapping", () => target.Connection.Db.RemotePathMapping.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("CustomFilter", () => target.Connection.Db.CustomFilter.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("DelayProfile", () => target.Connection.Db.DelayProfile.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("ReleaseProfile", () => target.Connection.Db.ReleaseProfile.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("IndexerDefinition", () => target.Connection.Db.IndexerDefinition.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("DownloadClientDefinition", () => target.Connection.Db.DownloadClientDefinition.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("ImportListDefinition", () => target.Connection.Db.ImportListDefinition.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("NotificationDefinition", () => target.Connection.Db.NotificationDefinition.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("MetadataDefinition", () => target.Connection.Db.MetadataDefinition.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("ImportListExclusion", () => target.Connection.Db.ImportListExclusion.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("QualityDefinition", () => target.Connection.Db.QualityDefinition.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("AutoTag", () => target.Connection.Db.AutoTag.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("User", () => target.Connection.Db.User.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("PendingRelease", () => target.Connection.Db.PendingRelease.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("DownloadHistory", () => target.Connection.Db.DownloadHistory.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("MetadataFile", () => target.Connection.Db.MetadataFile.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("SubtitleFile", () => target.Connection.Db.SubtitleFile.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("OtherExtraFile", () => target.Connection.Db.OtherExtraFile.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("ScheduledTask", () => target.Connection.Db.ScheduledTask.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+
+            if (checkUpdateHistory)
+            {
+                CheckEmpty("UpdateHistory", () => target.Connection.Db.UpdateHistory.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            }
         }
 
         private static IMainDatabase OpenReadOnlySource(string sqlitePath)
@@ -287,6 +597,49 @@ namespace Sonarr.SpacetimeMigration
             });
 
             return new MainDatabase(database);
+        }
+
+        private static ILogDatabase OpenReadOnlyLogSource(string sqlitePath)
+        {
+            var connectionString = new SQLiteConnectionStringBuilder
+            {
+                DataSource = sqlitePath,
+                ReadOnly = true,
+                JournalMode = SQLiteJournalModeEnum.Wal
+            }.ConnectionString;
+
+            var database = new Database("SourceLog", () =>
+            {
+                var connection = SQLiteFactory.Instance.CreateConnection();
+                connection.ConnectionString = connectionString;
+                connection.Open();
+                return connection;
+            });
+
+            return new LogDatabase(database);
+        }
+
+        // CommandQueueManager.Requeue() reloads every still-Queued command from the repository at
+        // every ApplicationStartedEvent, and Started commands are only flipped to Orphaned by
+        // OrphanStartedCommands at that same startup point - so unlike a normal restart, a
+        // command genuinely in flight (Queued or Started) at migration time has no path back:
+        // this tool never migrates Command at all, so it would simply vanish. Refuse to proceed
+        // rather than silently drop real in-flight work - see this file's own top-of-file comment
+        // for the full reasoning.
+        private static void RequireNoPendingCommands(ICommandRepository commandRepository)
+        {
+            var pending = commandRepository.All()
+                .Where(c => c.Status == CommandStatus.Queued || c.Status == CommandStatus.Started)
+                .ToList();
+
+            if (pending.Any())
+            {
+                throw new InvalidOperationException(
+                    $"Source database has {pending.Count} command(s) still Queued or Started (e.g. \"{pending[0].Name}\") - " +
+                    "this tool does not migrate the Command table, so an in-flight command would be silently lost, not recreated " +
+                    "(a normal Sonarr restart reloads Queued commands from the database; this migration does not carry that table over at all). " +
+                    "Wait for the source instance's command queue to fully drain (check its Activity/Queue page) and retry.");
+            }
         }
     }
 }

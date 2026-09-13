@@ -41,6 +41,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(AutoTag model) => Conn.Connection.Reducers.InsertAutoTag(
             model.Name ?? string.Empty, JsonSerializer.Serialize(model.Specifications, Options), model.RemoveTagsAutomatically, SpacetimeJson.Serialize(model.Tags));
 
+        public override void MigrateInsert(AutoTag model) => Conn.Connection.Reducers.MigrateInsertAutoTag(
+            model.Id, model.Name ?? string.Empty, JsonSerializer.Serialize(model.Specifications, Options), model.RemoveTagsAutomatically, SpacetimeJson.Serialize(model.Tags));
+
         protected override void InvokeUpdateReducer(AutoTag model) => Conn.Connection.Reducers.UpdateAutoTag(
             model.Id, model.Name ?? string.Empty, JsonSerializer.Serialize(model.Specifications, Options), model.RemoveTagsAutomatically, SpacetimeJson.Serialize(model.Tags));
 

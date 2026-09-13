@@ -45,6 +45,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.MinimumCustomFormatScore,
             SpacetimeJson.Serialize(model.Tags));
 
+        public override void MigrateInsert(DelayProfile model) => Conn.Connection.Reducers.MigrateInsertDelayProfile(
+            model.Id,
+            model.EnableUsenet,
+            model.EnableTorrent,
+            (int)model.PreferredProtocol,
+            model.UsenetDelay,
+            model.TorrentDelay,
+            model.Order,
+            model.BypassIfHighestQuality,
+            model.BypassIfAboveCustomFormatScore,
+            model.MinimumCustomFormatScore,
+            SpacetimeJson.Serialize(model.Tags));
+
         protected override void InvokeUpdateReducer(DelayProfile model) => Conn.Connection.Reducers.UpdateDelayProfile(
             model.Id,
             model.EnableUsenet,

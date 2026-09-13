@@ -31,6 +31,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(ImportListDefinition model) => Conn.Connection.Reducers.InsertImportListDefinition(
             model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
 
+        public override void MigrateInsert(ImportListDefinition model) => Conn.Connection.Reducers.MigrateInsertImportListDefinition(
+            model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
+
         protected override void InvokeUpdateReducer(ImportListDefinition model) => Conn.Connection.Reducers.UpdateImportListDefinition(
             model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
 

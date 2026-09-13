@@ -23,6 +23,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(ImportListExclusion model) =>
             Conn.Connection.Reducers.InsertImportListExclusion(model.TvdbId, model.Title);
 
+        public override void MigrateInsert(ImportListExclusion model) =>
+            Conn.Connection.Reducers.MigrateInsertImportListExclusion(model.Id, model.TvdbId, model.Title);
+
         protected override void InvokeUpdateReducer(ImportListExclusion model) =>
             Conn.Connection.Reducers.UpdateImportListExclusion(model.Id, model.TvdbId, model.Title);
 

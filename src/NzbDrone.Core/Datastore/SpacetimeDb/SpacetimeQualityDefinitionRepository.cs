@@ -28,6 +28,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(QualityDefinition model) =>
             Conn.Connection.Reducers.InsertQualityDefinition(SpacetimeJson.Serialize(model.Quality), model.Title ?? string.Empty);
 
+        public override void MigrateInsert(QualityDefinition model) =>
+            Conn.Connection.Reducers.MigrateInsertQualityDefinition(model.Id, SpacetimeJson.Serialize(model.Quality), model.Title ?? string.Empty);
+
         protected override void InvokeUpdateReducer(QualityDefinition model) =>
             Conn.Connection.Reducers.UpdateQualityDefinition(model.Id, SpacetimeJson.Serialize(model.Quality), model.Title ?? string.Empty);
 
