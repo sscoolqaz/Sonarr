@@ -61,6 +61,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static int DeriveQualityId(Blocklist model) => model.Quality?.Quality?.Id ?? 0;
 
+        public override void MigrateInsert(Blocklist model) => Conn.Connection.Reducers.MigrateInsertBlocklist(
+            model.Id,
+            model.SeriesId,
+            SpacetimeJson.Serialize(model.EpisodeIds),
+            model.SourceTitle ?? string.Empty,
+            SpacetimeJson.Serialize(model.Quality),
+            DeriveQualityId(model),
+            SpacetimeDateTime.ToTimestamp(model.Date),
+            SpacetimeDateTime.ToTimestamp(model.PublishedDate),
+            model.Size,
+            (int)model.Protocol,
+            model.Indexer ?? string.Empty,
+            (int)model.IndexerFlags,
+            (int)model.ReleaseType,
+            model.Message ?? string.Empty,
+            model.Source ?? string.Empty,
+            model.TorrentInfoHash ?? string.Empty,
+            SpacetimeJson.Serialize(model.Languages));
+
         protected override void InvokeInsertReducer(Blocklist model) => Conn.Connection.Reducers.InsertBlocklist(
             model.SeriesId,
             SpacetimeJson.Serialize(model.EpisodeIds),

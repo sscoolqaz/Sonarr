@@ -80,6 +80,52 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override int GetRowId(StdbSeries row) => row.Id;
 
+        // Tags aren't part of this - migration calls replace_series_tags separately afterward,
+        // same as the running app does (see ReplaceSeriesTags's own reducer, already keyed by
+        // seriesId/tagIds rather than needing an id-preserving variant of its own).
+        public override void MigrateInsert(Series model)
+        {
+            Conn.Connection.Reducers.MigrateInsertSeries(
+                model.Id,
+                model.TvdbId,
+                model.TvRageId,
+                model.TvMazeId,
+                model.ImdbId ?? string.Empty,
+                model.TmdbId,
+                SpacetimeJson.Serialize(model.MalIds),
+                SpacetimeJson.Serialize(model.AniListIds),
+                model.Title ?? string.Empty,
+                model.CleanTitle ?? string.Empty,
+                model.SortTitle ?? string.Empty,
+                (int)model.Status,
+                model.Overview ?? string.Empty,
+                model.AirTime ?? string.Empty,
+                model.Monitored,
+                (int)model.MonitorNewItems,
+                model.QualityProfileId,
+                model.SeasonFolder,
+                SpacetimeDateTime.ToTimestamp(model.LastInfoSync),
+                model.Runtime,
+                SpacetimeJson.Serialize(model.Images),
+                (int)model.SeriesType,
+                model.Network ?? string.Empty,
+                model.UseSceneNumbering,
+                model.TitleSlug ?? string.Empty,
+                model.Path ?? string.Empty,
+                model.Year,
+                SpacetimeJson.Serialize(model.Ratings),
+                SpacetimeJson.Serialize(model.Genres),
+                SpacetimeJson.Serialize(model.Actors),
+                model.Certification ?? string.Empty,
+                SpacetimeDateTime.ToTimestamp(model.Added),
+                SpacetimeDateTime.ToTimestamp(model.FirstAired),
+                SpacetimeDateTime.ToTimestamp(model.LastAired),
+                SpacetimeJson.Serialize(model.OriginalLanguage),
+                model.OriginalCountry ?? string.Empty,
+                SpacetimeJson.Serialize(model.Seasons),
+                SpacetimeJson.Serialize(model.AddOptions));
+        }
+
         protected override void InvokeInsertReducer(Series model)
         {
             Conn.Connection.Reducers.InsertSeries(

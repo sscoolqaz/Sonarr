@@ -80,6 +80,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SerializeFormatItems(model),
             SerializeItems(model));
 
+        public override void MigrateInsert(QualityProfile model) => Conn.Connection.Reducers.MigrateInsertQualityProfile(
+            model.Id,
+            model.Name ?? string.Empty,
+            model.UpgradeAllowed,
+            model.Cutoff,
+            model.MinFormatScore,
+            model.CutoffFormatScore,
+            model.MinUpgradeFormatScore,
+            SerializeFormatItems(model),
+            SerializeItems(model));
+
         protected override void InvokeUpdateReducer(QualityProfile model) => Conn.Connection.Reducers.UpdateQualityProfile(
             model.Id,
             model.Name ?? string.Empty,

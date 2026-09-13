@@ -62,6 +62,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Sonarr.Api.V3", "Sonarr.Api
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Sonarr.Http", "Sonarr.Http\Sonarr.Http.csproj", "{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Sonarr.SpacetimeMigration", "Sonarr.SpacetimeMigration\Sonarr.SpacetimeMigration.csproj", "{05463802-5337-45CF-989D-F94C3B3A806B}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Sonarr.Host.Test", "NzbDrone.Host.Test\Sonarr.Host.Test.csproj", "{C0EA1A40-91AD-4EEB-BD16-2DDDEBD20AE5}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Sonarr.Http.Test", "Sonarr.Http.Test\Sonarr.Http.Test.csproj", "{69333F98-305F-4E1A-87F3-7A2A3B062657}"
@@ -261,6 +263,14 @@ Global
 		{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}.Release|Posix.Build.0 = Release|Any CPU
 		{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}.Release|Windows.ActiveCfg = Release|Any CPU
 		{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}.Release|Windows.Build.0 = Release|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Debug|Posix.ActiveCfg = Debug|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Debug|Posix.Build.0 = Debug|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Debug|Windows.ActiveCfg = Debug|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Debug|Windows.Build.0 = Debug|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Release|Posix.ActiveCfg = Release|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Release|Posix.Build.0 = Release|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Release|Windows.ActiveCfg = Release|Any CPU
+		{05463802-5337-45CF-989D-F94C3B3A806B}.Release|Windows.Build.0 = Release|Any CPU
 		{C0EA1A40-91AD-4EEB-BD16-2DDDEBD20AE5}.Debug|Posix.ActiveCfg = Debug|Any CPU
 		{C0EA1A40-91AD-4EEB-BD16-2DDDEBD20AE5}.Debug|Posix.Build.0 = Debug|Any CPU
 		{C0EA1A40-91AD-4EEB-BD16-2DDDEBD20AE5}.Debug|Windows.ActiveCfg = Debug|Any CPU

@@ -103,6 +103,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         public TModel SingleOrDefault() => All().SingleOrDefault();
 
+        // Opt-in hook for the migration tool (Sonarr.SpacetimeMigration) cutting an existing
+        // SQLite-backed install over to SpacetimeDB - unlike Insert(), which always assigns a
+        // fresh id, this preserves model.Id exactly so foreign keys (Episode.SeriesId, etc.)
+        // transfer as-is with no in-script id-remapping needed. Only overridden by the handful of
+        // repositories the migration's first pass covers (Tag, QualityProfile, Series, Episode,
+        // EpisodeFile, EpisodeHistory, Blocklist) - everything else throws until the migration's
+        // scope grows to match. Deliberately reuses each repository's own InvokeInsertReducer
+        // argument-building expressions (just against a MigrateInsert<Entity> reducer instead of
+        // Insert<Entity>) rather than duplicating that logic in the migration tool itself, so the
+        // two can't drift apart.
+        public virtual void MigrateInsert(TModel model) =>
+            throw new NotSupportedException($"{GetType().Name} does not support migration inserts");
+
         public TModel Insert(TModel model)
         {
             if (model.Id != 0)

@@ -76,6 +76,32 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override int GetRowId(StdbEpisode row) => row.Id;
 
+        public override void MigrateInsert(Episode model) => Conn.Connection.Reducers.MigrateInsertEpisode(
+            model.Id,
+            model.SeriesId,
+            model.TvdbId,
+            model.EpisodeFileId,
+            model.SeasonNumber,
+            model.EpisodeNumber,
+            model.Title ?? string.Empty,
+            model.AirDate ?? string.Empty,
+            SpacetimeDateTime.ToTimestamp(model.AirDateUtc),
+            model.Overview ?? string.Empty,
+            model.Monitored,
+            model.AbsoluteEpisodeNumber,
+            model.SceneAbsoluteEpisodeNumber,
+            model.SceneSeasonNumber,
+            model.SceneEpisodeNumber,
+            model.AiredAfterSeasonNumber,
+            model.AiredBeforeSeasonNumber,
+            model.AiredBeforeEpisodeNumber,
+            model.UnverifiedSceneNumbering,
+            SpacetimeJson.Serialize(model.Ratings),
+            SpacetimeJson.Serialize(model.Images),
+            SpacetimeDateTime.ToTimestamp(model.LastSearchTime),
+            model.Runtime,
+            model.FinaleType ?? string.Empty);
+
         protected override void InvokeInsertReducer(Episode model) => Conn.Connection.Reducers.InsertEpisode(
             model.SeriesId,
             model.TvdbId,

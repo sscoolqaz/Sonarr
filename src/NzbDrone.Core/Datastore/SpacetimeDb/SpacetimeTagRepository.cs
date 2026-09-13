@@ -30,6 +30,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(Tag model) => Conn.Connection.Reducers.InsertTag(model.Label ?? string.Empty);
 
+        public override void MigrateInsert(Tag model) => Conn.Connection.Reducers.MigrateInsertTag(model.Id, model.Label ?? string.Empty);
+
         protected override void InvokeUpdateReducer(Tag model) => Conn.Connection.Reducers.UpdateTag(model.Id, model.Label ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteTag(id);

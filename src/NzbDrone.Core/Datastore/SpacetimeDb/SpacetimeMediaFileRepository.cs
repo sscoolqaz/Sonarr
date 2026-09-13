@@ -55,6 +55,24 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static int DeriveQualityId(EpisodeFile model) => model.Quality?.Quality?.Id ?? 0;
 
+        public override void MigrateInsert(EpisodeFile model) => Conn.Connection.Reducers.MigrateInsertEpisodeFile(
+            model.Id,
+            model.SeriesId,
+            model.SeasonNumber,
+            model.RelativePath ?? string.Empty,
+            model.Size,
+            SpacetimeDateTime.ToTimestamp(model.DateAdded),
+            model.OriginalFilePath ?? string.Empty,
+            model.SceneName ?? string.Empty,
+            model.ReleaseGroup ?? string.Empty,
+            model.ReleaseHash ?? string.Empty,
+            SpacetimeJson.Serialize(model.Quality),
+            DeriveQualityId(model),
+            (int)model.IndexerFlags,
+            SpacetimeJson.Serialize(model.MediaInfo),
+            SpacetimeJson.Serialize(model.Languages),
+            (int)model.ReleaseType);
+
         protected override void InvokeInsertReducer(EpisodeFile model) => Conn.Connection.Reducers.InsertEpisodeFile(
             model.SeriesId,
             model.SeasonNumber,
