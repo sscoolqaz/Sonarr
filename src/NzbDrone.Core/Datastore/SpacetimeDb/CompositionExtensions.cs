@@ -72,7 +72,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             typeof(SpacetimeCleanupOrphanedIndexerStatus),
             typeof(SpacetimeCleanupOrphanedDownloadClientStatus),
             typeof(SpacetimeCleanupOrphanedImportListStatus),
-            typeof(SpacetimeCleanupOrphanedNotificationStatus)
+            typeof(SpacetimeCleanupOrphanedNotificationStatus),
+            typeof(SpacetimeCleanupAbsolutePathMetadataFiles),
+            typeof(SpacetimeCleanupDownloadClientUnavailablePendingReleases),
+            typeof(SpacetimeCleanupDuplicateMetadataFiles),
+            typeof(SpacetimeCleanupQualityProfileFormatItems),
+            typeof(SpacetimeFixFutureRunScheduledTasks),
+            typeof(SpacetimeCleanupUnusedTags)
         };
 
         public static IContainer RemoveAutoRegisteredHousekeepingTasks(this IContainer container)
@@ -222,7 +228,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Register<INotificationRepository, SpacetimeNotificationRepository>(container);
             Register<IDownloadClientRepository, SpacetimeDownloadClientRepository>(container);
             Register<IMetadataRepository, SpacetimeMetadataRepository>(container);
-            Register<IQualityProfileRepository, SpacetimeQualityProfileRepository>(container);
+
+            // SpacetimeCleanupQualityProfileFormatItems needs the concrete type directly, for
+            // GetRawFormatItemIds() (not part of IQualityProfileRepository) - see that task's own
+            // comment. Registering the concrete type as the primary singleton and mapping the
+            // interface onto it (rather than two independent Register<TService,TImpl> calls)
+            // keeps both service types resolving to the exact same instance - two separate
+            // instances would each get their own SpacetimeBasicRepository _writeLock, quietly
+            // weakening the single-instance synchronization every other repository here relies on.
+            Register<SpacetimeQualityProfileRepository, SpacetimeQualityProfileRepository>(container);
+            container.RegisterMapping<IQualityProfileRepository, SpacetimeQualityProfileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
             Register<ISeriesRepository, SpacetimeSeriesRepository>(container);
 
             // Tier 2
@@ -268,6 +284,12 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             RegisterAdditionalHousekeepingTask<SpacetimeCleanupOrphanedDownloadClientStatus>(container);
             RegisterAdditionalHousekeepingTask<SpacetimeCleanupOrphanedImportListStatus>(container);
             RegisterAdditionalHousekeepingTask<SpacetimeCleanupOrphanedNotificationStatus>(container);
+            RegisterAdditionalHousekeepingTask<SpacetimeCleanupAbsolutePathMetadataFiles>(container);
+            RegisterAdditionalHousekeepingTask<SpacetimeCleanupDownloadClientUnavailablePendingReleases>(container);
+            RegisterAdditionalHousekeepingTask<SpacetimeCleanupDuplicateMetadataFiles>(container);
+            RegisterAdditionalHousekeepingTask<SpacetimeCleanupQualityProfileFormatItems>(container);
+            RegisterAdditionalHousekeepingTask<SpacetimeFixFutureRunScheduledTasks>(container);
+            RegisterAdditionalHousekeepingTask<SpacetimeCleanupUnusedTags>(container);
 
             return container;
         }

@@ -64,6 +64,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override int GetRowId(StdbQualityProfile row) => row.Id;
 
+        // ToModel silently drops any FormatItemDto whose Format id no longer exists in
+        // ICustomFormatService (see the loop above) - so profile.FormatItems as returned by
+        // All()/Find() can never reveal a stale id for SpacetimeCleanupQualityProfileFormatItems
+        // to detect and persist a removal for. This gives that task the raw, unfiltered ids
+        // exactly as stored, bypassing the CustomFormat existence check.
+        public Dictionary<int, List<int>> GetRawFormatItemIds()
+        {
+            return RemoteQuery(string.Empty).ToDictionary(
+                row => row.Id,
+                row => (JsonSerializer.Deserialize<List<FormatItemDto>>(row.FormatItemsJson, SerializerSettings) ?? new List<FormatItemDto>())
+                    .Select(dto => dto.Format)
+                    .ToList());
+        }
+
         private static string SerializeFormatItems(QualityProfile model) =>
             JsonSerializer.Serialize(model.FormatItems.Select(f => new FormatItemDto { Format = f.Format.Id, Score = f.Score }).ToList(), SerializerSettings);
 
