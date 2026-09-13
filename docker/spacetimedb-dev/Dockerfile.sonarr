@@ -1,9 +1,23 @@
-# Phase 2 dev container: backend-only build (no frontend/UI bundle) - this proves the
-# containerized .NET backend can run with the SpacetimeDB-backed ITagRepository wired in via
-# DI and reachable over its real REST API, which is what Phase 2 needs to validate. Building
-# the full React/TypeScript frontend is deferred to Phase 4's production containerization -
-# it's a separate, well-understood toolchain step that doesn't change anything about whether
-# the SpacetimeDB wiring works, so it isn't worth the extra build time here.
+# Frontend build stage - added for the Phase 4 browser/UI + SignalR verification pass. Pinned
+# to the exact node/yarn versions package.json's own "volta" block specifies, so this matches
+# what the real project's toolchain expects rather than whatever a floating "node:latest" tag
+# happens to be.
+FROM node:24.19.0-slim AS frontend-build
+WORKDIR /build
+RUN corepack enable && corepack prepare yarn@1.22.22 --activate
+COPY package.json yarn.lock tsconfig.json ./
+RUN yarn install --frozen-lockfile
+COPY frontend/ frontend/
+# Backend serves the UI from ../UI relative to its own StartUpFolder in Debug builds
+# (ConfigFileProvider.UiFolder) - webpack's own config already resolves its output to
+# <repo-root>/_output/UI for exactly this reason, matching the backend's dev-mode convention.
+RUN yarn build --env production
+
+# Phase 2 dev container: originally backend-only (no frontend/UI bundle) - that proved the
+# containerized .NET backend could run with the SpacetimeDB-backed repositories wired in via DI
+# and reachable over its real REST API, which is what Phase 2 needed to validate. The frontend
+# build stage above adds the full React/TypeScript UI bundle for Phase 4's browser/SignalR
+# verification pass, built from this same source tree against the running Spacetime-backed API.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /build
 # .editorconfig lives at the repo root, one level above src/, and downgrades a large set of
@@ -25,6 +39,11 @@ RUN dotnet build Sonarr.sln -c Debug
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /build/_output/net10.0/ .
+# ConfigFileProvider.UiFolder resolves to "../UI" relative to StartUpFolder (the executing
+# assembly's own directory, /app here) whenever BuildInfo.IsDebug is true - which it is, since
+# the backend build stage above uses `dotnet build -c Debug`, not `-c Release`. So the frontend
+# bundle needs to land at /UI (a sibling of /app), not /app/UI.
+COPY --from=frontend-build /build/_output/UI /UI
 RUN mkdir -p /config
 EXPOSE 8989
 ENTRYPOINT ["dotnet", "Sonarr.dll", "-nobrowser", "-data=/config"]
