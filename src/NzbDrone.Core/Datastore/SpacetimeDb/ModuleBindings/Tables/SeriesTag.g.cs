@@ -26,9 +26,19 @@ namespace SpacetimeDB.Types
 
             public readonly IdUniqueIndex Id;
 
+            public sealed class SeriesIdIndex : BTreeIndexBase<int>
+            {
+                protected override int GetKey(SeriesTag row) => row.SeriesId;
+
+                public SeriesIdIndex(SeriesTagHandle table) : base(table) { }
+            }
+
+            public readonly SeriesIdIndex SeriesId;
+
             internal SeriesTagHandle(DbConnection conn) : base(conn)
             {
                 Id = new(this);
+                SeriesId = new(this);
             }
 
             protected override object GetPrimaryKey(SeriesTag row) => row.Id;
@@ -54,10 +64,12 @@ namespace SpacetimeDB.Types
     public sealed class SeriesTagIxCols
     {
         public global::SpacetimeDB.IxCol<SeriesTag, int> Id { get; }
+        public global::SpacetimeDB.IxCol<SeriesTag, int> SeriesId { get; }
 
         public SeriesTagIxCols(string tableName)
         {
             Id = new global::SpacetimeDB.IxCol<SeriesTag, int>(tableName, "id");
+            SeriesId = new global::SpacetimeDB.IxCol<SeriesTag, int>(tableName, "series_id");
         }
     }
 }

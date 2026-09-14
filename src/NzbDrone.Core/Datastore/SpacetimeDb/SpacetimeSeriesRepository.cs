@@ -90,12 +90,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertSeries -= Handler);
         }
 
-        // TODO: this is a full table scan per series (Conn.Connection.Db.SeriesTag.Iter().Where)
-        // - switch to an index-based lookup once a secondary index on SeriesTag.SeriesId is
-        // available in this SpacetimeDB.Runtime version (tracked alongside the module-side
-        // schema work).
+        // Index-based lookup against the generated SeriesId BTree index (Batch6.cs,
+        // [SpacetimeDB.Index.BTree] on SeriesTag.SeriesId) - client bindings regenerated after
+        // that index was added server-side. Replaces an earlier full-table-scan per series.
         private List<int> TagIdsFor(int seriesId) =>
-            Conn.RunOnActor(() => Conn.Connection.Db.SeriesTag.Iter().Where(t => t.SeriesId == seriesId).Select(t => t.TagId).ToList());
+            Conn.RunOnActor(() => Conn.Connection.Db.SeriesTag.SeriesId.Filter(seriesId).Select(t => t.TagId).ToList());
 
         // QualityProfile is LazyLoaded (only QualityProfileId is a real column). The real
         // TableMapping's .HasOne(s => s.QualityProfile, ...) join means every Series it returns
