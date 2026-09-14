@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using NLog;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
 {
@@ -70,6 +71,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
     public class SpacetimeDbConnection : ISpacetimeDbConnection, IDisposable
     {
+        private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan SubscribeTimeout = TimeSpan.FromSeconds(60);
 
@@ -77,6 +79,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         private readonly BlockingCollection<Action> _workQueue = new BlockingCollection<Action>();
         private readonly CancellationTokenSource _pumpCts = new CancellationTokenSource();
         private readonly ConcurrentDictionary<object, Action<Exception>> _pendingOperations = new ConcurrentDictionary<object, Action<Exception>>();
+
+        private volatile bool _disconnected;
+        private volatile Exception _disconnectException;
 
         public SpacetimeDB.Types.DbConnection Connection { get; }
 
@@ -171,6 +176,16 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         public IDisposable RegisterPendingOperation(Action<Exception> onConnectionLost)
         {
+            // If the connection is already gone when a new write starts, fail immediately
+            // rather than waiting out the full WriteConfirmationTimeout for an event that
+            // will never arrive.
+            if (_disconnected)
+            {
+                var ex = _disconnectException ?? new InvalidOperationException("SpacetimeDB connection is disconnected.");
+                onConnectionLost(ex);
+                return new Unregisterer(() => { });
+            }
+
             var key = new object();
             _pendingOperations[key] = onConnectionLost;
 
@@ -180,6 +195,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         private void HandleDisconnect(Exception error)
         {
             var ex = error ?? new InvalidOperationException("The SpacetimeDB connection was disconnected while an operation was pending.");
+
+            _disconnectException = ex;
+            _disconnected = true;
+
+            // Log at error level: there is no automatic reconnection — the app must be restarted
+            // to restore the SpacetimeDB connection.
+            Logger.Error(ex, "SpacetimeDB connection lost — all pending writes have been failed. Restart the application to reconnect.");
 
             foreach (var pending in _pendingOperations.Values.ToArray())
             {
