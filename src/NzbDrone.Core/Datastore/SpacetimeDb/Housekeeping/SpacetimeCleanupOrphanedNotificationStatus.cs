@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Housekeeping;
 using NzbDrone.Core.Notifications;
 
@@ -16,10 +17,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _notificationRepository = notificationRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var validProviderIds = _notificationRepository.All().Select(n => n.Id).ToHashSet();
-            SpacetimeOrphanCleanup.DeleteWhereParentMissing(_statusRepository.All(), validProviderIds, s => s.ProviderId, _statusRepository.Delete);
+            var validProviderIds = (await _notificationRepository.All()).Select(n => n.Id).ToHashSet();
+            await SpacetimeOrphanCleanup.DeleteWhereParentMissing(await _statusRepository.All(), validProviderIds, s => s.ProviderId, _statusRepository.Delete);
         }
     }
 }

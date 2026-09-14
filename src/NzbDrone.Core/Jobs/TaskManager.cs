@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Core.Backup;
@@ -62,7 +63,17 @@ namespace NzbDrone.Core.Jobs
             return scheduledTask.LastExecution.AddMinutes(scheduledTask.Interval);
         }
 
+        // NOTE: IHandle<TEvent>/IHandleAsync<TEvent> are shared eventing interfaces (50+/18+
+        // implementers app-wide); their `void Handle(...)`/`void HandleAsync(...)` signatures are
+        // out of scope to change. EventAggregator runs handlers off the request thread via
+        // Task.Factory.StartNew and ASP.NET Core carries no SynchronizationContext, so bridging
+        // here via GetAwaiter().GetResult() cannot deadlock.
         public void Handle(ApplicationStartedEvent message)
+        {
+            HandleApplicationStarted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleApplicationStarted(ApplicationStartedEvent message)
         {
             var defaultTasks = new List<ScheduledTask>
                 {
@@ -134,7 +145,7 @@ namespace NzbDrone.Core.Jobs
                     }
                 };
 
-            var currentTasks = _scheduledTaskRepository.All().ToList();
+            var currentTasks = (await _scheduledTaskRepository.All()).ToList();
 
             _logger.Trace("Initializing jobs. Available: {0} Existing: {1}", defaultTasks.Count, currentTasks.Count);
 
@@ -143,7 +154,7 @@ namespace NzbDrone.Core.Jobs
                 if (!defaultTasks.Any(c => c.TypeName == job.TypeName))
                 {
                     _logger.Trace("Removing job from database '{0}'", job.TypeName);
-                    _scheduledTaskRepository.Delete(job.Id);
+                    await _scheduledTaskRepository.Delete(job.Id);
                 }
             }
 
@@ -161,7 +172,7 @@ namespace NzbDrone.Core.Jobs
                 currentDefinition.Priority = defaultTask.Priority;
 
                 _cache.Set(currentDefinition.TypeName, currentDefinition);
-                _scheduledTaskRepository.Upsert(currentDefinition);
+                await _scheduledTaskRepository.Upsert(currentDefinition);
             }
         }
 
@@ -201,7 +212,12 @@ namespace NzbDrone.Core.Jobs
 
         public void Handle(CommandExecutedEvent message)
         {
-            var scheduledTask = _scheduledTaskRepository.All().SingleOrDefault(c => c.TypeName == message.Command.Body.GetType().FullName);
+            HandleCommandExecuted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleCommandExecuted(CommandExecutedEvent message)
+        {
+            var scheduledTask = (await _scheduledTaskRepository.All()).SingleOrDefault(c => c.TypeName == message.Command.Body.GetType().FullName);
 
             if (scheduledTask != null && message.Command.Body.UpdateScheduledTask)
             {
@@ -210,7 +226,7 @@ namespace NzbDrone.Core.Jobs
                 var lastExecution = DateTime.UtcNow;
                 var startTime = message.Command.StartedAt.Value;
 
-                _scheduledTaskRepository.SetLastExecutionTime(scheduledTask.Id, lastExecution, startTime);
+                await _scheduledTaskRepository.SetLastExecutionTime(scheduledTask.Id, lastExecution, startTime);
 
                 var cached = _cache.Find(scheduledTask.TypeName);
 
@@ -221,13 +237,18 @@ namespace NzbDrone.Core.Jobs
 
         public void HandleAsync(ConfigSavedEvent message)
         {
-            var rss = _scheduledTaskRepository.GetDefinition(typeof(RssSyncCommand));
+            HandleConfigSaved(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleConfigSaved(ConfigSavedEvent message)
+        {
+            var rss = await _scheduledTaskRepository.GetDefinition(typeof(RssSyncCommand));
             rss.Interval = GetRssSyncInterval();
 
-            var backup = _scheduledTaskRepository.GetDefinition(typeof(BackupCommand));
+            var backup = await _scheduledTaskRepository.GetDefinition(typeof(BackupCommand));
             backup.Interval = GetBackupInterval();
 
-            _scheduledTaskRepository.UpdateMany(new List<ScheduledTask> { rss, backup });
+            await _scheduledTaskRepository.UpdateMany(new List<ScheduledTask> { rss, backup });
 
             _cache.Find(rss.TypeName).Interval = rss.Interval;
             _cache.Find(backup.TypeName).Interval = backup.Interval;

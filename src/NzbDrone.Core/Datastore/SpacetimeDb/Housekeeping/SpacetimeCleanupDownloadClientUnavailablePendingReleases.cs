@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Download.Pending;
 using NzbDrone.Core.Housekeeping;
 
@@ -17,18 +18,18 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _pendingReleaseRepository = pendingReleaseRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
             var twoWeeksAgo = DateTime.UtcNow.AddDays(-14);
 
-            var stale = _pendingReleaseRepository.All()
+            var stale = (await _pendingReleaseRepository.All())
                 .Where(p => p.Added < twoWeeksAgo &&
                             (p.Reason == PendingReleaseReason.DownloadClientUnavailable || p.Reason == PendingReleaseReason.Fallback))
                 .ToList();
 
             foreach (var release in stale)
             {
-                _pendingReleaseRepository.Delete(release.Id);
+                await _pendingReleaseRepository.Delete(release.Id);
             }
         }
     }

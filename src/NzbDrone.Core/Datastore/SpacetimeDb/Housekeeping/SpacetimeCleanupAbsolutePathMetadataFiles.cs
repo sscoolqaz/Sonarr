@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.Housekeeping;
 
@@ -16,11 +17,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _metadataFileRepository = metadataFileRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            foreach (var file in _metadataFileRepository.All().Where(f => IsAbsolutePath(f.RelativePath)).ToList())
+            foreach (var file in (await _metadataFileRepository.All()).Where(f => IsAbsolutePath(f.RelativePath)).ToList())
             {
-                _metadataFileRepository.Delete(file.Id);
+                await _metadataFileRepository.Delete(file.Id);
             }
         }
 

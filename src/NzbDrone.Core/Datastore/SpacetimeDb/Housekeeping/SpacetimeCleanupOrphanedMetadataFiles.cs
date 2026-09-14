@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Metadata;
 using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.Housekeeping;
@@ -24,24 +25,24 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _mediaFileRepository = mediaFileRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var validSeriesIds = _seriesRepository.All().Select(s => s.Id).ToHashSet();
-            SpacetimeOrphanCleanup.DeleteWhereParentMissing(_metadataFileRepository.All(), validSeriesIds, f => f.SeriesId, _metadataFileRepository.Delete);
+            var validSeriesIds = (await _seriesRepository.All()).Select(s => s.Id).ToHashSet();
+            await SpacetimeOrphanCleanup.DeleteWhereParentMissing(await _metadataFileRepository.All(), validSeriesIds, f => f.SeriesId, _metadataFileRepository.Delete);
 
-            var validFileIds = _mediaFileRepository.All().Select(f => f.Id).ToHashSet();
+            var validFileIds = (await _mediaFileRepository.All()).Select(f => f.Id).ToHashSet();
 
-            foreach (var metadataFile in _metadataFileRepository.All().ToList())
+            foreach (var metadataFile in (await _metadataFileRepository.All()).ToList())
             {
                 var hasFile = metadataFile.EpisodeFileId is > 0;
 
                 if (hasFile && !validFileIds.Contains(metadataFile.EpisodeFileId.Value))
                 {
-                    _metadataFileRepository.Delete(metadataFile.Id);
+                    await _metadataFileRepository.Delete(metadataFile.Id);
                 }
                 else if (!hasFile && (metadataFile.Type == MetadataType.EpisodeMetadata || metadataFile.Type == MetadataType.EpisodeImage))
                 {
-                    _metadataFileRepository.Delete(metadataFile.Id);
+                    await _metadataFileRepository.Delete(metadataFile.Id);
                 }
             }
         }

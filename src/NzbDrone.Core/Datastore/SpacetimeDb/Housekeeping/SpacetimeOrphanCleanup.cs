@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
 {
@@ -10,16 +11,16 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
     // "DELETE ... WHERE Id IN (SELECT ... LEFT OUTER JOIN ... WHERE parent.Id IS NULL)" queries.
     internal static class SpacetimeOrphanCleanup
     {
-        public static void DeleteWhereParentMissing<TChild>(
+        public static async Task DeleteWhereParentMissing<TChild>(
             IEnumerable<TChild> children,
             HashSet<int> validParentIds,
             Func<TChild, int> getParentId,
-            Action<int> delete)
+            Func<int, Task> delete)
             where TChild : ModelBase
         {
             foreach (var child in children.Where(c => !validParentIds.Contains(getParentId(c))).ToList())
             {
-                delete(child.Id);
+                await delete(child.Id);
             }
         }
     }

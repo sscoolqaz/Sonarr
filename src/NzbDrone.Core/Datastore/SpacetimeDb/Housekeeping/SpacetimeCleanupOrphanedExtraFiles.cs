@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Others;
 using NzbDrone.Core.Housekeeping;
 using NzbDrone.Core.MediaFiles;
@@ -26,24 +27,24 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _mediaFileRepository = mediaFileRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var validSeriesIds = _seriesRepository.All().Select(s => s.Id).ToHashSet();
-            SpacetimeOrphanCleanup.DeleteWhereParentMissing(_extraFileRepository.All(), validSeriesIds, f => f.SeriesId, _extraFileRepository.Delete);
+            var validSeriesIds = (await _seriesRepository.All()).Select(s => s.Id).ToHashSet();
+            await SpacetimeOrphanCleanup.DeleteWhereParentMissing(await _extraFileRepository.All(), validSeriesIds, f => f.SeriesId, _extraFileRepository.Delete);
 
-            var validFileIds = _mediaFileRepository.All().Select(f => f.Id).ToHashSet();
+            var validFileIds = (await _mediaFileRepository.All()).Select(f => f.Id).ToHashSet();
 
-            foreach (var extraFile in _extraFileRepository.All().ToList())
+            foreach (var extraFile in (await _extraFileRepository.All()).ToList())
             {
                 var hasFile = extraFile.EpisodeFileId is > 0;
 
                 if (hasFile && !validFileIds.Contains(extraFile.EpisodeFileId.Value))
                 {
-                    _extraFileRepository.Delete(extraFile.Id);
+                    await _extraFileRepository.Delete(extraFile.Id);
                 }
                 else if (!hasFile)
                 {
-                    _extraFileRepository.Delete(extraFile.Id);
+                    await _extraFileRepository.Delete(extraFile.Id);
                 }
             }
         }

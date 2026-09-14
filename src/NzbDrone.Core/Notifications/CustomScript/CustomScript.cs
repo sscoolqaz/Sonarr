@@ -373,6 +373,12 @@ namespace NzbDrone.Core.Notifications.CustomScript
             return possibleParent.IsParentPath(path);
         }
 
+        // NOTE: INotification's On* methods are a shared synchronous interface (void, out of
+        // scope to change here) but ITagRepository.GetTags is now async. Bridging via
+        // GetAwaiter().GetResult() is safe for the same reason as the IHandle<TEvent> boundary
+        // documented in NotificationService: these On* callbacks run off the request thread
+        // (via EventAggregator / Task.Factory.StartNew) with no SynchronizationContext to
+        // deadlock against.
         private List<string> GetTagLabels(Series series)
         {
             if (series == null)
@@ -380,7 +386,7 @@ namespace NzbDrone.Core.Notifications.CustomScript
                 return new List<string>();
             }
 
-            return _tagRepository.GetTags(series.Tags)
+            return _tagRepository.GetTags(series.Tags).GetAwaiter().GetResult()
                 .Select(s => s.Label)
                 .Where(l => l.IsNotNullOrWhiteSpace())
                 .OrderBy(l => l)

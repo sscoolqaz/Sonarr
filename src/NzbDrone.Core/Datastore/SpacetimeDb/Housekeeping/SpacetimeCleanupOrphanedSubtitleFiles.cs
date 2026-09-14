@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Subtitles;
 using NzbDrone.Core.Housekeeping;
 using NzbDrone.Core.MediaFiles;
@@ -23,24 +24,24 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _mediaFileRepository = mediaFileRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var validSeriesIds = _seriesRepository.All().Select(s => s.Id).ToHashSet();
-            SpacetimeOrphanCleanup.DeleteWhereParentMissing(_subtitleFileRepository.All(), validSeriesIds, f => f.SeriesId, _subtitleFileRepository.Delete);
+            var validSeriesIds = (await _seriesRepository.All()).Select(s => s.Id).ToHashSet();
+            await SpacetimeOrphanCleanup.DeleteWhereParentMissing(await _subtitleFileRepository.All(), validSeriesIds, f => f.SeriesId, _subtitleFileRepository.Delete);
 
-            var validFileIds = _mediaFileRepository.All().Select(f => f.Id).ToHashSet();
+            var validFileIds = (await _mediaFileRepository.All()).Select(f => f.Id).ToHashSet();
 
-            foreach (var subtitleFile in _subtitleFileRepository.All().ToList())
+            foreach (var subtitleFile in (await _subtitleFileRepository.All()).ToList())
             {
                 var hasFile = subtitleFile.EpisodeFileId is > 0;
 
                 if (hasFile && !validFileIds.Contains(subtitleFile.EpisodeFileId.Value))
                 {
-                    _subtitleFileRepository.Delete(subtitleFile.Id);
+                    await _subtitleFileRepository.Delete(subtitleFile.Id);
                 }
                 else if (!hasFile)
                 {
-                    _subtitleFileRepository.Delete(subtitleFile.Id);
+                    await _subtitleFileRepository.Delete(subtitleFile.Id);
                 }
             }
         }

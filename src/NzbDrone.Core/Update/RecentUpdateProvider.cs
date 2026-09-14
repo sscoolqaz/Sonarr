@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Update.History;
@@ -7,7 +8,7 @@ namespace NzbDrone.Core.Update
 {
     public interface IRecentUpdateProvider
     {
-        List<UpdatePackage> GetRecentUpdatePackages();
+        Task<List<UpdatePackage>> GetRecentUpdatePackages();
     }
 
     public class RecentUpdateProvider : IRecentUpdateProvider
@@ -25,11 +26,11 @@ namespace NzbDrone.Core.Update
             _updateHistoryService = updateHistoryService;
         }
 
-        public List<UpdatePackage> GetRecentUpdatePackages()
+        public async Task<List<UpdatePackage>> GetRecentUpdatePackages()
         {
             var branch = _configFileProvider.Branch;
             var version = BuildInfo.Version;
-            var prevVersion = _configFileProvider.LogDbEnabled ? _updateHistoryService.PreviouslyInstalled() : null;
+            var prevVersion = _configFileProvider.LogDbEnabled ? await _updateHistoryService.PreviouslyInstalled() : null;
             return _updatePackageProvider.GetRecentUpdates(branch, version, prevVersion);
         }
     }

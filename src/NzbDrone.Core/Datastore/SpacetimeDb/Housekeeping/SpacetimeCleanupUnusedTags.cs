@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.AutoTagging;
 using NzbDrone.Core.AutoTagging.Specifications;
 using NzbDrone.Core.Download;
@@ -55,19 +56,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _autoTaggingRepository = autoTaggingRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
             var usedTags = new HashSet<int>();
 
-            usedTags.UnionWith(_seriesRepository.All().SelectMany(s => s.Tags));
-            usedTags.UnionWith(_notificationRepository.All().SelectMany(n => n.Tags));
-            usedTags.UnionWith(_delayProfileRepository.All().SelectMany(d => d.Tags));
-            usedTags.UnionWith(_releaseProfileRepository.All().SelectMany(r => r.Tags.Concat(r.ExcludedTags)));
-            usedTags.UnionWith(_importListRepository.All().SelectMany(i => i.Tags));
-            usedTags.UnionWith(_indexerRepository.All().SelectMany(i => i.Tags));
-            usedTags.UnionWith(_downloadClientRepository.All().SelectMany(d => d.Tags));
+            usedTags.UnionWith((await _seriesRepository.All()).SelectMany(s => s.Tags));
+            usedTags.UnionWith((await _notificationRepository.All()).SelectMany(n => n.Tags));
+            usedTags.UnionWith((await _delayProfileRepository.All()).SelectMany(d => d.Tags));
+            usedTags.UnionWith((await _releaseProfileRepository.All()).SelectMany(r => r.Tags.Concat(r.ExcludedTags)));
+            usedTags.UnionWith((await _importListRepository.All()).SelectMany(i => i.Tags));
+            usedTags.UnionWith((await _indexerRepository.All()).SelectMany(i => i.Tags));
+            usedTags.UnionWith((await _downloadClientRepository.All()).SelectMany(d => d.Tags));
 
-            var autoTags = _autoTaggingRepository.All().ToList();
+            var autoTags = (await _autoTaggingRepository.All()).ToList();
 
             // Real task scans AutoTagging's own Tags column (the tags an auto-tag applies to a
             // series) as one of its 8 generic tag-bearing tables, separately from the
@@ -79,11 +80,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
                 .OfType<TagSpecification>()
                 .Select(s => s.Value));
 
-            var unused = _tagRepository.All().Where(t => !usedTags.Contains(t.Id)).ToList();
+            var unused = (await _tagRepository.All()).Where(t => !usedTags.Contains(t.Id)).ToList();
 
             foreach (var tag in unused)
             {
-                _tagRepository.Delete(tag.Id);
+                await _tagRepository.Delete(tag.Id);
             }
         }
     }

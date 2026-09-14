@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Metadata;
 using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.Housekeeping;
@@ -18,13 +19,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _metadataFileRepository = metadataFileRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var allFiles = _metadataFileRepository.All().ToList();
+            var allFiles = (await _metadataFileRepository.All()).ToList();
 
-            DeleteDuplicates(allFiles.Where(f => f.Type == MetadataType.SeriesMetadata), f => (f.SeriesId, f.Consumer));
-            DeleteDuplicates(allFiles.Where(f => f.Type == MetadataType.EpisodeMetadata && f.EpisodeFileId != null), f => (f.EpisodeFileId, f.Consumer));
-            DeleteDuplicates(allFiles.Where(f => f.Type == MetadataType.EpisodeImage && f.EpisodeFileId != null), f => (f.EpisodeFileId, f.Consumer));
+            await DeleteDuplicates(allFiles.Where(f => f.Type == MetadataType.SeriesMetadata), f => (f.SeriesId, f.Consumer));
+            await DeleteDuplicates(allFiles.Where(f => f.Type == MetadataType.EpisodeMetadata && f.EpisodeFileId != null), f => (f.EpisodeFileId, f.Consumer));
+            await DeleteDuplicates(allFiles.Where(f => f.Type == MetadataType.EpisodeImage && f.EpisodeFileId != null), f => (f.EpisodeFileId, f.Consumer));
         }
 
         // The real SQL deletes the MIN(Id) row of each duplicate group (keeping the
@@ -33,7 +34,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
         // no EpisodeFileId are never flagged as duplicates there; the EpisodeFileId != null
         // filter above reproduces that exclusion (SeriesId is NOT NULL for SeriesMetadata rows,
         // so no equivalent filter is needed on that grouping).
-        private void DeleteDuplicates<TKey>(System.Collections.Generic.IEnumerable<MetadataFile> files, System.Func<MetadataFile, TKey> groupKey)
+        private async Task DeleteDuplicates<TKey>(System.Collections.Generic.IEnumerable<MetadataFile> files, System.Func<MetadataFile, TKey> groupKey)
         {
             var duplicateIds = files
                 .GroupBy(groupKey)
@@ -42,7 +43,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
 
             foreach (var id in duplicateIds)
             {
-                _metadataFileRepository.Delete(id);
+                await _metadataFileRepository.Delete(id);
             }
         }
     }

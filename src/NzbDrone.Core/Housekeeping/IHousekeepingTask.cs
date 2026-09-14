@@ -1,7 +1,9 @@
+using System.Threading.Tasks;
+
 namespace NzbDrone.Core.Housekeeping
 {
     public interface IHousekeepingTask
     {
-        void Clean();
+        Task Clean();
     }
 }

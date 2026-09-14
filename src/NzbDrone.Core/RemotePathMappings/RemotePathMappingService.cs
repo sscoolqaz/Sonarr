@@ -43,9 +43,18 @@ namespace NzbDrone.Core.RemotePathMappings
             _cache = cacheManager.GetCache<List<RemotePathMapping>>(GetType());
         }
 
+        // NOTE: IRemotePathMappingService is consumed synchronously from ~25 download-client
+        // files under Download/Clients/* (another agent's active domain this round). Rather than
+        // making this public API async - which would force an unrelated, large-scale conversion
+        // of that whole call graph as a side effect of this file - we keep the interface
+        // synchronous and bridge to the now-async IRemotePathMappingRepository via
+        // GetAwaiter().GetResult() at each call site, same as the documented IHandle<TEvent>
+        // boundary elsewhere: this runs under ASP.NET Core, which carries no
+        // SynchronizationContext, so it cannot deadlock. This mirrors the deliberate ConfigService
+        // carve-out (a conversion whose blast radius warrants a separate follow-up task).
         public List<RemotePathMapping> All()
         {
-            return _cache.Get("all", () => _remotePathMappingRepository.All().ToList(), TimeSpan.FromSeconds(10));
+            return _cache.Get("all", () => _remotePathMappingRepository.All().GetAwaiter().GetResult().ToList(), TimeSpan.FromSeconds(10));
         }
 
         public RemotePathMapping Add(RemotePathMapping mapping)
@@ -57,7 +66,7 @@ namespace NzbDrone.Core.RemotePathMappings
 
             ValidateMapping(all, mapping);
 
-            var result = _remotePathMappingRepository.Insert(mapping);
+            var result = _remotePathMappingRepository.Insert(mapping).GetAwaiter().GetResult();
 
             _cache.Clear();
 
@@ -66,14 +75,14 @@ namespace NzbDrone.Core.RemotePathMappings
 
         public void Remove(int id)
         {
-            _remotePathMappingRepository.Delete(id);
+            _remotePathMappingRepository.Delete(id).GetAwaiter().GetResult();
 
             _cache.Clear();
         }
 
         public RemotePathMapping Get(int id)
         {
-            return _remotePathMappingRepository.Get(id);
+            return _remotePathMappingRepository.Get(id).GetAwaiter().GetResult();
         }
 
         public RemotePathMapping Update(RemotePathMapping mapping)
@@ -82,7 +91,7 @@ namespace NzbDrone.Core.RemotePathMappings
 
             ValidateMapping(existing, mapping);
 
-            var result = _remotePathMappingRepository.Update(mapping);
+            var result = _remotePathMappingRepository.Update(mapping).GetAwaiter().GetResult();
 
             _cache.Clear();
 

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Housekeeping;
@@ -38,11 +39,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _customFormatRepository = customFormatRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var customFormats = _customFormatRepository.All().ToDictionary(c => c.Id);
-            var profiles = _qualityProfileRepository.All();
-            var rawFormatIds = _qualityProfileRepository.GetRawFormatItemIds();
+            var customFormats = (await _customFormatRepository.All()).ToDictionary(c => c.Id);
+            var profiles = await _qualityProfileRepository.All();
+            var rawFormatIds = await _qualityProfileRepository.GetRawFormatItemIds();
             var updatedProfiles = new List<QualityProfile>();
 
             foreach (var profile in profiles)
@@ -89,7 +90,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
 
             if (updatedProfiles.Any())
             {
-                _qualityProfileRepository.SetFields(updatedProfiles, p => p.FormatItems, p => p.MinFormatScore, p => p.CutoffFormatScore, p => p.MinUpgradeFormatScore);
+                await _qualityProfileRepository.SetFields(updatedProfiles, p => p.FormatItems, p => p.MinFormatScore, p => p.CutoffFormatScore, p => p.MinUpgradeFormatScore);
             }
         }
     }

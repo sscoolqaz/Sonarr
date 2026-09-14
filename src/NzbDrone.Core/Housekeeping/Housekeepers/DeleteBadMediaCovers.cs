@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Core.Configuration;
@@ -30,18 +31,18 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             _logger = logger;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
             if (!_configService.CleanupMetadataImages)
             {
                 return;
             }
 
-            var series = _seriesService.GetAllSeriesPaths();
+            var series = await _seriesService.GetAllSeriesPaths();
 
             foreach (var show in series)
             {
-                var images = _metaFileService.GetFilesBySeries(show.Key)
+                var images = (await _metaFileService.GetFilesBySeries(show.Key))
                     .Where(c => c.LastUpdated > new DateTime(2014, 12, 27) && c.RelativePath.EndsWith(".jpg", StringComparison.InvariantCultureIgnoreCase));
 
                 foreach (var image in images)
@@ -52,7 +53,7 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
                         if (!IsValid(path))
                         {
                             _logger.Debug("Deleting invalid image file " + path);
-                            DeleteMetadata(image.Id, path);
+                            await DeleteMetadata(image.Id, path);
                         }
                     }
                     catch (Exception e)
@@ -65,9 +66,9 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             _configService.CleanupMetadataImages = false;
         }
 
-        private void DeleteMetadata(int id, string path)
+        private async Task DeleteMetadata(int id, string path)
         {
-            _metaFileService.Delete(id);
+            await _metaFileService.Delete(id);
             _diskProvider.DeleteFile(path);
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Housekeeping;
@@ -24,7 +25,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _logger = logger;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
             if (BuildInfo.IsDebug)
             {
@@ -32,12 +33,12 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             }
 
             var now = DateTime.UtcNow;
-            var future = _scheduledTaskRepository.All().Where(t => t.LastExecution > now).ToList();
+            var future = (await _scheduledTaskRepository.All()).Where(t => t.LastExecution > now).ToList();
 
             foreach (var task in future)
             {
                 task.LastExecution = now;
-                _scheduledTaskRepository.SetFields(task, t => t.LastExecution);
+                await _scheduledTaskRepository.SetFields(task, t => t.LastExecution);
             }
         }
     }

@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Housekeeping;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Tv;
@@ -22,16 +23,16 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _episodeRepository = episodeRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var referencedFileIds = _episodeRepository.All()
+            var referencedFileIds = (await _episodeRepository.All())
                 .Where(e => e.EpisodeFileId > 0)
                 .Select(e => e.EpisodeFileId)
                 .ToHashSet();
 
-            foreach (var file in _mediaFileRepository.All().Where(f => !referencedFileIds.Contains(f.Id)).ToList())
+            foreach (var file in (await _mediaFileRepository.All()).Where(f => !referencedFileIds.Contains(f.Id)).ToList())
             {
-                _mediaFileRepository.Delete(file.Id);
+                await _mediaFileRepository.Delete(file.Id);
             }
         }
     }

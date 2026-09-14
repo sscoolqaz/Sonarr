@@ -22,6 +22,15 @@ namespace NzbDrone.Core.CustomFormats
         List<CustomFormat> ParseCustomFormat(LocalEpisode localEpisode, string fileName);
     }
 
+    // NOTE: ICustomFormatCalculationService is consumed synchronously from ~10 files across
+    // DecisionEngine, Download, and MediaFiles/EpisodeImport (other agents' active domains this
+    // round). Rather than making this public API async - which would force an unrelated,
+    // large-scale conversion of that whole call graph as a side effect of this file - we keep
+    // the interface synchronous and bridge to the now-async ICustomFormatService.All() via
+    // GetAwaiter().GetResult(), same as the documented IHandle<TEvent> boundary elsewhere: this
+    // runs under ASP.NET Core, which carries no SynchronizationContext, so it cannot deadlock.
+    // This mirrors the deliberate ConfigService carve-out (a conversion whose blast radius
+    // warrants a separate follow-up task).
     public class CustomFormatCalculationService : ICustomFormatCalculationService
     {
         private readonly ICustomFormatService _formatService;
@@ -50,12 +59,12 @@ namespace NzbDrone.Core.CustomFormats
 
         public List<CustomFormat> ParseCustomFormat(EpisodeFile episodeFile, Series series)
         {
-            return ParseCustomFormat(episodeFile, series, _formatService.All());
+            return ParseCustomFormat(episodeFile, series, _formatService.All().GetAwaiter().GetResult());
         }
 
         public List<CustomFormat> ParseCustomFormat(EpisodeFile episodeFile)
         {
-            return ParseCustomFormat(episodeFile, episodeFile.Series.Value, _formatService.All());
+            return ParseCustomFormat(episodeFile, episodeFile.Series.Value, _formatService.All().GetAwaiter().GetResult());
         }
 
         public List<CustomFormat> ParseCustomFormat(Blocklist blocklist, Series series)
@@ -141,7 +150,7 @@ namespace NzbDrone.Core.CustomFormats
 
         private List<CustomFormat> ParseCustomFormat(CustomFormatInput input)
         {
-            return ParseCustomFormat(input, _formatService.All());
+            return ParseCustomFormat(input, _formatService.All().GetAwaiter().GetResult());
         }
 
         private static List<CustomFormat> ParseCustomFormat(CustomFormatInput input, List<CustomFormat> allCustomFormats)

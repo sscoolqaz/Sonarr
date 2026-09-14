@@ -504,7 +504,13 @@ namespace NzbDrone.Core.Configuration
             key = key.ToLowerInvariant();
 
             _logger.Trace("Writing Setting to database. Key:'{0}' Value:'{1}'", key, value);
-            _repository.Upsert(key, value);
+
+            // NOTE: ConfigService is deliberately left synchronous (separate ~50-property,
+            // 100+-call-site follow-up task) even though IConfigRepository is now async;
+            // bridging via GetAwaiter().GetResult() here is safe for the same reason as the
+            // documented IHandle<TEvent> boundary elsewhere - ASP.NET Core carries no
+            // SynchronizationContext, so it cannot deadlock.
+            _repository.Upsert(key, value).GetAwaiter().GetResult();
 
             ClearCache();
         }
@@ -515,7 +521,7 @@ namespace NzbDrone.Core.Configuration
             {
                 if (!_cache.Any())
                 {
-                    var all = _repository.All();
+                    var all = _repository.All().GetAwaiter().GetResult();
                     _cache = all.ToDictionary(c => c.Key.ToLower(), c => c.Value);
                 }
             }

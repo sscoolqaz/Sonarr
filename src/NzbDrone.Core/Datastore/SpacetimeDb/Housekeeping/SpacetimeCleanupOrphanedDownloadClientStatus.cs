@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Housekeeping;
 
@@ -16,10 +17,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _downloadClientRepository = downloadClientRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var validProviderIds = _downloadClientRepository.All().Select(d => d.Id).ToHashSet();
-            SpacetimeOrphanCleanup.DeleteWhereParentMissing(_statusRepository.All(), validProviderIds, s => s.ProviderId, _statusRepository.Delete);
+            var validProviderIds = (await _downloadClientRepository.All()).Select(d => d.Id).ToHashSet();
+            await SpacetimeOrphanCleanup.DeleteWhereParentMissing(await _statusRepository.All(), validProviderIds, s => s.ProviderId, _statusRepository.Delete);
         }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Download;
@@ -15,12 +16,12 @@ namespace NzbDrone.Core.Blocklisting
 {
     public interface IBlocklistService
     {
-        bool Blocklisted(int seriesId, ReleaseInfo release);
-        bool BlocklistedTorrentHash(int seriesId, string hash);
-        PagingSpec<Blocklist> Paged(PagingSpec<Blocklist> pagingSpec);
-        void Block(RemoteEpisode remoteEpisode, string message, string source);
-        void Delete(int id);
-        void Delete(List<int> ids);
+        Task<bool> Blocklisted(int seriesId, ReleaseInfo release);
+        Task<bool> BlocklistedTorrentHash(int seriesId, string hash);
+        Task<PagingSpec<Blocklist>> Paged(PagingSpec<Blocklist> pagingSpec);
+        Task Block(RemoteEpisode remoteEpisode, string message, string source);
+        Task Delete(int id);
+        Task Delete(List<int> ids);
     }
 
     public class BlocklistService : IBlocklistService,
@@ -35,7 +36,7 @@ namespace NzbDrone.Core.Blocklisting
             _blocklistRepository = blocklistRepository;
         }
 
-        public bool Blocklisted(int seriesId, ReleaseInfo release)
+        public async Task<bool> Blocklisted(int seriesId, ReleaseInfo release)
         {
             if (release.DownloadProtocol == DownloadProtocol.Torrent)
             {
@@ -46,33 +47,33 @@ namespace NzbDrone.Core.Blocklisting
 
                 if (torrentInfo.InfoHash.IsNotNullOrWhiteSpace())
                 {
-                    var blocklistedByTorrentInfohash = _blocklistRepository.BlocklistedByTorrentInfoHash(seriesId, torrentInfo.InfoHash);
+                    var blocklistedByTorrentInfohash = await _blocklistRepository.BlocklistedByTorrentInfoHash(seriesId, torrentInfo.InfoHash);
 
                     return blocklistedByTorrentInfohash.Any(b => SameTorrent(b, torrentInfo));
                 }
 
-                return _blocklistRepository.BlocklistedByTitle(seriesId, release.Title)
+                return (await _blocklistRepository.BlocklistedByTitle(seriesId, release.Title))
                     .Where(b => b.Protocol == DownloadProtocol.Torrent)
                     .Any(b => SameTorrent(b, torrentInfo));
             }
 
-            return _blocklistRepository.BlocklistedByTitle(seriesId, release.Title)
+            return (await _blocklistRepository.BlocklistedByTitle(seriesId, release.Title))
                 .Where(b => b.Protocol == DownloadProtocol.Usenet)
                 .Any(b => SameNzb(b, release));
         }
 
-        public bool BlocklistedTorrentHash(int seriesId, string hash)
+        public async Task<bool> BlocklistedTorrentHash(int seriesId, string hash)
         {
-            return _blocklistRepository.BlocklistedByTorrentInfoHash(seriesId, hash).Any(b =>
+            return (await _blocklistRepository.BlocklistedByTorrentInfoHash(seriesId, hash)).Any(b =>
                 b.TorrentInfoHash.Equals(hash, StringComparison.InvariantCultureIgnoreCase));
         }
 
-        public PagingSpec<Blocklist> Paged(PagingSpec<Blocklist> pagingSpec)
+        public Task<PagingSpec<Blocklist>> Paged(PagingSpec<Blocklist> pagingSpec)
         {
             return _blocklistRepository.GetPaged(pagingSpec);
         }
 
-        public void Block(RemoteEpisode remoteEpisode, string message, string source)
+        public Task Block(RemoteEpisode remoteEpisode, string message, string source)
         {
             var blocklist = new Blocklist
                             {
@@ -95,17 +96,17 @@ namespace NzbDrone.Core.Blocklisting
                 blocklist.TorrentInfoHash = torrentRelease.InfoHash;
             }
 
-            _blocklistRepository.Insert(blocklist);
+            return _blocklistRepository.Insert(blocklist);
         }
 
-        public void Delete(int id)
+        public Task Delete(int id)
         {
-            _blocklistRepository.Delete(id);
+            return _blocklistRepository.Delete(id);
         }
 
-        public void Delete(List<int> ids)
+        public Task Delete(List<int> ids)
         {
-            _blocklistRepository.DeleteMany(ids);
+            return _blocklistRepository.DeleteMany(ids);
         }
 
         private bool SameNzb(Blocklist item, ReleaseInfo release)
@@ -118,11 +119,20 @@ namespace NzbDrone.Core.Blocklisting
             return ReleaseComparer.SameTorrent(new ReleaseComparerModel(item), release);
         }
 
+        // NOTE: IExecute<TCommand> is a shared command-eventing interface (31+ implementers
+        // app-wide); its `void Execute(TCommand message)` signature is out of scope to change.
+        // Commands run off the request thread via the same EventAggregator/Task.Factory.StartNew
+        // path as IHandle<TEvent>, with no SynchronizationContext, so bridging here via
+        // GetAwaiter().GetResult() cannot deadlock.
         public void Execute(ClearBlocklistCommand message)
         {
-            _blocklistRepository.Purge();
+            _blocklistRepository.Purge().GetAwaiter().GetResult();
         }
 
+        // NOTE: IHandle<TEvent>/IHandleAsync<TEvent> are shared eventing interfaces (50+/18+
+        // implementers app-wide); their `void Handle(...)`/`void HandleAsync(...)` signatures are
+        // out of scope to change. Bridging via GetAwaiter().GetResult() is safe for the same
+        // reason as above.
         public void Handle(DownloadFailedEvent message)
         {
             var blocklist = new Blocklist
@@ -154,12 +164,12 @@ namespace NzbDrone.Core.Blocklisting
                 blocklist.ReleaseType = releaseType;
             }
 
-            _blocklistRepository.Insert(blocklist);
+            _blocklistRepository.Insert(blocklist).GetAwaiter().GetResult();
         }
 
         public void HandleAsync(SeriesDeletedEvent message)
         {
-            _blocklistRepository.DeleteForSeriesIds(message.Series.Select(m => m.Id).ToList());
+            _blocklistRepository.DeleteForSeriesIds(message.Series.Select(m => m.Id).ToList()).GetAwaiter().GetResult();
         }
     }
 }

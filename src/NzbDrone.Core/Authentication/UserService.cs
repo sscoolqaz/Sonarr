@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using NzbDrone.Common.Disk;
@@ -13,12 +14,12 @@ namespace NzbDrone.Core.Authentication
 {
     public interface IUserService
     {
-        User Add(string username, string password);
-        User Update(User user);
-        User Upsert(string username, string password);
-        User FindUser();
-        User FindUser(string username, string password);
-        User FindUser(Guid identifier);
+        Task<User> Add(string username, string password);
+        Task<User> Update(User user);
+        Task<User> Upsert(string username, string password);
+        Task<User> FindUser();
+        Task<User> FindUser(string username, string password);
+        Task<User> FindUser(Guid identifier);
     }
 
     public class UserService : IUserService, IHandle<ApplicationStartedEvent>
@@ -38,7 +39,7 @@ namespace NzbDrone.Core.Authentication
             _diskProvider = diskProvider;
         }
 
-        public User Add(string username, string password)
+        public Task<User> Add(string username, string password)
         {
             var user = new User
             {
@@ -51,18 +52,18 @@ namespace NzbDrone.Core.Authentication
             return _repo.Insert(user);
         }
 
-        public User Update(User user)
+        public Task<User> Update(User user)
         {
             return _repo.Update(user);
         }
 
-        public User Upsert(string username, string password)
+        public async Task<User> Upsert(string username, string password)
         {
-            var user = FindUser();
+            var user = await FindUser();
 
             if (user == null)
             {
-                return Add(username, password);
+                return await Add(username, password);
             }
 
             if (user.Password != password)
@@ -72,22 +73,22 @@ namespace NzbDrone.Core.Authentication
 
             user.Username = username.ToLowerInvariant();
 
-            return Update(user);
+            return await Update(user);
         }
 
-        public User FindUser()
+        public Task<User> FindUser()
         {
             return _repo.SingleOrDefault();
         }
 
-        public User FindUser(string username, string password)
+        public async Task<User> FindUser(string username, string password)
         {
             if (username.IsNullOrWhiteSpace() || password.IsNullOrWhiteSpace())
             {
                 return null;
             }
 
-            var user = _repo.FindUser(username.ToLowerInvariant());
+            var user = await _repo.FindUser(username.ToLowerInvariant());
 
             if (user == null)
             {
@@ -101,7 +102,7 @@ namespace NzbDrone.Core.Authentication
                 {
                     SetUserHashedPassword(user, password);
 
-                    return Update(user);
+                    return await Update(user);
                 }
 
                 return null;
@@ -115,7 +116,7 @@ namespace NzbDrone.Core.Authentication
             return null;
         }
 
-        public User FindUser(Guid identifier)
+        public Task<User> FindUser(Guid identifier)
         {
             return _repo.FindUser(identifier);
         }
@@ -157,9 +158,18 @@ namespace NzbDrone.Core.Authentication
             return user.Password == hashedPassword;
         }
 
+        // NOTE: IHandle<TEvent> is a shared eventing interface (50+ implementers app-wide); its
+        // `void Handle(TEvent message)` signature is out of scope to change. EventAggregator runs
+        // handlers off the request thread via Task.Factory.StartNew and ASP.NET Core carries no
+        // SynchronizationContext, so bridging here via GetAwaiter().GetResult() cannot deadlock.
         public void Handle(ApplicationStartedEvent message)
         {
-            if (_repo.All().Any())
+            HandleApplicationStarted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleApplicationStarted(ApplicationStartedEvent message)
+        {
+            if ((await _repo.All()).Any())
             {
                 return;
             }
@@ -184,7 +194,7 @@ namespace NzbDrone.Core.Authentication
             var username = usernameElement.Value;
             var password = passwordElement.Value;
 
-            Add(username, password);
+            await Add(username, password);
         }
     }
 }

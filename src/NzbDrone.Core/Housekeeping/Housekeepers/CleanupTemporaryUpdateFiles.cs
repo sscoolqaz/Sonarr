@@ -1,4 +1,5 @@
-﻿using NzbDrone.Common.Disk;
+﻿using System.Threading.Tasks;
+using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Extensions;
 
@@ -15,7 +16,7 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             _appFolderInfo = appFolderInfo;
         }
 
-        public void Clean()
+        public Task Clean()
         {
             var updateSandboxFolder = _appFolderInfo.GetUpdateSandboxFolder();
 
@@ -23,6 +24,8 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             {
                 _diskProvider.DeleteFolder(updateSandboxFolder, true);
             }
+
+            return Task.CompletedTask;
         }
     }
 }

@@ -1,15 +1,16 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace NzbDrone.Core.CustomFilters
 {
     public interface ICustomFilterService
     {
-        CustomFilter Add(CustomFilter customFilter);
-        List<CustomFilter> All();
-        void Delete(int id);
-        CustomFilter Get(int id);
-        CustomFilter Update(CustomFilter customFilter);
+        Task<CustomFilter> Add(CustomFilter customFilter);
+        Task<List<CustomFilter>> All();
+        Task Delete(int id);
+        Task<CustomFilter> Get(int id);
+        Task<CustomFilter> Update(CustomFilter customFilter);
     }
 
     public class CustomFilterService : ICustomFilterService
@@ -21,29 +22,29 @@ namespace NzbDrone.Core.CustomFilters
             _repo = repo;
         }
 
-        public CustomFilter Add(CustomFilter customFilter)
+        public Task<CustomFilter> Add(CustomFilter customFilter)
         {
             return _repo.Insert(customFilter);
         }
 
-        public CustomFilter Update(CustomFilter customFilter)
+        public Task<CustomFilter> Update(CustomFilter customFilter)
         {
             return _repo.Update(customFilter);
         }
 
-        public void Delete(int id)
+        public Task Delete(int id)
         {
-            _repo.Delete(id);
+            return _repo.Delete(id);
         }
 
-        public CustomFilter Get(int id)
+        public Task<CustomFilter> Get(int id)
         {
             return _repo.Get(id);
         }
 
-        public List<CustomFilter> All()
+        public async Task<List<CustomFilter>> All()
         {
-            return _repo.All().ToList();
+            return (await _repo.All()).ToList();
         }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Messaging.Commands;
 
@@ -16,7 +17,7 @@ namespace NzbDrone.Core.Housekeeping
             _logger = logger;
         }
 
-        private void Clean()
+        private async Task Clean()
         {
             _logger.Info("Running housecleaning tasks");
 
@@ -25,7 +26,7 @@ namespace NzbDrone.Core.Housekeeping
                 try
                 {
                     _logger.Debug("Starting {0}", housekeeper.GetType().Name);
-                    housekeeper.Clean();
+                    await housekeeper.Clean();
                     _logger.Debug("Completed {0}", housekeeper.GetType().Name);
                 }
                 catch (Exception ex)
@@ -35,9 +36,14 @@ namespace NzbDrone.Core.Housekeeping
             }
         }
 
+        // NOTE: IExecute<TCommand> is a shared command-eventing interface (31+ implementers
+        // app-wide); its `void Execute(TCommand message)` signature is out of scope to change.
+        // Commands run off the request thread via the same EventAggregator/Task.Factory.StartNew
+        // path as IHandle<TEvent>, with no SynchronizationContext, so bridging here via
+        // GetAwaiter().GetResult() cannot deadlock.
         public void Execute(HousekeepingCommand message)
         {
-            Clean();
+            Clean().GetAwaiter().GetResult();
         }
     }
 }

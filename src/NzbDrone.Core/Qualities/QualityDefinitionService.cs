@@ -19,6 +19,14 @@ namespace NzbDrone.Core.Qualities
         QualityDefinition Get(Quality quality);
     }
 
+    // NOTE: IQualityDefinitionService is consumed synchronously from Organizer/FileNameBuilder.cs
+    // (another agent's active domain this round) on a hot per-file naming path. Rather than
+    // making this public API async - which would force an unrelated conversion of that call
+    // graph as a side effect of this file - we keep the interface synchronous and bridge to the
+    // now-async IQualityDefinitionRepository via GetAwaiter().GetResult(), same as the documented
+    // IHandle<TEvent> boundary elsewhere: this runs under ASP.NET Core, which carries no
+    // SynchronizationContext, so it cannot deadlock. This mirrors the deliberate ConfigService
+    // carve-out (a conversion whose blast radius warrants a separate follow-up task).
     public class QualityDefinitionService : IQualityDefinitionService, IExecute<ResetQualityDefinitionsCommand>, IHandle<ApplicationStartedEvent>
     {
         private readonly IQualityDefinitionRepository _repo;
@@ -34,19 +42,19 @@ namespace NzbDrone.Core.Qualities
 
         private Dictionary<Quality, QualityDefinition> GetAll()
         {
-            return _cache.Get("all", () => _repo.All().Select(WithWeight).ToDictionary(v => v.Quality), TimeSpan.FromSeconds(5.0));
+            return _cache.Get("all", () => _repo.All().GetAwaiter().GetResult().Select(WithWeight).ToDictionary(v => v.Quality), TimeSpan.FromSeconds(5.0));
         }
 
         public void Update(QualityDefinition qualityDefinition)
         {
-            _repo.Update(qualityDefinition);
+            _repo.Update(qualityDefinition).GetAwaiter().GetResult();
 
             _cache.Clear();
         }
 
         public void UpdateMany(List<QualityDefinition> qualityDefinitions)
         {
-            _repo.UpdateMany(qualityDefinitions);
+            _repo.UpdateMany(qualityDefinitions).GetAwaiter().GetResult();
             _cache.Clear();
         }
 
@@ -71,7 +79,7 @@ namespace NzbDrone.Core.Qualities
             var updateList = new List<QualityDefinition>();
 
             var allDefinitions = Quality.DefaultQualityDefinitions.OrderBy(d => d.Weight).ToList();
-            var existingDefinitions = _repo.All().ToList();
+            var existingDefinitions = _repo.All().GetAwaiter().GetResult().ToList();
 
             foreach (var definition in allDefinitions)
             {
@@ -88,9 +96,9 @@ namespace NzbDrone.Core.Qualities
                 }
             }
 
-            _repo.InsertMany(insertList);
-            _repo.UpdateMany(updateList);
-            _repo.DeleteMany(existingDefinitions);
+            _repo.InsertMany(insertList).GetAwaiter().GetResult();
+            _repo.UpdateMany(updateList).GetAwaiter().GetResult();
+            _repo.DeleteMany(existingDefinitions).GetAwaiter().GetResult();
 
             _cache.Clear();
         }
@@ -114,7 +122,7 @@ namespace NzbDrone.Core.Qualities
             var updateList = new List<QualityDefinition>();
 
             var allDefinitions = Quality.DefaultQualityDefinitions.OrderBy(d => d.Weight).ToList();
-            var existingDefinitions = _repo.All().ToList();
+            var existingDefinitions = _repo.All().GetAwaiter().GetResult().ToList();
 
             foreach (var definition in allDefinitions)
             {
@@ -125,7 +133,7 @@ namespace NzbDrone.Core.Qualities
                 updateList.Add(existing);
             }
 
-            _repo.UpdateMany(updateList);
+            _repo.UpdateMany(updateList).GetAwaiter().GetResult();
 
             _cache.Clear();
         }

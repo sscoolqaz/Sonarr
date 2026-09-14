@@ -1,4 +1,5 @@
-﻿using NzbDrone.Core.Messaging.Commands;
+﻿using System.Threading.Tasks;
+using NzbDrone.Core.Messaging.Commands;
 
 namespace NzbDrone.Core.Housekeeping.Housekeepers
 {
@@ -11,9 +12,9 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             _commandQueueManager = commandQueueManager;
         }
 
-        public void Clean()
+        public Task Clean()
         {
-            _commandQueueManager.CleanCommands();
+            return _commandQueueManager.CleanCommands();
         }
     }
 }

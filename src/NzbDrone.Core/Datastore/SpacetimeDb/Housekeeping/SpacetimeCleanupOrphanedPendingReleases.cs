@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Download.Pending;
 using NzbDrone.Core.Housekeeping;
 using NzbDrone.Core.Tv;
@@ -17,10 +18,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb.Housekeeping
             _seriesRepository = seriesRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var validSeriesIds = _seriesRepository.All().Select(s => s.Id).ToHashSet();
-            SpacetimeOrphanCleanup.DeleteWhereParentMissing(_pendingReleaseRepository.All(), validSeriesIds, p => p.SeriesId, _pendingReleaseRepository.Delete);
+            var validSeriesIds = (await _seriesRepository.All()).Select(s => s.Id).ToHashSet();
+            await SpacetimeOrphanCleanup.DeleteWhereParentMissing(await _pendingReleaseRepository.All(), validSeriesIds, p => p.SeriesId, _pendingReleaseRepository.Delete);
         }
     }
 }

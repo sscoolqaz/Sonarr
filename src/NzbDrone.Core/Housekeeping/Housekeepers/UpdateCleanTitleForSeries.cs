@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Parser;
 using NzbDrone.Core.Tv;
 
@@ -13,19 +14,19 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             _seriesRepository = seriesRepository;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var series = _seriesRepository.All().ToList();
+            var series = (await _seriesRepository.All()).ToList();
 
-            series.ForEach(s =>
+            foreach (var s in series)
             {
                 var cleanTitle = s.Title.CleanSeriesTitle();
                 if (s.CleanTitle != cleanTitle)
                 {
                     s.CleanTitle = cleanTitle;
-                    _seriesRepository.Update(s);
+                    await _seriesRepository.Update(s);
                 }
-            });
+            }
         }
     }
 }

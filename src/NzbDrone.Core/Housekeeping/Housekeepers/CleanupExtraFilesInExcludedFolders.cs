@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Files;
 using NzbDrone.Core.Extras.Others;
 using NzbDrone.Core.MediaFiles;
@@ -20,13 +21,13 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             _diskScanService = diskScanService;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
-            var allSeries = _seriesService.GetAllSeries();
+            var allSeries = await _seriesService.GetAllSeries();
 
             foreach (var series in allSeries)
             {
-                var extraFiles = _extraFileRepository.GetFilesBySeries(series.Id);
+                var extraFiles = await _extraFileRepository.GetFilesBySeries(series.Id);
                 var filteredExtraFiles = _diskScanService.FilterPaths(series.Path, extraFiles.Select(e => Path.Combine(series.Path, e.RelativePath)));
 
                 if (filteredExtraFiles.Count == extraFiles.Count)
@@ -38,7 +39,7 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
 
                 if (excludedExtraFiles.Any())
                 {
-                    _extraFileRepository.DeleteMany(excludedExtraFiles.Select(e => e.Id));
+                    await _extraFileRepository.DeleteMany(excludedExtraFiles.Select(e => e.Id));
                 }
             }
         }

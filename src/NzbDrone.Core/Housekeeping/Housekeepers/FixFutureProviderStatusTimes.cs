@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.ThingiProvider.Status;
 
 namespace NzbDrone.Core.Housekeeping.Housekeepers
@@ -15,10 +16,10 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
             _repo = repo;
         }
 
-        public void Clean()
+        public async Task Clean()
         {
             var now = DateTime.UtcNow;
-            var statuses = _repo.All().ToList();
+            var statuses = (await _repo.All()).ToList();
             var toUpdate = new List<TModel>();
 
             foreach (var status in statuses)
@@ -51,7 +52,7 @@ namespace NzbDrone.Core.Housekeeping.Housekeepers
                 }
             }
 
-            _repo.UpdateMany(toUpdate);
+            await _repo.UpdateMany(toUpdate);
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Download;
@@ -127,7 +128,17 @@ namespace NzbDrone.Core.Notifications
             return false;
         }
 
+        // NOTE: IHandle<TEvent>/IHandleAsync<TEvent> are shared eventing interfaces (50+/18+
+        // implementers app-wide); their `void Handle(...)`/`void HandleAsync(...)` signatures are
+        // out of scope to change. EventAggregator runs handlers off the request thread via
+        // Task.Factory.StartNew and ASP.NET Core carries no SynchronizationContext, so bridging
+        // here via GetAwaiter().GetResult() cannot deadlock.
         public void Handle(EpisodeGrabbedEvent message)
+        {
+            HandleEpisodeGrabbed(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleEpisodeGrabbed(EpisodeGrabbedEvent message)
         {
             var grabMessage = new GrabMessage
             {
@@ -140,7 +151,7 @@ namespace NzbDrone.Core.Notifications
                 DownloadId = message.DownloadId
             };
 
-            foreach (var notification in _notificationFactory.OnGrabEnabled())
+            foreach (var notification in await _notificationFactory.OnGrabEnabled())
             {
                 try
                 {
@@ -150,17 +161,22 @@ namespace NzbDrone.Core.Notifications
                     }
 
                     notification.OnGrab(grabMessage);
-                    _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                    await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Error(ex, "Unable to send OnGrab notification to {0}", notification.Definition.Name);
                 }
             }
         }
 
         public void Handle(EpisodeImportedEvent message)
+        {
+            HandleEpisodeImported(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleEpisodeImported(EpisodeImportedEvent message)
         {
             if (!message.NewDownload)
             {
@@ -180,7 +196,7 @@ namespace NzbDrone.Core.Notifications
                 Release = message.EpisodeInfo.Release
             };
 
-            foreach (var notification in _notificationFactory.OnDownloadEnabled())
+            foreach (var notification in await _notificationFactory.OnDownloadEnabled())
             {
                 try
                 {
@@ -189,19 +205,24 @@ namespace NzbDrone.Core.Notifications
                         if (downloadMessage.OldFiles.Empty() || ((NotificationDefinition)notification.Definition).OnUpgrade)
                         {
                             notification.OnDownload(downloadMessage);
-                            _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                            await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnDownload notification to: " + notification.Definition.Name);
                 }
             }
         }
 
         public void Handle(DownloadCompletedEvent message)
+        {
+            HandleDownloadCompleted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleDownloadCompleted(DownloadCompletedEvent message)
         {
             var series = message.TrackedDownload.RemoteEpisode.Series;
             var episodes = message.TrackedDownload.RemoteEpisode.Episodes;
@@ -224,7 +245,7 @@ namespace NzbDrone.Core.Notifications
                 ReleaseQuality = parsedEpisodeInfo.Quality
             };
 
-            foreach (var notification in _notificationFactory.OnImportCompleteEnabled())
+            foreach (var notification in await _notificationFactory.OnImportCompleteEnabled())
             {
                 try
                 {
@@ -233,19 +254,24 @@ namespace NzbDrone.Core.Notifications
                         if (((NotificationDefinition)notification.Definition).OnImportComplete)
                         {
                             notification.OnImportComplete(downloadMessage);
-                            _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                            await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnImportComplete notification to: " + notification.Definition.Name);
                 }
             }
         }
 
         public void Handle(UntrackedDownloadCompletedEvent message)
+        {
+            HandleUntrackedDownloadCompleted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleUntrackedDownloadCompleted(UntrackedDownloadCompletedEvent message)
         {
             var series = message.Series;
             var episodes = message.Episodes;
@@ -266,7 +292,7 @@ namespace NzbDrone.Core.Notifications
                 ReleaseQuality = parsedEpisodeInfo.Quality
             };
 
-            foreach (var notification in _notificationFactory.OnImportCompleteEnabled())
+            foreach (var notification in await _notificationFactory.OnImportCompleteEnabled())
             {
                 try
                 {
@@ -275,13 +301,13 @@ namespace NzbDrone.Core.Notifications
                         if (((NotificationDefinition)notification.Definition).OnImportComplete)
                         {
                             notification.OnImportComplete(downloadMessage);
-                            _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                            await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnImportComplete notification to: " + notification.Definition.Name);
                 }
             }
@@ -289,19 +315,24 @@ namespace NzbDrone.Core.Notifications
 
         public void Handle(SeriesRenamedEvent message)
         {
-            foreach (var notification in _notificationFactory.OnRenameEnabled())
+            HandleSeriesRenamed(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleSeriesRenamed(SeriesRenamedEvent message)
+        {
+            foreach (var notification in await _notificationFactory.OnRenameEnabled())
             {
                 try
                 {
                     if (ShouldHandleSeries(notification.Definition, message.Series))
                     {
                         notification.OnRename(message.Series, message.RenamedFiles);
-                        _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                        await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnRename notification to: " + notification.Definition.Name);
                 }
             }
@@ -309,27 +340,37 @@ namespace NzbDrone.Core.Notifications
 
         public void Handle(UpdateInstalledEvent message)
         {
+            HandleUpdateInstalled(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleUpdateInstalled(UpdateInstalledEvent message)
+        {
             var updateMessage = new ApplicationUpdateMessage();
             updateMessage.Message = $"Sonarr updated from {message.PreviousVerison.ToString()} to {message.NewVersion.ToString()}";
             updateMessage.PreviousVersion = message.PreviousVerison;
             updateMessage.NewVersion = message.NewVersion;
 
-            foreach (var notification in _notificationFactory.OnApplicationUpdateEnabled())
+            foreach (var notification in await _notificationFactory.OnApplicationUpdateEnabled())
             {
                 try
                 {
                     notification.OnApplicationUpdate(updateMessage);
-                    _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                    await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnApplicationUpdate notification to: " + notification.Definition.Name);
                 }
             }
         }
 
         public void Handle(ManualInteractionRequiredEvent message)
+        {
+            HandleManualInteractionRequired(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleManualInteractionRequired(ManualInteractionRequiredEvent message)
         {
             var series = message.Episode?.Series;
             var mess = "";
@@ -361,7 +402,7 @@ namespace NzbDrone.Core.Notifications
                 Release = message.Release
             };
 
-            foreach (var notification in _notificationFactory.OnManualInteractionEnabled())
+            foreach (var notification in await _notificationFactory.OnManualInteractionEnabled())
             {
                 try
                 {
@@ -371,17 +412,22 @@ namespace NzbDrone.Core.Notifications
                     }
 
                     notification.OnManualInteractionRequired(manualInteractionMessage);
-                    _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                    await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Error(ex, "Unable to send OnManualInteractionRequired notification to {0}", notification.Definition.Name);
                 }
             }
         }
 
         public void Handle(EpisodeFileDeletedEvent message)
+        {
+            HandleEpisodeFileDeleted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleEpisodeFileDeleted(EpisodeFileDeletedEvent message)
         {
             if (message.EpisodeFile.Episodes.Value.Empty())
             {
@@ -396,7 +442,7 @@ namespace NzbDrone.Core.Notifications
             deleteMessage.EpisodeFile = message.EpisodeFile;
             deleteMessage.Reason = message.Reason;
 
-            foreach (var notification in _notificationFactory.OnEpisodeFileDeleteEnabled())
+            foreach (var notification in await _notificationFactory.OnEpisodeFileDeleteEnabled())
             {
                 try
                 {
@@ -405,19 +451,24 @@ namespace NzbDrone.Core.Notifications
                         if (ShouldHandleSeries(notification.Definition, deleteMessage.EpisodeFile.Series))
                         {
                             notification.OnEpisodeFileDelete(deleteMessage);
-                            _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                            await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnEpisodeFileDelete notification to: " + notification.Definition.Name);
                 }
             }
         }
 
         public void Handle(SeriesAddCompletedEvent message)
+        {
+            HandleSeriesAddCompleted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleSeriesAddCompleted(SeriesAddCompletedEvent message)
         {
             var series = message.Series;
             var addMessage = new SeriesAddMessage
@@ -426,19 +477,19 @@ namespace NzbDrone.Core.Notifications
                 Message = series.Title
             };
 
-            foreach (var notification in _notificationFactory.OnSeriesAddEnabled())
+            foreach (var notification in await _notificationFactory.OnSeriesAddEnabled())
             {
                 try
                 {
                     if (ShouldHandleSeries(notification.Definition, series))
                     {
                         notification.OnSeriesAdd(addMessage);
-                        _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                        await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnSeriesAdd notification to: " + notification.Definition.Name);
                 }
             }
@@ -446,23 +497,28 @@ namespace NzbDrone.Core.Notifications
 
         public void Handle(SeriesDeletedEvent message)
         {
+            HandleSeriesDeleted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleSeriesDeleted(SeriesDeletedEvent message)
+        {
             foreach (var series in message.Series)
             {
                 var deleteMessage = new SeriesDeleteMessage(series, message.DeleteFiles);
 
-                foreach (var notification in _notificationFactory.OnSeriesDeleteEnabled())
+                foreach (var notification in await _notificationFactory.OnSeriesDeleteEnabled())
                 {
                     try
                     {
                         if (ShouldHandleSeries(notification.Definition, deleteMessage.Series))
                         {
                             notification.OnSeriesDelete(deleteMessage);
-                            _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                            await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                         }
                     }
                     catch (Exception ex)
                     {
-                        _notificationStatusService.RecordFailure(notification.Definition.Id);
+                        await _notificationStatusService.RecordFailure(notification.Definition.Id);
                         _logger.Warn(ex, "Unable to send OnSeriesDelete notification to: " + notification.Definition.Name);
                     }
                 }
@@ -470,6 +526,11 @@ namespace NzbDrone.Core.Notifications
         }
 
         public void Handle(HealthCheckFailedEvent message)
+        {
+            HandleHealthCheckFailed(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleHealthCheckFailed(HealthCheckFailedEvent message)
         {
             // Don't send health check notifications during the start up grace period,
             // once that duration expires they they'll be retested and fired off if necessary.
@@ -479,19 +540,19 @@ namespace NzbDrone.Core.Notifications
                 return;
             }
 
-            foreach (var notification in _notificationFactory.OnHealthIssueEnabled())
+            foreach (var notification in await _notificationFactory.OnHealthIssueEnabled())
             {
                 try
                 {
                     if (ShouldHandleHealthFailure(message.HealthCheck, ((NotificationDefinition)notification.Definition).IncludeHealthWarnings))
                     {
                         notification.OnHealthIssue(message.HealthCheck);
-                        _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                        await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnHealthIssue notification to: " + notification.Definition.Name);
                 }
             }
@@ -499,24 +560,29 @@ namespace NzbDrone.Core.Notifications
 
         public void Handle(HealthCheckRestoredEvent message)
         {
+            HandleHealthCheckRestored(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleHealthCheckRestored(HealthCheckRestoredEvent message)
+        {
             if (message.IsInStartupGracePeriod)
             {
                 return;
             }
 
-            foreach (var notification in _notificationFactory.OnHealthRestoredEnabled())
+            foreach (var notification in await _notificationFactory.OnHealthRestoredEnabled())
             {
                 try
                 {
                     if (ShouldHandleHealthFailure(message.PreviousCheck, ((NotificationDefinition)notification.Definition).IncludeHealthWarnings))
                     {
                         notification.OnHealthRestored(message.PreviousCheck);
-                        _notificationStatusService.RecordSuccess(notification.Definition.Id);
+                        await _notificationStatusService.RecordSuccess(notification.Definition.Id);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _notificationStatusService.RecordFailure(notification.Definition.Id);
+                    await _notificationStatusService.RecordFailure(notification.Definition.Id);
                     _logger.Warn(ex, "Unable to send OnHealthRestored notification to: " + notification.Definition.Name);
                 }
             }
@@ -524,27 +590,27 @@ namespace NzbDrone.Core.Notifications
 
         public void HandleAsync(DeleteCompletedEvent message)
         {
-            ProcessQueue();
+            ProcessQueue().GetAwaiter().GetResult();
         }
 
         public void HandleAsync(DownloadsProcessedEvent message)
         {
-            ProcessQueue();
+            ProcessQueue().GetAwaiter().GetResult();
         }
 
         public void HandleAsync(RenameCompletedEvent message)
         {
-            ProcessQueue();
+            ProcessQueue().GetAwaiter().GetResult();
         }
 
         public void HandleAsync(HealthCheckCompleteEvent message)
         {
-            ProcessQueue();
+            ProcessQueue().GetAwaiter().GetResult();
         }
 
-        private void ProcessQueue()
+        private async Task ProcessQueue()
         {
-            foreach (var notification in _notificationFactory.GetAvailableProviders())
+            foreach (var notification in await _notificationFactory.GetAvailableProviders())
             {
                 try
                 {
