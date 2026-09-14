@@ -33,7 +33,7 @@ namespace Sonarr.Http.Authentication
                 return null;
             }
 
-            var user = _userService.FindUser(username, password);
+            var user = _userService.FindUser(username, password).GetAwaiter().GetResult();
 
             if (user != null)
             {
