@@ -60,6 +60,23 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         void RunOnActor(Action work);
 
         /// <summary>
+        /// Async, non-blocking variant of RunOnActor - queues work onto the actor thread and
+        /// returns a Task that completes with its result once the actor processes it, instead of
+        /// blocking the calling thread until that happens. This is what SpacetimeBasicRepository's
+        /// public (IBasicRepository) methods use: the calling thread (an ASP.NET request thread,
+        /// ultimately) is freed to do other work while the actor thread pump handles the queued
+        /// item on its own schedule, rather than parking a thread-pool thread for the duration.
+        /// Called from the actor thread itself runs inline via Task.FromResult, same reasoning as
+        /// RunOnActor's own inline case.
+        /// </summary>
+        Task<T> RunOnActorAsync<T>(Func<T> work);
+
+        /// <summary>
+        /// Void-returning variant of RunOnActorAsync.
+        /// </summary>
+        Task RunOnActorAsync(Action work);
+
+        /// <summary>
         /// Registers a callback to run if the connection is lost while some operation is pending
         /// (e.g. a write waiting for row/reducer confirmation) - callers register one of these for
         /// as long as they're waiting, and unregister (via the returned IDisposable) once they get
@@ -169,6 +186,36 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         }
 
         public void RunOnActor(Action work) => RunOnActor<object>(() =>
+        {
+            work();
+            return null;
+        });
+
+        public Task<T> RunOnActorAsync<T>(Func<T> work)
+        {
+            if (Thread.CurrentThread == _actorThread)
+            {
+                return Task.FromResult(work());
+            }
+
+            var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            _workQueue.Add(() =>
+            {
+                try
+                {
+                    tcs.SetResult(work());
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            });
+
+            return tcs.Task;
+        }
+
+        public Task RunOnActorAsync(Action work) => RunOnActorAsync<object>(() =>
         {
             work();
             return null;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
 using SpacetimeDB;
@@ -21,11 +22,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// ToModel/GetRowId, the Invoke*Reducer delegates, and SubscribeOwnUpdateCommitted) that can't
     /// be generalized because each generated table/reducer is its own type.
     ///
+    /// Phase 3: every public method is genuinely async (Task-returning throughout, not a sync
+    /// facade blocking on an async core) - callers await Conn.RunOnActorAsync rather than
+    /// Conn.RunOnActor, so a caller's own thread (an ASP.NET request thread, ultimately) is freed
+    /// while the actor thread processes the queued work on its own schedule, instead of parking a
+    /// thread for the duration. This also means _writeLock can no longer be a plain Monitor lock
+    /// (you cannot hold a lock across an await - the continuation may resume on a different
+    /// thread than took the lock, and Monitor.Exit from a non-owning thread throws) - it's a
+    /// SemaphoreSlim(1,1) instead, acquired with WaitAsync and released in a finally.
+    ///
     /// Reads: every read (All/Get/Find/Get(ids)/Single/SingleOrDefault) runs against the locally
-    /// subscribed client cache (Table.Iter()/Table.Id.Find(id)) via Conn.RunOnActor, not an ad-hoc
-    /// RemoteQuery network round-trip - SpacetimeDbConnection already keeps this cache live via
-    /// SubscribeToAllTables(), so querying it locally instead of asking the server again is both
-    /// faster and the actually-idiomatic way to read from SpacetimeDB.
+    /// subscribed client cache (Table.Iter()/Table.Id.Find(id)) via Conn.RunOnActorAsync, not an
+    /// ad-hoc RemoteQuery network round-trip - SpacetimeDbConnection already keeps this cache live
+    /// via SubscribeToAllTables(), so querying it locally instead of asking the server again is
+    /// both faster and the actually-idiomatic way to read from SpacetimeDB.
     ///
     /// Writes: every write (Insert/Update/SetFields/Delete) is confirmed by matching a table row
     /// event's CallerIdentity/CallerConnectionId against this connection's own (see
@@ -33,15 +43,15 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// additionally accepts a correlated reducer-committed result (via SubscribeOwnUpdateCommitted)
     /// as alternate confirmation, because a no-op update (the new row content is identical to the
     /// old) commits successfully but produces no row-delta event at all - waiting on the row event
-    /// alone would time out on a legitimate, successful write. All callback registration/
-    /// unregistration and every Table/Db touch happens via Conn.RunOnActor, which serializes it
-    /// against the connection's FrameTick() pump on one dedicated thread - the SDK's own generated
+    /// alone would time out on a legitimate, successful write. The same channel also signals
+    /// failure (Status.Failed/OutOfEnergy) so a rejected reducer call surfaces as an immediate
+    /// exception instead of waiting out the full timeout. All callback registration/unregistration
+    /// and every Table/Db touch happens via Conn.RunOnActorAsync, which serializes it against the
+    /// connection's FrameTick() pump on one dedicated thread - the SDK's own generated
     /// event-listener storage is an unsynchronized List/Dictionary, so registering or invoking a
     /// callback from two different threads at once is a real race, not just a style concern.
-    /// Writes are additionally serialized per repository instance with a lock (see
-    /// PinRealRepositoriesByDefault-adjacent remarks in CompositionExtensions.cs for why every
-    /// entity must resolve to exactly one singleton instance for this to mean anything), so only
-    /// one entity's table is blocked at a time; a different entity's repository (sharing the same
+    /// Writes are additionally serialized per repository instance with _writeLock, so only one
+    /// entity's table is blocked at a time; a different entity's repository (sharing the same
     /// underlying connection) writes independently.
     /// </summary>
     public abstract class SpacetimeBasicRepository<TModel, TStdbRow> : IBasicRepository<TModel>
@@ -50,7 +60,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     {
         protected readonly ISpacetimeDbConnection Conn;
         private readonly IEventAggregator _eventAggregator;
-        private readonly object _writeLock = new object();
+        private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
 
         protected SpacetimeBasicRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
         {
@@ -63,14 +73,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// SpacetimeDB table handle shares this same generic base regardless of row type, which
         /// is what lets Insert/Update/SetFields/Delete below subscribe to OnInsert/OnUpdate/
         /// OnDelete generically instead of needing a bespoke hook per entity. Only ever touched
-        /// via Conn.RunOnActor - never read or subscribed to directly.
+        /// via Conn.RunOnActorAsync - never read or subscribed to directly.
         /// </summary>
         protected abstract RemoteTableHandle<EventContext, TStdbRow> Table { get; }
 
         /// <summary>
         /// Primary-key lookup against the locally subscribed cache (e.g. Table.Id.Find(id)) -
         /// every entity has a [PrimaryKey] column and therefore a generated unique-index accessor
-        /// for it. Only ever called from inside a Conn.RunOnActor delegate.
+        /// for it. Only ever called from inside a Conn.RunOnActorAsync delegate.
         /// </summary>
         protected abstract TStdbRow FindRowById(int id);
 
@@ -89,28 +99,28 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// Conn.Connection.Reducers.OnUpdateTag) to onCommitted (Status.Committed) or onFailed
         /// (Status.Failed / OutOfEnergy) - the second confirmation channel for Update (see class
         /// remarks on why a row event alone isn't enough). Returns an IDisposable that unsubscribes;
-        /// called and disposed only from inside Conn.RunOnActor.
+        /// called and disposed only from inside Conn.RunOnActorAsync.
         /// </summary>
         protected abstract IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed);
 
         protected virtual bool PublishModelEvents => false;
 
-        public virtual IEnumerable<TModel> All() =>
-            Conn.RunOnActor(() => Table.Iter().Select(ToModel).ToList());
+        public virtual async Task<IEnumerable<TModel>> All() =>
+            await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).ToList());
 
-        public int Count() => Conn.RunOnActor(() => Table.Count);
+        public async Task<int> Count() => await Conn.RunOnActorAsync(() => Table.Count);
 
-        public bool HasItems() => Conn.RunOnActor(() => Table.Count > 0);
+        public async Task<bool> HasItems() => await Conn.RunOnActorAsync(() => Table.Count > 0);
 
-        public TModel Find(int id) => Conn.RunOnActor(() =>
+        public async Task<TModel> Find(int id) => await Conn.RunOnActorAsync(() =>
         {
             var row = FindRowById(id);
             return row == null ? null : ToModel(row);
         });
 
-        public TModel Get(int id)
+        public async Task<TModel> Get(int id)
         {
-            var model = Find(id);
+            var model = await Find(id);
 
             if (model == null)
             {
@@ -120,7 +130,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return model;
         }
 
-        public IEnumerable<TModel> Get(IEnumerable<int> ids)
+        public async Task<IEnumerable<TModel>> Get(IEnumerable<int> ids)
         {
             var idSet = ids.ToHashSet();
 
@@ -129,7 +139,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 return Array.Empty<TModel>();
             }
 
-            var result = Conn.RunOnActor(() => Table.Iter().Where(r => idSet.Contains(GetRowId(r))).Select(ToModel).ToList());
+            var result = await Conn.RunOnActorAsync(() => Table.Iter().Where(r => idSet.Contains(GetRowId(r))).Select(ToModel).ToList());
 
             if (result.Count != idSet.Count)
             {
@@ -139,9 +149,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return result;
         }
 
-        public TModel Single() => Conn.RunOnActor(() => Table.Iter().Select(ToModel).Single());
+        public async Task<TModel> Single() => await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).Single());
 
-        public TModel SingleOrDefault() => Conn.RunOnActor(() => Table.Iter().Select(ToModel).SingleOrDefault());
+        public async Task<TModel> SingleOrDefault() => await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).SingleOrDefault());
 
         /// <summary>
         /// Runs a read against the locally subscribed cache, materializing the result before it
@@ -152,8 +162,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// actor thread, since enumerating it concurrently with FrameTick() is exactly the race
         /// this class exists to avoid.
         /// </summary>
-        protected TResult Query<TResult>(Func<RemoteTableHandle<EventContext, TStdbRow>, TResult> query) =>
-            Conn.RunOnActor(() => query(Table));
+        protected Task<TResult> Query<TResult>(Func<RemoteTableHandle<EventContext, TStdbRow>, TResult> query) =>
+            Conn.RunOnActorAsync(() => query(Table));
 
         // Opt-in hook for the migration tool (Sonarr.SpacetimeMigration) cutting an existing
         // SQLite-backed install over to SpacetimeDB - unlike Insert(), which always assigns a
@@ -161,7 +171,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // transfer as-is with no in-script id-remapping needed. Only overridden by the handful of
         // repositories the migration's first pass covers - everything else throws until the
         // migration's scope grows to match.
-        public virtual void MigrateInsert(TModel model) =>
+        public virtual Task MigrateInsert(TModel model) =>
             throw new NotSupportedException($"{GetType().Name} does not support migration inserts");
 
         /// <summary>
@@ -179,12 +189,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// gap, and holding the lock for the same duration Insert/Update/Delete already do means
         /// only one write of any kind is ever in flight per repository instance.
         /// </summary>
-        protected void InvokeAndWaitForMigrateInsert(int id, Action invokeReducer)
+        protected async Task InvokeAndWaitForMigrateInsert(int id, Action invokeReducer)
         {
-            lock (_writeLock)
+            await _writeLock.WaitAsync();
+
+            try
             {
                 Exception failure = null;
-                var confirmed = new ManualResetEventSlim(false);
+                var confirmedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 void Handler(EventContext ctx, TStdbRow row)
                 {
@@ -193,22 +205,22 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                         return;
                     }
 
-                    confirmed.Set();
+                    confirmedTcs.TrySetResult(true);
                 }
 
                 using var pendingOp = Conn.RegisterPendingOperation(ex =>
                 {
                     failure = ex;
-                    confirmed.Set();
+                    confirmedTcs.TrySetResult(true);
                 });
 
-                Conn.RunOnActor(() => Table.OnInsert += Handler);
+                await Conn.RunOnActorAsync(() => Table.OnInsert += Handler);
 
                 try
                 {
                     invokeReducer();
 
-                    if (!confirmed.Wait(WriteConfirmationTimeout))
+                    if (!await WaitForConfirmation(confirmedTcs))
                     {
                         throw new InvalidOperationException(
                             $"{typeof(TModel).Name}: migrate-insert of id {id} was not confirmed within {WriteConfirmationTimeout} - the reducer call " +
@@ -222,8 +234,12 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 }
                 finally
                 {
-                    Conn.RunOnActor(() => Table.OnInsert -= Handler);
+                    await Conn.RunOnActorAsync(() => Table.OnInsert -= Handler);
                 }
+            }
+            finally
+            {
+                _writeLock.Release();
             }
         }
 
@@ -238,32 +254,34 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// the collision a bulk reducer's row events would otherwise create for whichever per-row
         /// wait happened to be watching the same table at the same time.
         /// </summary>
-        protected void InvokeAndWaitForReducerCommitted(Action invokeReducer, Func<Action, Action<Exception>, IDisposable> subscribeCommitted)
+        protected async Task InvokeAndWaitForReducerCommitted(Action invokeReducer, Func<Action, Action<Exception>, IDisposable> subscribeCommitted)
         {
-            lock (_writeLock)
+            await _writeLock.WaitAsync();
+
+            try
             {
                 Exception failure = null;
-                var confirmed = new ManualResetEventSlim(false);
+                var confirmedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 using var pendingOp = Conn.RegisterPendingOperation(ex =>
                 {
                     failure = ex;
-                    confirmed.Set();
+                    confirmedTcs.TrySetResult(true);
                 });
 
-                var subscription = Conn.RunOnActor(() => subscribeCommitted(
-                    () => confirmed.Set(),
+                var subscription = await Conn.RunOnActorAsync(() => subscribeCommitted(
+                    () => confirmedTcs.TrySetResult(true),
                     ex =>
                     {
                         failure = ex;
-                        confirmed.Set();
+                        confirmedTcs.TrySetResult(true);
                     }));
 
                 try
                 {
                     invokeReducer();
 
-                    if (!confirmed.Wait(WriteConfirmationTimeout))
+                    if (!await WaitForConfirmation(confirmedTcs))
                     {
                         throw new InvalidOperationException($"{GetType().Name}: reducer call was not confirmed within {WriteConfirmationTimeout} - it may have failed, or the connection to SpacetimeDB is unresponsive.");
                     }
@@ -275,23 +293,29 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 }
                 finally
                 {
-                    Conn.RunOnActor(() => subscription.Dispose());
+                    await Conn.RunOnActorAsync(() => subscription.Dispose());
                 }
+            }
+            finally
+            {
+                _writeLock.Release();
             }
         }
 
-        public TModel Insert(TModel model)
+        public async Task<TModel> Insert(TModel model)
         {
             if (model.Id != 0)
             {
                 throw new InvalidOperationException("Can't insert model with existing ID " + model.Id);
             }
 
-            lock (_writeLock)
+            await _writeLock.WaitAsync();
+
+            try
             {
                 TStdbRow insertedRow = null;
                 Exception failure = null;
-                var confirmed = new ManualResetEventSlim(false);
+                var confirmedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 void Handler(EventContext ctx, TStdbRow row)
                 {
@@ -301,40 +325,37 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     }
 
                     insertedRow = row;
-                    confirmed.Set();
+                    confirmedTcs.TrySetResult(true);
                 }
 
                 // Registered before the row-event handler, not after: if the connection is lost in
                 // the gap between the two, RegisterPendingOperation must already be listening so
                 // HandleDisconnect's sweep of currently-pending operations doesn't miss this one
                 // (a disconnect that lands in that gap would otherwise go unnoticed until the full
-                // WriteConfirmationTimeout elapses instead of failing immediately). Setting
-                // `confirmed` before Wait() is even called is harmless - ManualResetEventSlim is a
-                // persistent signal, not a one-shot handoff, so a Set() that "arrives early" is
-                // still observed correctly.
+                // WriteConfirmationTimeout elapses instead of failing immediately).
                 using var pendingOp = Conn.RegisterPendingOperation(ex =>
                 {
                     failure = ex;
-                    confirmed.Set();
+                    confirmedTcs.TrySetResult(true);
                 });
 
-                // Registered (and later removed) exclusively via RunOnActor, so it can never race
-                // FrameTick()'s own invocation of this same event on the actor thread. Registered
-                // before invoking the reducer, inside the same lock a different Insert() call
-                // through this instance would also need - only one insert to this table via this
-                // repository can be in flight at a time, so the first OnInsert event we see that's
-                // confirmed as OUR OWN connection's doing (not a genuinely different connection's
-                // insert into the same table, which fires this same event but with a different
-                // CallerIdentity/CallerConnectionId, and is simply ignored) has to be this call's
-                // row. No guessing which of several new ids is ours the way a polling-based "grab
-                // the current max id" approach would have to.
-                Conn.RunOnActor(() => Table.OnInsert += Handler);
+                // Registered (and later removed) exclusively via RunOnActorAsync, so it can never
+                // race FrameTick()'s own invocation of this same event on the actor thread.
+                // Registered before invoking the reducer, inside the same lock a different
+                // Insert() call through this instance would also need - only one insert to this
+                // table via this repository can be in flight at a time, so the first OnInsert
+                // event we see that's confirmed as OUR OWN connection's doing (not a genuinely
+                // different connection's insert into the same table, which fires this same event
+                // but with a different CallerIdentity/CallerConnectionId, and is simply ignored)
+                // has to be this call's row. No guessing which of several new ids is ours the way
+                // a polling-based "grab the current max id" approach would have to.
+                await Conn.RunOnActorAsync(() => Table.OnInsert += Handler);
 
                 try
                 {
                     InvokeInsertReducer(model);
 
-                    if (!confirmed.Wait(WriteConfirmationTimeout))
+                    if (!await WaitForConfirmation(confirmedTcs))
                     {
                         throw new InvalidOperationException(
                             $"{typeof(TModel).Name}: insert was not confirmed within {WriteConfirmationTimeout} - the reducer call may " +
@@ -348,7 +369,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 }
                 finally
                 {
-                    Conn.RunOnActor(() => Table.OnInsert -= Handler);
+                    await Conn.RunOnActorAsync(() => Table.OnInsert -= Handler);
                 }
 
                 model.Id = GetRowId(insertedRow);
@@ -356,7 +377,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 // Runs while still holding _writeLock, with model.Id now correctly resolved -
                 // the hook a subclass needing an additional reducer call keyed by the new row's
                 // id (e.g. SpacetimeSeriesRepository replacing the new Series' tags) should use.
-                AfterInsertIdResolved(model);
+                await AfterInsertIdResolved(model);
+            }
+            finally
+            {
+                _writeLock.Release();
             }
 
             PublishModelEvent(model, ModelAction.Created);
@@ -369,17 +394,32 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// assigned id as part of the same insert (e.g. a junction-table replace) - runs inside
         /// Insert's lock, after model.Id has been safely resolved. No-op by default.
         /// </summary>
-        protected virtual void AfterInsertIdResolved(TModel model)
-        {
-        }
+        protected virtual Task AfterInsertIdResolved(TModel model) => Task.CompletedTask;
 
-        // Bounded safety-net timeout for the ManualResetEventSlim waits below - the ordinary path
+        // Bounded safety-net timeout for the confirmation waits below - the ordinary path
         // resolves as soon as the corresponding row/reducer event arrives, usually well under
         // this; this only matters if the reducer call fails silently or the connection is
         // unresponsive. Overridable purely so an integration test against a live server can
         // shrink it instead of waiting out the full default to exercise the timeout path -
         // production code never overrides this.
         protected virtual TimeSpan WriteConfirmationTimeout => TimeSpan.FromSeconds(5);
+
+        // Awaits a write-confirmation TaskCompletionSource with WriteConfirmationTimeout applied,
+        // returning false on timeout instead of letting Task.WaitAsync's TimeoutException
+        // propagate - every call site below already has its own more descriptive
+        // InvalidOperationException to throw on a false result, matching the pre-async
+        // ManualResetEventSlim.Wait(timeout) callers were written against.
+        private async Task<bool> WaitForConfirmation(TaskCompletionSource<bool> confirmedTcs)
+        {
+            try
+            {
+                return await confirmedTcs.Task.WaitAsync(WriteConfirmationTimeout);
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+        }
 
         // True if the given table-row event was caused by a reducer call from THIS connection,
         // not a genuinely different connection also writing to the same table. EventContext.Event
@@ -392,7 +432,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             reducerCase.ReducerEvent.CallerIdentity == Conn.Connection.Identity &&
             reducerCase.ReducerEvent.CallerConnectionId == Conn.Connection.ConnectionId;
 
-        public void InsertMany(IList<TModel> models)
+        public async Task InsertMany(IList<TModel> models)
         {
             if (models.Any(x => x.Id != 0))
             {
@@ -401,20 +441,26 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
             foreach (var model in models)
             {
-                Insert(model);
+                await Insert(model);
             }
         }
 
-        public TModel Update(TModel model)
+        public async Task<TModel> Update(TModel model)
         {
             if (model.Id == 0)
             {
                 throw new InvalidOperationException("Can't update model with ID 0");
             }
 
-            lock (_writeLock)
+            await _writeLock.WaitAsync();
+
+            try
             {
-                InvokeAndWaitForUpdate(model.Id, () => InvokeUpdateReducer(model));
+                await InvokeAndWaitForUpdate(model.Id, () => InvokeUpdateReducer(model));
+            }
+            finally
+            {
+                _writeLock.Release();
             }
 
             PublishModelEvent(model, ModelAction.Updated);
@@ -422,7 +468,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return model;
         }
 
-        public void UpdateMany(IList<TModel> models)
+        public async Task UpdateMany(IList<TModel> models)
         {
             if (models.Any(x => x.Id == 0))
             {
@@ -431,13 +477,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
             foreach (var model in models)
             {
-                Update(model);
+                await Update(model);
             }
         }
 
-        public TModel Upsert(TModel model) => model.Id == 0 ? Insert(model) : Update(model);
+        public async Task<TModel> Upsert(TModel model) => model.Id == 0 ? await Insert(model) : await Update(model);
 
-        public void SetFields(TModel model, params Expression<Func<TModel, object>>[] properties)
+        public async Task SetFields(TModel model, params Expression<Func<TModel, object>>[] properties)
         {
             if (model.Id == 0)
             {
@@ -462,34 +508,41 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             // call in line for the lock could still read a not-yet-applied row.
             TModel current;
 
-            lock (_writeLock)
+            await _writeLock.WaitAsync();
+
+            try
             {
-                current = Get(model.Id);
+                current = await Get(model.Id);
 
                 foreach (var property in properties.Select(p => p.GetMemberName()))
                 {
                     property.SetValue(current, property.GetValue(model));
                 }
 
-                InvokeAndWaitForUpdate(current.Id, () => InvokeUpdateReducer(current));
+                await InvokeAndWaitForUpdate(current.Id, () => InvokeUpdateReducer(current));
+            }
+            finally
+            {
+                _writeLock.Release();
             }
 
             PublishModelEvent(current, ModelAction.Updated);
         }
 
-        // Shared by Update() and SetFields(): invokes the given reducer call and blocks until
+        // Shared by Update() and SetFields(): invokes the given reducer call and waits until
         // EITHER an OnUpdate row event, or this entity's own reducer-committed result, confirms
-        // it landed for the specific row id being updated. Both channels are needed: a genuine
-        // no-op update (the new row content is byte-identical to what was already there) commits
-        // successfully server-side but produces no row-delta event at all, since there is nothing
-        // to broadcast - waiting on the row event alone would time out on a legitimate write. Both
-        // handlers are filtered to events this connection itself caused (see IsOwnConnectionEvent)
-        // for the specific row id, not just "any update to this table", in case a different
-        // connection updates a different row while this one is waiting.
-        private void InvokeAndWaitForUpdate(int id, Action invokeReducer)
+        // it landed for the specific row id being updated - or throws immediately if the
+        // reducer-committed channel reports Status.Failed/OutOfEnergy. A genuine no-op update
+        // (the new row content is byte-identical to what was already there) commits successfully
+        // server-side but produces no row-delta event at all, since there is nothing to broadcast
+        // - waiting on the row event alone would time out on a legitimate write. Both handlers are
+        // filtered to events this connection itself caused (see IsOwnConnectionEvent) for the
+        // specific row id, not just "any update to this table", in case a different connection
+        // updates a different row while this one is waiting. Caller must already hold _writeLock.
+        private async Task InvokeAndWaitForUpdate(int id, Action invokeReducer)
         {
             Exception failure = null;
-            var confirmed = new ManualResetEventSlim(false);
+            var confirmedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             void RowHandler(EventContext ctx, TStdbRow oldRow, TStdbRow newRow)
             {
@@ -498,7 +551,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     return;
                 }
 
-                confirmed.Set();
+                confirmedTcs.TrySetResult(true);
             }
 
             void CommittedHandler(int committedId)
@@ -508,29 +561,29 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     return;
                 }
 
-                confirmed.Set();
+                confirmedTcs.TrySetResult(true);
+            }
+
+            void FailureHandler(Exception ex)
+            {
+                failure = ex;
+                confirmedTcs.TrySetResult(true);
             }
 
             using var pendingOp = Conn.RegisterPendingOperation(ex =>
             {
                 failure = ex;
-                confirmed.Set();
+                confirmedTcs.TrySetResult(true);
             });
 
-            void FailureHandler(Exception ex)
-            {
-                failure = ex;
-                confirmed.Set();
-            }
-
-            Conn.RunOnActor(() => Table.OnUpdate += RowHandler);
-            var committedSubscription = Conn.RunOnActor(() => SubscribeOwnUpdateCommitted(CommittedHandler, FailureHandler));
+            await Conn.RunOnActorAsync(() => Table.OnUpdate += RowHandler);
+            var committedSubscription = await Conn.RunOnActorAsync(() => SubscribeOwnUpdateCommitted(CommittedHandler, FailureHandler));
 
             try
             {
                 invokeReducer();
 
-                if (!confirmed.Wait(WriteConfirmationTimeout))
+                if (!await WaitForConfirmation(confirmedTcs))
                 {
                     throw new InvalidOperationException(
                         $"{typeof(TModel).Name}: update to id {id} was not confirmed within {WriteConfirmationTimeout} - the reducer call " +
@@ -544,7 +597,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             }
             finally
             {
-                Conn.RunOnActor(() =>
+                await Conn.RunOnActorAsync(() =>
                 {
                     Table.OnUpdate -= RowHandler;
                     committedSubscription.Dispose();
@@ -553,30 +606,48 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         }
 
         // One outer lock around the whole batch, not just each per-model SetFields' own inner
-        // lock - _writeLock is a plain Monitor, safe to re-enter from the same thread, so this
-        // costs nothing extra but closes a real gap: without it, another caller through this same
-        // instance could interleave a write between two models in what the caller of this method
-        // intended as one batch, the same way a bare loop of single-row SetFields calls could
-        // for any other repository.
-        public void SetFields(IList<TModel> models, params Expression<Func<TModel, object>>[] properties)
+        // lock - _writeLock is a SemaphoreSlim(1,1), NOT re-entrant the way Monitor is, so
+        // SetFields(IList<TModel>, ...) below cannot simply call the single-model SetFields (that
+        // would deadlock trying to re-acquire a semaphore this same call already holds). It
+        // duplicates the read-merge-write-and-wait sequence per model instead, all under one
+        // WaitAsync/Release pair for the whole batch - closing the same gap the single-model
+        // overload's own comment describes, without re-entering the lock.
+        public async Task SetFields(IList<TModel> models, params Expression<Func<TModel, object>>[] properties)
         {
-            lock (_writeLock)
+            await _writeLock.WaitAsync();
+
+            try
             {
                 foreach (var model in models)
                 {
-                    SetFields(model, properties);
+                    var current = await Get(model.Id);
+
+                    foreach (var property in properties.Select(p => p.GetMemberName()))
+                    {
+                        property.SetValue(current, property.GetValue(model));
+                    }
+
+                    await InvokeAndWaitForUpdate(current.Id, () => InvokeUpdateReducer(current));
+
+                    PublishModelEvent(current, ModelAction.Updated);
                 }
+            }
+            finally
+            {
+                _writeLock.Release();
             }
         }
 
-        public void Delete(TModel model) => Delete(model.Id);
+        public Task Delete(TModel model) => Delete(model.Id);
 
-        public void Delete(int id)
+        public async Task Delete(int id)
         {
-            lock (_writeLock)
+            await _writeLock.WaitAsync();
+
+            try
             {
                 Exception failure = null;
-                var confirmed = new ManualResetEventSlim(false);
+                var confirmedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 void Handler(EventContext ctx, TStdbRow row)
                 {
@@ -585,22 +656,22 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                         return;
                     }
 
-                    confirmed.Set();
+                    confirmedTcs.TrySetResult(true);
                 }
 
                 using var pendingOp = Conn.RegisterPendingOperation(ex =>
                 {
                     failure = ex;
-                    confirmed.Set();
+                    confirmedTcs.TrySetResult(true);
                 });
 
-                Conn.RunOnActor(() => Table.OnDelete += Handler);
+                await Conn.RunOnActorAsync(() => Table.OnDelete += Handler);
 
                 try
                 {
                     InvokeDeleteReducer(id);
 
-                    if (!confirmed.Wait(WriteConfirmationTimeout))
+                    if (!await WaitForConfirmation(confirmedTcs))
                     {
                         throw new InvalidOperationException(
                             $"{typeof(TModel).Name}: delete of id {id} was not confirmed within {WriteConfirmationTimeout} - the reducer call " +
@@ -614,35 +685,36 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 }
                 finally
                 {
-                    Conn.RunOnActor(() => Table.OnDelete -= Handler);
+                    await Conn.RunOnActorAsync(() => Table.OnDelete -= Handler);
                 }
+            }
+            finally
+            {
+                _writeLock.Release();
             }
         }
 
-        public void DeleteMany(List<TModel> models)
-        {
-            DeleteMany(models.Select(m => m.Id));
-        }
+        public Task DeleteMany(List<TModel> models) => DeleteMany(models.Select(m => m.Id));
 
-        public void DeleteMany(IEnumerable<int> ids)
+        public async Task DeleteMany(IEnumerable<int> ids)
         {
             foreach (var id in ids)
             {
-                Delete(id);
+                await Delete(id);
             }
         }
 
-        public void Purge(bool vacuum = false)
+        public async Task Purge(bool vacuum = false)
         {
-            foreach (var model in All().ToList())
+            foreach (var model in (await All()).ToList())
             {
-                Delete(model.Id);
+                await Delete(model.Id);
             }
         }
 
-        public virtual PagingSpec<TModel> GetPaged(PagingSpec<TModel> pagingSpec)
+        public virtual async Task<PagingSpec<TModel>> GetPaged(PagingSpec<TModel> pagingSpec)
         {
-            var query = All().AsEnumerable();
+            var query = (await All()).AsEnumerable();
 
             foreach (var filter in pagingSpec.FilterExpressions)
             {
