@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
@@ -20,7 +21,7 @@ namespace NzbDrone.Core.Profiles.Qualities
 
         protected override List<QualityProfile> Query(SqlBuilder builder)
         {
-            var cfs = _customFormatService.All().ToDictionary(c => c.Id);
+            var cfs = _customFormatService.All().GetAwaiter().GetResult().ToDictionary(c => c.Id);
 
             var profiles = base.Query(builder);
 
@@ -48,9 +49,9 @@ namespace NzbDrone.Core.Profiles.Qualities
             return profiles;
         }
 
-        public bool Exists(int id)
+        public Task<bool> Exists(int id)
         {
-            return Query(p => p.Id == id).Count == 1;
+            return Task.FromResult(Query(p => p.Id == id).Count == 1);
         }
     }
 }

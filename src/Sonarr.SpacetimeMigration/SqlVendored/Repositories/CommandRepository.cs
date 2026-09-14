@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Dapper;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
@@ -13,14 +14,16 @@ namespace NzbDrone.Core.Messaging.Commands
         {
         }
 
-        public void Trim()
+        public Task Trim()
         {
             var date = DateTime.UtcNow.AddDays(-1);
 
             Delete(c => c.EndedAt < date);
+
+            return Task.CompletedTask;
         }
 
-        public void OrphanStarted()
+        public Task OrphanStarted()
         {
             var sql = @"UPDATE ""Commands"" SET ""Status"" = @Orphaned, ""EndedAt"" = @Ended WHERE ""Status"" = @Started";
             var args = new
@@ -34,21 +37,25 @@ namespace NzbDrone.Core.Messaging.Commands
             {
                 conn.Execute(sql, args);
             }
+
+            return Task.CompletedTask;
         }
 
-        public List<CommandModel> Queued()
+        public Task<List<CommandModel>> Queued()
         {
-            return Query(x => x.Status == CommandStatus.Queued);
+            return Task.FromResult(Query(x => x.Status == CommandStatus.Queued));
         }
 
-        public void Start(CommandModel command)
+        public Task Start(CommandModel command)
         {
-            SetFields(command, c => c.StartedAt, c => c.Status);
+            SetFields(command, c => c.StartedAt, c => c.Status).GetAwaiter().GetResult();
+            return Task.CompletedTask;
         }
 
-        public void End(CommandModel command)
+        public Task End(CommandModel command)
         {
-            SetFields(command, c => c.EndedAt, c => c.Status, c => c.Duration, c => c.Exception);
+            SetFields(command, c => c.EndedAt, c => c.Status, c => c.Duration, c => c.Exception).GetAwaiter().GetResult();
+            return Task.CompletedTask;
         }
     }
 }

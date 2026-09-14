@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Tv;
@@ -13,27 +14,28 @@ namespace NzbDrone.Core.Blocklisting
         {
         }
 
-        public List<Blocklist> BlocklistedByTitle(int seriesId, string sourceTitle)
+        public Task<List<Blocklist>> BlocklistedByTitle(int seriesId, string sourceTitle)
         {
-            return Query(e => e.SeriesId == seriesId && e.SourceTitle.Contains(sourceTitle));
+            return Task.FromResult(Query(e => e.SeriesId == seriesId && e.SourceTitle.Contains(sourceTitle)));
         }
 
-        public List<Blocklist> BlocklistedByTorrentInfoHash(int seriesId, string torrentInfoHash)
+        public Task<List<Blocklist>> BlocklistedByTorrentInfoHash(int seriesId, string torrentInfoHash)
         {
-            return Query(e => e.SeriesId == seriesId && e.TorrentInfoHash.Contains(torrentInfoHash));
+            return Task.FromResult(Query(e => e.SeriesId == seriesId && e.TorrentInfoHash.Contains(torrentInfoHash)));
         }
 
-        public List<Blocklist> BlocklistedBySeries(int seriesId)
+        public Task<List<Blocklist>> BlocklistedBySeries(int seriesId)
         {
-            return Query(b => b.SeriesId == seriesId);
+            return Task.FromResult(Query(b => b.SeriesId == seriesId));
         }
 
-        public void DeleteForSeriesIds(List<int> seriesIds)
+        public Task DeleteForSeriesIds(List<int> seriesIds)
         {
             Delete(x => seriesIds.Contains(x.SeriesId));
+            return Task.CompletedTask;
         }
 
-        public override PagingSpec<Blocklist> GetPaged(PagingSpec<Blocklist> pagingSpec)
+        public override Task<PagingSpec<Blocklist>> GetPaged(PagingSpec<Blocklist> pagingSpec)
         {
             var sortingByQuality = string.Equals(pagingSpec.SortKey, "quality", StringComparison.OrdinalIgnoreCase);
             var customSortExpression = sortingByQuality ? "COALESCE(\"r\".\"Score\", -1)" : null;
@@ -43,7 +45,7 @@ namespace NzbDrone.Core.Blocklisting
             var countTemplate = $"SELECT COUNT(*) FROM (SELECT /**select**/ FROM \"{TableMapping.Mapper.TableNameMapping(typeof(Blocklist))}\" /**join**/ /**innerjoin**/ /**leftjoin**/ /**where**/ /**groupby**/ /**having**/) AS \"Inner\"";
             pagingSpec.TotalRecords = GetPagedRecordCount(PagedBuilder(sortingByQuality).Select(typeof(Blocklist)), pagingSpec, countTemplate);
 
-            return pagingSpec;
+            return Task.FromResult(pagingSpec);
         }
 
         protected override SqlBuilder PagedBuilder() => PagedBuilder(false);

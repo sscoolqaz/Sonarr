@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -12,14 +13,14 @@ namespace NzbDrone.Core.Authentication
         {
         }
 
-        public User FindUser(string username)
+        public Task<User> FindUser(string username)
         {
-            return Query(x => x.Username == username).SingleOrDefault();
+            return Task.FromResult(Query(x => x.Username == username).SingleOrDefault());
         }
 
-        public User FindUser(Guid identifier)
+        public Task<User> FindUser(Guid identifier)
         {
-            return Query(x => x.Identifier == identifier).SingleOrDefault();
+            return Task.FromResult(Query(x => x.Identifier == identifier).SingleOrDefault());
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Dapper;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
@@ -13,31 +14,31 @@ namespace NzbDrone.Core.Tv
         {
         }
 
-        public bool SeriesPathExists(string path)
+        public Task<bool> SeriesPathExists(string path)
         {
-            return Query(c => c.Path == path).Any();
+            return Task.FromResult(Query(c => c.Path == path).Any());
         }
 
-        public Series FindByTitle(string cleanTitle)
+        public Task<Series> FindByTitle(string cleanTitle)
         {
             cleanTitle = cleanTitle.ToLowerInvariant();
 
             var series = Query(s => s.CleanTitle == cleanTitle)
                                         .ToList();
 
-            return ReturnSingleSeriesOrThrow(series);
+            return Task.FromResult(ReturnSingleSeriesOrThrow(series));
         }
 
-        public Series FindByTitle(string cleanTitle, int year)
+        public Task<Series> FindByTitle(string cleanTitle, int year)
         {
             cleanTitle = cleanTitle.ToLowerInvariant();
 
             var series = Query(s => s.CleanTitle == cleanTitle && s.Year == year).ToList();
 
-            return ReturnSingleSeriesOrThrow(series);
+            return Task.FromResult(ReturnSingleSeriesOrThrow(series));
         }
 
-        public List<Series> FindByTitleInexact(string cleanTitle)
+        public Task<List<Series>> FindByTitleInexact(string cleanTitle)
         {
             var builder = Builder().Where($"instr(@cleanTitle, \"Series\".\"CleanTitle\")", new { cleanTitle = cleanTitle });
 
@@ -46,63 +47,63 @@ namespace NzbDrone.Core.Tv
                 builder = Builder().Where($"(strpos(@cleanTitle, \"Series\".\"CleanTitle\") > 0)", new { cleanTitle = cleanTitle });
             }
 
-            return Query(builder).ToList();
+            return Task.FromResult(Query(builder).ToList());
         }
 
-        public Series FindByTvdbId(int tvdbId)
+        public Task<Series> FindByTvdbId(int tvdbId)
         {
-            return Query(s => s.TvdbId == tvdbId).SingleOrDefault();
+            return Task.FromResult(Query(s => s.TvdbId == tvdbId).SingleOrDefault());
         }
 
-        public Series FindByTvRageId(int tvRageId)
+        public Task<Series> FindByTvRageId(int tvRageId)
         {
-            return Query(s => s.TvRageId == tvRageId).SingleOrDefault();
+            return Task.FromResult(Query(s => s.TvRageId == tvRageId).SingleOrDefault());
         }
 
-        public Series FindByImdbId(string imdbId)
+        public Task<Series> FindByImdbId(string imdbId)
         {
-            return Query(s => s.ImdbId == imdbId).SingleOrDefault();
+            return Task.FromResult(Query(s => s.ImdbId == imdbId).SingleOrDefault());
         }
 
-        public Series FindByPath(string path)
+        public Task<Series> FindByPath(string path)
         {
-            return Query(s => s.Path == path)
-                        .FirstOrDefault();
+            return Task.FromResult(Query(s => s.Path == path)
+                        .FirstOrDefault());
         }
 
-        public Dictionary<int, int> AllSeriesTvdbIds()
+        public Task<Dictionary<int, int>> AllSeriesTvdbIds()
         {
             using (var conn = _database.OpenConnection())
             {
                 var strSql = "SELECT \"Id\" AS Key, \"TvdbId\" AS Value FROM \"Series\"";
-                return conn.Query<KeyValuePair<int, int>>(strSql).ToDictionary(x => x.Key, x => x.Value);
+                return Task.FromResult(conn.Query<KeyValuePair<int, int>>(strSql).ToDictionary(x => x.Key, x => x.Value));
             }
         }
 
-        public Dictionary<int, string> AllSeriesPaths()
+        public Task<Dictionary<int, string>> AllSeriesPaths()
         {
             using (var conn = _database.OpenConnection())
             {
                 var strSql = "SELECT \"Id\" AS Key, \"Path\" AS Value FROM \"Series\"";
-                return conn.Query<KeyValuePair<int, string>>(strSql).ToDictionary(x => x.Key, x => x.Value);
+                return Task.FromResult(conn.Query<KeyValuePair<int, string>>(strSql).ToDictionary(x => x.Key, x => x.Value));
             }
         }
 
-        public Dictionary<int, List<int>> AllSeriesTags()
+        public Task<Dictionary<int, List<int>>> AllSeriesTags()
         {
             using (var conn = _database.OpenConnection())
             {
                 var strSql = "SELECT \"Id\" AS Key, \"Tags\" AS Value FROM \"Series\" WHERE \"Tags\" IS NOT NULL";
-                return conn.Query<KeyValuePair<int, List<int>>>(strSql).ToDictionary(x => x.Key, x => x.Value);
+                return Task.FromResult(conn.Query<KeyValuePair<int, List<int>>>(strSql).ToDictionary(x => x.Key, x => x.Value));
             }
         }
 
-        public Dictionary<int, int> AllSeriesQualityProfiles()
+        public Task<Dictionary<int, int>> AllSeriesQualityProfiles()
         {
             using (var conn = _database.OpenConnection())
             {
                 var strSql = "SELECT \"Id\" AS Key, \"QualityProfileId\" AS Value FROM \"Series\"";
-                return conn.Query<KeyValuePair<int, int>>(strSql).ToDictionary(x => x.Key, x => x.Value);
+                return Task.FromResult(conn.Query<KeyValuePair<int, int>>(strSql).ToDictionary(x => x.Key, x => x.Value));
             }
         }
 

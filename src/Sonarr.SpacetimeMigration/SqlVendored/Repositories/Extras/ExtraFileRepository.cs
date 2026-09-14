@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -13,39 +14,42 @@ namespace NzbDrone.Core.Extras.Files
         {
         }
 
-        public void DeleteForSeriesIds(List<int> seriesIds)
+        public Task DeleteForSeriesIds(List<int> seriesIds)
         {
             Delete(c => seriesIds.Contains(c.SeriesId));
+            return Task.CompletedTask;
         }
 
-        public void DeleteForSeason(int seriesId, int seasonNumber)
+        public Task DeleteForSeason(int seriesId, int seasonNumber)
         {
             Delete(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber);
+            return Task.CompletedTask;
         }
 
-        public void DeleteForEpisodeFile(int episodeFileId)
+        public Task DeleteForEpisodeFile(int episodeFileId)
         {
             Delete(c => c.EpisodeFileId == episodeFileId);
+            return Task.CompletedTask;
         }
 
-        public List<TExtraFile> GetFilesBySeries(int seriesId)
+        public Task<List<TExtraFile>> GetFilesBySeries(int seriesId)
         {
-            return Query(c => c.SeriesId == seriesId);
+            return Task.FromResult(Query(c => c.SeriesId == seriesId));
         }
 
-        public List<TExtraFile> GetFilesBySeason(int seriesId, int seasonNumber)
+        public Task<List<TExtraFile>> GetFilesBySeason(int seriesId, int seasonNumber)
         {
-            return Query(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber);
+            return Task.FromResult(Query(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber));
         }
 
-        public List<TExtraFile> GetFilesByEpisodeFile(int episodeFileId)
+        public Task<List<TExtraFile>> GetFilesByEpisodeFile(int episodeFileId)
         {
-            return Query(c => c.EpisodeFileId == episodeFileId);
+            return Task.FromResult(Query(c => c.EpisodeFileId == episodeFileId));
         }
 
-        public TExtraFile FindByPath(int seriesId, string path)
+        public Task<TExtraFile> FindByPath(int seriesId, string path)
         {
-            return Query(c => c.SeriesId == seriesId && c.RelativePath == path).SingleOrDefault();
+            return Task.FromResult(Query(c => c.SeriesId == seriesId && c.RelativePath == path).SingleOrDefault());
         }
     }
 }

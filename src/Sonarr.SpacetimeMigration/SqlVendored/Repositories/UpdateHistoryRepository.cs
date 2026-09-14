@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -13,17 +14,17 @@ namespace NzbDrone.Core.Update.History
         {
         }
 
-        public UpdateHistory LastInstalled()
+        public Task<UpdateHistory> LastInstalled()
         {
             var history = Query(v => v.EventType == UpdateHistoryEventType.Installed)
                                .OrderByDescending(v => v.Date)
                                .Take(1)
                                .FirstOrDefault();
 
-            return history;
+            return Task.FromResult(history);
         }
 
-        public UpdateHistory PreviouslyInstalled()
+        public Task<UpdateHistory> PreviouslyInstalled()
         {
             var history = Query(v => v.EventType == UpdateHistoryEventType.Installed)
                                .OrderByDescending(v => v.Date)
@@ -31,16 +32,16 @@ namespace NzbDrone.Core.Update.History
                                .Take(1)
                                .FirstOrDefault();
 
-            return history;
+            return Task.FromResult(history);
         }
 
-        public List<UpdateHistory> InstalledSince(DateTime dateTime)
+        public Task<List<UpdateHistory>> InstalledSince(DateTime dateTime)
         {
             var history = Query(v => v.EventType == UpdateHistoryEventType.Installed && v.Date >= dateTime)
                                .OrderBy(v => v.Date)
                                .ToList();
 
-            return history;
+            return Task.FromResult(history);
         }
     }
 }

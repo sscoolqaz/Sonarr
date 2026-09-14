@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.ThingiProvider;
@@ -12,9 +13,9 @@ namespace NzbDrone.Core.Indexers
         {
         }
 
-        public IndexerDefinition FindByName(string name)
+        public Task<IndexerDefinition> FindByName(string name)
         {
-            return Query(i => i.Name == name).SingleOrDefault();
+            return Task.FromResult(Query(i => i.Name == name).SingleOrDefault());
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.ThingiProvider;
@@ -11,9 +12,10 @@ namespace NzbDrone.Core.ImportLists
         {
         }
 
-        public void UpdateSettings(ImportListDefinition model)
+        public Task UpdateSettings(ImportListDefinition model)
         {
-            SetFields(model, m => m.Settings);
+            SetFields(model, m => m.Settings).GetAwaiter().GetResult();
+            return Task.CompletedTask;
         }
     }
 }

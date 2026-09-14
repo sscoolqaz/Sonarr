@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -13,7 +14,7 @@ namespace NzbDrone.Core.Tags
         {
         }
 
-        public Tag GetByLabel(string label)
+        public Task<Tag> GetByLabel(string label)
         {
             var model = Query(c => c.Label == label).SingleOrDefault();
 
@@ -22,17 +23,17 @@ namespace NzbDrone.Core.Tags
                 throw new InvalidOperationException("Didn't find tag with label " + label);
             }
 
-            return model;
+            return Task.FromResult(model);
         }
 
-        public Tag FindByLabel(string label)
+        public Task<Tag> FindByLabel(string label)
         {
-            return Query(c => c.Label == label).SingleOrDefault();
+            return Task.FromResult(Query(c => c.Label == label).SingleOrDefault());
         }
 
-        public List<Tag> GetTags(HashSet<int> tagIds)
+        public Task<List<Tag>> GetTags(HashSet<int> tagIds)
         {
-            return Query(t => tagIds.Contains(t.Id));
+            return Task.FromResult(Query(t => tagIds.Contains(t.Id)));
         }
     }
 }

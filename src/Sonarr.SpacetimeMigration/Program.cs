@@ -198,23 +198,23 @@ namespace Sonarr.SpacetimeMigration
 
             MigrateEntity(
                 "Tags",
-                tagRepository.All(),
+                tagRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetTags?.MigrateInsert(model),
-                () => targetTags.Count());
+                () => targetTags.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "QualityProfiles",
-                qualityProfileRepository.All(),
+                qualityProfileRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetQualityProfiles?.MigrateInsert(model),
-                () => targetQualityProfiles.Count());
+                () => targetQualityProfiles.Count().GetAwaiter().GetResult());
 
             var expectedSeriesTagRows = 0;
 
             MigrateEntity(
                 "Series",
-                seriesRepository.All(),
+                seriesRepository.All().GetAwaiter().GetResult(),
                 options,
                 model =>
                 {
@@ -226,7 +226,7 @@ namespace Sonarr.SpacetimeMigration
                         expectedSeriesTagRows += model.Tags.Count;
                     }
                 },
-                () => targetSeries.Count());
+                () => targetSeries.Count().GetAwaiter().GetResult());
 
             // ReplaceSeriesTags is a reducer call like any MigrateInsert - just as fire-and-forget,
             // and not covered by the Count() check above (that only confirms the Series rows
@@ -242,31 +242,31 @@ namespace Sonarr.SpacetimeMigration
 
             MigrateEntity(
                 "EpisodeFiles",
-                mediaFileRepository.All(),
+                mediaFileRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetMediaFiles?.MigrateInsert(model),
-                () => targetMediaFiles.Count());
+                () => targetMediaFiles.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "Episodes",
-                episodeRepository.All(),
+                episodeRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetEpisodes?.MigrateInsert(model),
-                () => targetEpisodes.Count());
+                () => targetEpisodes.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "History",
-                historyRepository.All(),
+                historyRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetHistory?.MigrateInsert(model),
-                () => targetHistory.Count());
+                () => targetHistory.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "Blocklist",
-                blocklistRepository.All(),
+                blocklistRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetBlocklist?.MigrateInsert(model),
-                () => targetBlocklist.Count());
+                () => targetBlocklist.Count().GetAwaiter().GetResult());
 
             // Second migration pass - everything else this port has ported, except UpdateHistory
             // and the deliberately-excluded entities (see this file's own top-of-file comment for
@@ -275,173 +275,173 @@ namespace Sonarr.SpacetimeMigration
             // roughly by real-app subsystem rather than by dependency.
             MigrateEntity(
                 "CustomFormats",
-                customFormatRepository.All(),
+                customFormatRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetCustomFormats?.MigrateInsert(model),
-                () => targetCustomFormats.Count());
+                () => targetCustomFormats.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "Config",
-                configRepository.All(),
+                configRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetConfig?.MigrateInsert(model),
-                () => targetConfig.Count());
+                () => targetConfig.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "NamingConfig",
-                namingConfigRepository.All(),
+                namingConfigRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetNamingConfig?.MigrateInsert(model),
-                () => targetNamingConfig.Count());
+                () => targetNamingConfig.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "RootFolders",
-                rootFolderRepository.All(),
+                rootFolderRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetRootFolders?.MigrateInsert(model),
-                () => targetRootFolders.Count());
+                () => targetRootFolders.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "RemotePathMappings",
-                remotePathMappingRepository.All(),
+                remotePathMappingRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetRemotePathMappings?.MigrateInsert(model),
-                () => targetRemotePathMappings.Count());
+                () => targetRemotePathMappings.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "CustomFilters",
-                customFilterRepository.All(),
+                customFilterRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetCustomFilters?.MigrateInsert(model),
-                () => targetCustomFilters.Count());
+                () => targetCustomFilters.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "DelayProfiles",
-                delayProfileRepository.All(),
+                delayProfileRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetDelayProfiles?.MigrateInsert(model),
-                () => targetDelayProfiles.Count());
+                () => targetDelayProfiles.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "ReleaseProfiles",
-                releaseProfileRepository.All(),
+                releaseProfileRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetReleaseProfiles?.MigrateInsert(model),
-                () => targetReleaseProfiles.Count());
+                () => targetReleaseProfiles.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "Indexers",
-                indexerRepository.All(),
+                indexerRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetIndexers?.MigrateInsert(model),
-                () => targetIndexers.Count());
+                () => targetIndexers.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "DownloadClients",
-                downloadClientRepository.All(),
+                downloadClientRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetDownloadClients?.MigrateInsert(model),
-                () => targetDownloadClients.Count());
+                () => targetDownloadClients.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "ImportLists",
-                importListRepository.All(),
+                importListRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetImportLists?.MigrateInsert(model),
-                () => targetImportLists.Count());
+                () => targetImportLists.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "Notifications",
-                notificationRepository.All(),
+                notificationRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetNotifications?.MigrateInsert(model),
-                () => targetNotifications.Count());
+                () => targetNotifications.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "MetadataProviders",
-                metadataRepository.All(),
+                metadataRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetMetadata?.MigrateInsert(model),
-                () => targetMetadata.Count());
+                () => targetMetadata.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "ImportListExclusions",
-                importListExclusionRepository.All(),
+                importListExclusionRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetImportListExclusions?.MigrateInsert(model),
-                () => targetImportListExclusions.Count());
+                () => targetImportListExclusions.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "QualityDefinitions",
-                qualityDefinitionRepository.All(),
+                qualityDefinitionRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetQualityDefinitions?.MigrateInsert(model),
-                () => targetQualityDefinitions.Count());
+                () => targetQualityDefinitions.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "AutoTagging",
-                autoTaggingRepository.All(),
+                autoTaggingRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetAutoTagging?.MigrateInsert(model),
-                () => targetAutoTagging.Count());
+                () => targetAutoTagging.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "Users",
-                userRepository.All(),
+                userRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetUsers?.MigrateInsert(model),
-                () => targetUsers.Count());
+                () => targetUsers.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "PendingReleases",
-                pendingReleaseRepository.All(),
+                pendingReleaseRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetPendingReleases?.MigrateInsert(model),
-                () => targetPendingReleases.Count());
+                () => targetPendingReleases.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "DownloadHistory",
-                downloadHistoryRepository.All(),
+                downloadHistoryRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetDownloadHistory?.MigrateInsert(model),
-                () => targetDownloadHistory.Count());
+                () => targetDownloadHistory.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "MetadataFiles",
-                metadataFileRepository.All(),
+                metadataFileRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetMetadataFiles?.MigrateInsert(model),
-                () => targetMetadataFiles.Count());
+                () => targetMetadataFiles.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "SubtitleFiles",
-                subtitleFileRepository.All(),
+                subtitleFileRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetSubtitleFiles?.MigrateInsert(model),
-                () => targetSubtitleFiles.Count());
+                () => targetSubtitleFiles.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "OtherExtraFiles",
-                otherExtraFileRepository.All(),
+                otherExtraFileRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetOtherExtraFiles?.MigrateInsert(model),
-                () => targetOtherExtraFiles.Count());
+                () => targetOtherExtraFiles.Count().GetAwaiter().GetResult());
 
             MigrateEntity(
                 "ScheduledTasks",
-                scheduledTaskRepository.All(),
+                scheduledTaskRepository.All().GetAwaiter().GetResult(),
                 options,
                 model => targetScheduledTasks?.MigrateInsert(model),
-                () => targetScheduledTasks.Count());
+                () => targetScheduledTasks.Count().GetAwaiter().GetResult());
 
             if (sourceLog != null)
             {
                 MigrateEntity(
                     "UpdateHistory",
-                    updateHistoryRepository.All(),
+                    updateHistoryRepository.All().GetAwaiter().GetResult(),
                     options,
                     model => targetUpdateHistory?.MigrateInsert(model),
-                    () => targetUpdateHistory.Count());
+                    () => targetUpdateHistory.Count().GetAwaiter().GetResult());
             }
 
             Console.WriteLine("Done.");
@@ -628,7 +628,7 @@ namespace Sonarr.SpacetimeMigration
         // for the full reasoning.
         private static void RequireNoPendingCommands(ICommandRepository commandRepository)
         {
-            var pending = commandRepository.All()
+            var pending = commandRepository.All().GetAwaiter().GetResult()
                 .Where(c => c.Status == CommandStatus.Queued || c.Status == CommandStatus.Started)
                 .ToList();
 

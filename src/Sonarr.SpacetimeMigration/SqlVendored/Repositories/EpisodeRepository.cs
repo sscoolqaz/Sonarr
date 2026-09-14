@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Threading.Tasks;
 using Dapper;
 using NLog;
 using NzbDrone.Core.Datastore;
@@ -28,64 +29,64 @@ namespace NzbDrone.Core.Tv
                 return episode;
             });
 
-        public Episode Find(int seriesId, int season, int episodeNumber)
+        public Task<Episode> Find(int seriesId, int season, int episodeNumber)
         {
-            return Query(s => s.SeriesId == seriesId && s.SeasonNumber == season && s.EpisodeNumber == episodeNumber)
-                               .SingleOrDefault();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId && s.SeasonNumber == season && s.EpisodeNumber == episodeNumber)
+                               .SingleOrDefault());
         }
 
-        public Episode Find(int seriesId, int absoluteEpisodeNumber)
+        public Task<Episode> Find(int seriesId, int absoluteEpisodeNumber)
         {
-            return Query(s => s.SeriesId == seriesId && s.AbsoluteEpisodeNumber == absoluteEpisodeNumber)
-                        .SingleOrDefault();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId && s.AbsoluteEpisodeNumber == absoluteEpisodeNumber)
+                        .SingleOrDefault());
         }
 
-        public List<Episode> Find(int seriesId, string date)
+        public Task<List<Episode>> Find(int seriesId, string date)
         {
-            return Query(s => s.SeriesId == seriesId && s.AirDate == date).ToList();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId && s.AirDate == date).ToList());
         }
 
-        public List<Episode> GetEpisodes(int seriesId)
+        public Task<List<Episode>> GetEpisodes(int seriesId)
         {
-            return Query(s => s.SeriesId == seriesId).ToList();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId).ToList());
         }
 
-        public List<Episode> GetEpisodes(int seriesId, int seasonNumber)
+        public Task<List<Episode>> GetEpisodes(int seriesId, int seasonNumber)
         {
-            return Query(s => s.SeriesId == seriesId && s.SeasonNumber == seasonNumber).ToList();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId && s.SeasonNumber == seasonNumber).ToList());
         }
 
-        public List<Episode> GetEpisodesBySeriesIds(List<int> seriesIds)
+        public Task<List<Episode>> GetEpisodesBySeriesIds(List<int> seriesIds)
         {
-            return Query(s => seriesIds.Contains(s.SeriesId)).ToList();
+            return Task.FromResult(Query(s => seriesIds.Contains(s.SeriesId)).ToList());
         }
 
-        public List<Episode> GetEpisodesBySceneSeason(int seriesId, int seasonNumber)
+        public Task<List<Episode>> GetEpisodesBySceneSeason(int seriesId, int seasonNumber)
         {
-            return Query(s => s.SeriesId == seriesId && s.SceneSeasonNumber == seasonNumber).ToList();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId && s.SceneSeasonNumber == seasonNumber).ToList());
         }
 
-        public List<Episode> GetEpisodeByFileId(int fileId)
+        public Task<List<Episode>> GetEpisodeByFileId(int fileId)
         {
-            return Query(e => e.EpisodeFileId == fileId).ToList();
+            return Task.FromResult(Query(e => e.EpisodeFileId == fileId).ToList());
         }
 
-        public List<Episode> EpisodesWithFiles(int seriesId)
+        public Task<List<Episode>> EpisodesWithFiles(int seriesId)
         {
             var builder = Builder()
                 .Join<Episode, EpisodeFile>((e, ef) => e.EpisodeFileId == ef.Id)
                 .Where<Episode>(e => e.SeriesId == seriesId);
 
-            return _database.QueryJoined<Episode, EpisodeFile>(
+            return Task.FromResult(_database.QueryJoined<Episode, EpisodeFile>(
                 builder,
                 (episode, episodeFile) =>
                 {
                     episode.EpisodeFile = episodeFile;
                     return episode;
-                }).ToList();
+                }).ToList());
         }
 
-        public PagingSpec<Episode> EpisodesWithoutFiles(PagingSpec<Episode> pagingSpec, bool includeSpecials, HashSet<int> seriesTags = null)
+        public Task<PagingSpec<Episode>> EpisodesWithoutFiles(PagingSpec<Episode> pagingSpec, bool includeSpecials, HashSet<int> seriesTags = null)
         {
             var currentTime = DateTime.UtcNow;
             var startingSeasonNumber = 1;
@@ -98,10 +99,10 @@ namespace NzbDrone.Core.Tv
             pagingSpec.Records = GetPagedRecords(EpisodesWithoutFilesBuilder(currentTime, startingSeasonNumber, seriesTags), pagingSpec, PagedQuery);
             pagingSpec.TotalRecords = GetPagedRecordCount(EpisodesWithoutFilesBuilder(currentTime, startingSeasonNumber, seriesTags).SelectCountDistinct<Episode>(x => x.Id), pagingSpec);
 
-            return pagingSpec;
+            return Task.FromResult(pagingSpec);
         }
 
-        public PagingSpec<Episode> EpisodesWhereCutoffUnmet(PagingSpec<Episode> pagingSpec, List<QualitiesBelowCutoff> qualitiesBelowCutoff, bool includeSpecials, HashSet<int> seriesTags = null, List<int> quality = null)
+        public Task<PagingSpec<Episode>> EpisodesWhereCutoffUnmet(PagingSpec<Episode> pagingSpec, List<QualitiesBelowCutoff> qualitiesBelowCutoff, bool includeSpecials, HashSet<int> seriesTags = null, List<int> quality = null)
         {
             var startingSeasonNumber = includeSpecials ? 0 : 1;
             var sortingByQuality = string.Equals(pagingSpec.SortKey, "quality", StringComparison.OrdinalIgnoreCase);
@@ -112,20 +113,20 @@ namespace NzbDrone.Core.Tv
             var countTemplate = $"SELECT COUNT(*) FROM (SELECT /**select**/ FROM \"{TableMapping.Mapper.TableNameMapping(typeof(Episode))}\" /**join**/ /**innerjoin**/ /**leftjoin**/ /**where**/ /**groupby**/ /**having**/) AS \"Inner\"";
             pagingSpec.TotalRecords = GetPagedRecordCount(EpisodesWhereCutoffUnmetBuilder(qualitiesBelowCutoff, startingSeasonNumber, seriesTags, quality, sortingByQuality).Select(typeof(Episode)), pagingSpec, countTemplate);
 
-            return pagingSpec;
+            return Task.FromResult(pagingSpec);
         }
 
-        public List<Episode> FindEpisodesBySceneNumbering(int seriesId, int seasonNumber, int episodeNumber)
+        public Task<List<Episode>> FindEpisodesBySceneNumbering(int seriesId, int seasonNumber, int episodeNumber)
         {
-            return Query(s => s.SeriesId == seriesId && s.SceneSeasonNumber == seasonNumber && s.SceneEpisodeNumber == episodeNumber).ToList();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId && s.SceneSeasonNumber == seasonNumber && s.SceneEpisodeNumber == episodeNumber).ToList());
         }
 
-        public List<Episode> FindEpisodesBySceneNumbering(int seriesId, int sceneAbsoluteEpisodeNumber)
+        public Task<List<Episode>> FindEpisodesBySceneNumbering(int seriesId, int sceneAbsoluteEpisodeNumber)
         {
-            return Query(s => s.SeriesId == seriesId && s.SceneAbsoluteEpisodeNumber == sceneAbsoluteEpisodeNumber).ToList();
+            return Task.FromResult(Query(s => s.SeriesId == seriesId && s.SceneAbsoluteEpisodeNumber == sceneAbsoluteEpisodeNumber).ToList());
         }
 
-        public List<Episode> EpisodesBetweenDates(DateTime startDate, DateTime endDate, bool includeUnmonitored, bool includeSpecials)
+        public Task<List<Episode>> EpisodesBetweenDates(DateTime startDate, DateTime endDate, bool includeUnmonitored, bool includeSpecials)
         {
             var builder = Builder().Where<Episode>(rg => rg.AirDateUtc >= startDate && rg.AirDateUtc <= endDate);
 
@@ -141,33 +142,39 @@ namespace NzbDrone.Core.Tv
                     .Where<Series>(e => e.Monitored == true);
             }
 
-            return Query(builder);
+            return Task.FromResult(Query(builder));
         }
 
-        public void SetMonitoredFlat(Episode episode, bool monitored)
+        public Task SetMonitoredFlat(Episode episode, bool monitored)
         {
             episode.Monitored = monitored;
-            SetFields(episode, p => p.Monitored);
+            SetFields(episode, p => p.Monitored).GetAwaiter().GetResult();
 
             ModelUpdated(episode, true);
+
+            return Task.CompletedTask;
         }
 
-        public void SetMonitoredBySeason(int seriesId, int seasonNumber, bool monitored)
+        public Task SetMonitoredBySeason(int seriesId, int seasonNumber, bool monitored)
         {
             using (var conn = _database.OpenConnection())
             {
                 conn.Execute("UPDATE \"Episodes\" SET \"Monitored\" = @monitored WHERE \"SeriesId\" = @seriesId AND \"SeasonNumber\" = @seasonNumber AND \"Monitored\" != @monitored",
                     new { seriesId = seriesId, seasonNumber = seasonNumber, monitored = monitored });
             }
+
+            return Task.CompletedTask;
         }
 
-        public void SetMonitored(IEnumerable<int> ids, bool monitored)
+        public Task SetMonitored(IEnumerable<int> ids, bool monitored)
         {
             var episodes = ids.Select(x => new Episode { Id = x, Monitored = monitored }).ToList();
-            SetFields(episodes, p => p.Monitored);
+            SetFields(episodes, p => p.Monitored).GetAwaiter().GetResult();
+
+            return Task.CompletedTask;
         }
 
-        public List<int> SetMonitored(int seriesId, MonitorTypes monitor, int firstSeason, int lastSeason)
+        public Task<List<int>> SetMonitored(int seriesId, MonitorTypes monitor, int firstSeason, int lastSeason)
         {
             var parameters = new DynamicParameters();
             parameters.Add("seriesId", seriesId);
@@ -178,14 +185,14 @@ namespace NzbDrone.Core.Tv
             {
                 SetMonitoredWhere(conn, null, "\"SeriesId\" = @seriesId AND \"SeasonNumber\" = 0", monitor == MonitorTypes.MonitorSpecials, parameters);
 
-                return GetSeasonNumbersWithMonitoredEpisodes(conn, seriesId);
+                return Task.FromResult(GetSeasonNumbersWithMonitoredEpisodes(conn, seriesId));
             }
 
             if (monitor == MonitorTypes.None)
             {
                 SetMonitoredWhere(conn, null, "\"SeriesId\" = @seriesId", false, parameters);
 
-                return new List<int>();
+                return Task.FromResult(new List<int>());
             }
 
             string predicate;
@@ -231,7 +238,7 @@ namespace NzbDrone.Core.Tv
             }
             else
             {
-                return GetSeasonNumbersWithMonitoredEpisodes(conn, seriesId);
+                return Task.FromResult(GetSeasonNumbersWithMonitoredEpisodes(conn, seriesId));
             }
 
             using (var tran = conn.BeginTransaction(IsolationLevel.ReadCommitted))
@@ -241,26 +248,30 @@ namespace NzbDrone.Core.Tv
                 tran.Commit();
             }
 
-            return GetSeasonNumbersWithMonitoredEpisodes(conn, seriesId);
+            return Task.FromResult(GetSeasonNumbersWithMonitoredEpisodes(conn, seriesId));
         }
 
-        public void SetFileId(Episode episode, int fileId)
+        public Task SetFileId(Episode episode, int fileId)
         {
             episode.EpisodeFileId = fileId;
 
-            SetFields(episode, ep => ep.EpisodeFileId);
+            SetFields(episode, ep => ep.EpisodeFileId).GetAwaiter().GetResult();
 
             ModelUpdated(episode, true);
+
+            return Task.CompletedTask;
         }
 
-        public void ClearFileId(Episode episode, bool unmonitor)
+        public Task ClearFileId(Episode episode, bool unmonitor)
         {
             episode.EpisodeFileId = 0;
             episode.Monitored &= !unmonitor;
 
-            SetFields(episode, ep => ep.EpisodeFileId, ep => ep.Monitored);
+            SetFields(episode, ep => ep.EpisodeFileId, ep => ep.Monitored).GetAwaiter().GetResult();
 
             ModelUpdated(episode, true);
+
+            return Task.CompletedTask;
         }
 
         private SqlBuilder EpisodesWithoutFilesBuilder(DateTime currentTime, int startingSeasonNumber, HashSet<int> seriesTags)

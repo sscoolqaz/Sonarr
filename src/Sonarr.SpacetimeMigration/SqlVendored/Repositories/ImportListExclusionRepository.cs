@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -11,9 +12,9 @@ namespace NzbDrone.Core.ImportLists.Exclusions
         {
         }
 
-        public ImportListExclusion FindByTvdbId(int tvdbId)
+        public Task<ImportListExclusion> FindByTvdbId(int tvdbId)
         {
-            return Query(m => m.TvdbId == tvdbId).SingleOrDefault();
+            return Task.FromResult(Query(m => m.TvdbId == tvdbId).SingleOrDefault());
         }
     }
 }

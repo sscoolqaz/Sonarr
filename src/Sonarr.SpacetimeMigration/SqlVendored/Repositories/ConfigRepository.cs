@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -11,14 +12,14 @@ namespace NzbDrone.Core.Configuration
         {
         }
 
-        public Config Get(string key)
+        public Task<Config> Get(string key)
         {
-            return Query(c => c.Key == key).SingleOrDefault();
+            return Task.FromResult(Query(c => c.Key == key).SingleOrDefault());
         }
 
-        public Config Upsert(string key, string value)
+        public Task<Config> Upsert(string key, string value)
         {
-            var dbValue = Get(key);
+            var dbValue = Get(key).GetAwaiter().GetResult();
 
             if (dbValue == null)
             {

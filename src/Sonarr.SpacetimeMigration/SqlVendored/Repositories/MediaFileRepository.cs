@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -12,35 +13,36 @@ namespace NzbDrone.Core.MediaFiles
         {
         }
 
-        public List<EpisodeFile> GetFilesBySeries(int seriesId)
+        public Task<List<EpisodeFile>> GetFilesBySeries(int seriesId)
         {
-            return Query(c => c.SeriesId == seriesId).ToList();
+            return Task.FromResult(Query(c => c.SeriesId == seriesId).ToList());
         }
 
-        public List<EpisodeFile> GetFilesBySeriesIds(List<int> seriesIds)
+        public Task<List<EpisodeFile>> GetFilesBySeriesIds(List<int> seriesIds)
         {
-            return Query(c => seriesIds.Contains(c.SeriesId)).ToList();
+            return Task.FromResult(Query(c => seriesIds.Contains(c.SeriesId)).ToList());
         }
 
-        public List<EpisodeFile> GetFilesBySeason(int seriesId, int seasonNumber)
+        public Task<List<EpisodeFile>> GetFilesBySeason(int seriesId, int seasonNumber)
         {
-            return Query(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber).ToList();
+            return Task.FromResult(Query(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber).ToList());
         }
 
-        public List<EpisodeFile> GetFilesWithoutMediaInfo()
+        public Task<List<EpisodeFile>> GetFilesWithoutMediaInfo()
         {
-            return Query(c => c.MediaInfo == null).ToList();
+            return Task.FromResult(Query(c => c.MediaInfo == null).ToList());
         }
 
-        public List<EpisodeFile> GetFilesWithRelativePath(int seriesId, string relativePath)
+        public Task<List<EpisodeFile>> GetFilesWithRelativePath(int seriesId, string relativePath)
         {
-            return Query(c => c.SeriesId == seriesId && c.RelativePath == relativePath)
-                        .ToList();
+            return Task.FromResult(Query(c => c.SeriesId == seriesId && c.RelativePath == relativePath)
+                        .ToList());
         }
 
-        public void DeleteForSeries(List<int> seriesIds)
+        public Task DeleteForSeries(List<int> seriesIds)
         {
             Delete(x => seriesIds.Contains(x.SeriesId));
+            return Task.CompletedTask;
         }
     }
 }

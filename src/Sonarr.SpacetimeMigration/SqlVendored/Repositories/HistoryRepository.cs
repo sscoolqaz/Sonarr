@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Qualities;
@@ -15,29 +16,29 @@ namespace NzbDrone.Core.History
         {
         }
 
-        public EpisodeHistory MostRecentForEpisode(int episodeId)
+        public Task<EpisodeHistory> MostRecentForEpisode(int episodeId)
         {
-            return Query(h => h.EpisodeId == episodeId).MaxBy(h => h.Date);
+            return Task.FromResult(Query(h => h.EpisodeId == episodeId).MaxBy(h => h.Date));
         }
 
-        public List<EpisodeHistory> FindByEpisodeId(int episodeId)
+        public Task<List<EpisodeHistory>> FindByEpisodeId(int episodeId)
         {
-            return Query(h => h.EpisodeId == episodeId)
+            return Task.FromResult(Query(h => h.EpisodeId == episodeId)
                         .OrderByDescending(h => h.Date)
-                        .ToList();
+                        .ToList());
         }
 
-        public EpisodeHistory MostRecentForDownloadId(string downloadId)
+        public Task<EpisodeHistory> MostRecentForDownloadId(string downloadId)
         {
-            return Query(h => h.DownloadId == downloadId).MaxBy(h => h.Date);
+            return Task.FromResult(Query(h => h.DownloadId == downloadId).MaxBy(h => h.Date));
         }
 
-        public List<EpisodeHistory> FindByDownloadId(string downloadId)
+        public Task<List<EpisodeHistory>> FindByDownloadId(string downloadId)
         {
-            return Query(h => h.DownloadId == downloadId);
+            return Task.FromResult(Query(h => h.DownloadId == downloadId));
         }
 
-        public List<EpisodeHistory> GetBySeries(int seriesId, EpisodeHistoryEventType? eventType)
+        public Task<List<EpisodeHistory>> GetBySeries(int seriesId, EpisodeHistoryEventType? eventType)
         {
             var builder = Builder().Join<EpisodeHistory, Series>((h, a) => h.SeriesId == a.Id)
                                    .Join<EpisodeHistory, Episode>((h, a) => h.EpisodeId == a.Id)
@@ -48,10 +49,10 @@ namespace NzbDrone.Core.History
                 builder.Where<EpisodeHistory>(h => h.EventType == eventType);
             }
 
-            return Query(builder).OrderByDescending(h => h.Date).ToList();
+            return Task.FromResult(Query(builder).OrderByDescending(h => h.Date).ToList());
         }
 
-        public List<EpisodeHistory> GetBySeason(int seriesId, int seasonNumber, EpisodeHistoryEventType? eventType)
+        public Task<List<EpisodeHistory>> GetBySeason(int seriesId, int seasonNumber, EpisodeHistoryEventType? eventType)
         {
             var builder = Builder()
                 .Join<EpisodeHistory, Episode>((h, a) => h.EpisodeId == a.Id)
@@ -63,16 +64,16 @@ namespace NzbDrone.Core.History
                 builder.Where<EpisodeHistory>(h => h.EventType == eventType);
             }
 
-            return _database.QueryJoined<EpisodeHistory, Episode>(
+            return Task.FromResult(_database.QueryJoined<EpisodeHistory, Episode>(
                 builder,
                 (history, episode) =>
                 {
                     history.Episode = episode;
                     return history;
-                }).OrderByDescending(h => h.Date).ToList();
+                }).OrderByDescending(h => h.Date).ToList());
         }
 
-        public List<EpisodeHistory> GetByEpisode(int episodeId, EpisodeHistoryEventType? eventType)
+        public Task<List<EpisodeHistory>> GetByEpisode(int episodeId, EpisodeHistoryEventType? eventType)
         {
             var builder = Builder()
                 .Join<EpisodeHistory, Series>((h, a) => h.SeriesId == a.Id)
@@ -84,26 +85,27 @@ namespace NzbDrone.Core.History
                 builder.Where<EpisodeHistory>(h => h.EventType == eventType);
             }
 
-            return Query(builder).OrderByDescending(h => h.Date).ToList();
+            return Task.FromResult(Query(builder).OrderByDescending(h => h.Date).ToList());
         }
 
-        public List<EpisodeHistory> FindDownloadHistory(int idSeriesId, QualityModel quality)
+        public Task<List<EpisodeHistory>> FindDownloadHistory(int idSeriesId, QualityModel quality)
         {
-            return Query(h =>
+            return Task.FromResult(Query(h =>
                  h.SeriesId == idSeriesId &&
                  h.Quality == quality &&
                  (h.EventType == EpisodeHistoryEventType.Grabbed ||
                  h.EventType == EpisodeHistoryEventType.DownloadFailed ||
                  h.EventType == EpisodeHistoryEventType.DownloadFolderImported))
-                 .ToList();
+                 .ToList());
         }
 
-        public void DeleteForSeries(List<int> seriesIds)
+        public Task DeleteForSeries(List<int> seriesIds)
         {
             Delete(c => seriesIds.Contains(c.SeriesId));
+            return Task.CompletedTask;
         }
 
-        public List<EpisodeHistory> Since(DateTime date, EpisodeHistoryEventType? eventType)
+        public Task<List<EpisodeHistory>> Since(DateTime date, EpisodeHistoryEventType? eventType)
         {
             var builder = Builder()
                 .Join<EpisodeHistory, Series>((h, a) => h.SeriesId == a.Id)
@@ -115,15 +117,15 @@ namespace NzbDrone.Core.History
                 builder.Where<EpisodeHistory>(h => h.EventType == eventType);
             }
 
-            return _database.QueryJoined<EpisodeHistory, Series, Episode>(builder, (history, series, episode) =>
+            return Task.FromResult(_database.QueryJoined<EpisodeHistory, Series, Episode>(builder, (history, series, episode) =>
             {
                 history.Series = series;
                 history.Episode = episode;
                 return history;
-            }).OrderBy(h => h.Date).ToList();
+            }).OrderBy(h => h.Date).ToList());
         }
 
-        public PagingSpec<EpisodeHistory> GetPaged(PagingSpec<EpisodeHistory> pagingSpec, int[] languages, int[] qualities)
+        public Task<PagingSpec<EpisodeHistory>> GetPaged(PagingSpec<EpisodeHistory> pagingSpec, int[] languages, int[] qualities)
         {
             var sortingByQuality = string.Equals(pagingSpec.SortKey, "quality", StringComparison.OrdinalIgnoreCase);
             var customSortExpression = sortingByQuality ? "COALESCE(\"r\".\"Score\", -1)" : null;
@@ -133,7 +135,7 @@ namespace NzbDrone.Core.History
             var countTemplate = $"SELECT COUNT(*) FROM (SELECT /**select**/ FROM \"{TableMapping.Mapper.TableNameMapping(typeof(EpisodeHistory))}\" /**join**/ /**innerjoin**/ /**leftjoin**/ /**where**/ /**groupby**/ /**having**/) AS \"Inner\"";
             pagingSpec.TotalRecords = GetPagedRecordCount(PagedBuilder(languages, qualities, sortingByQuality).Select(typeof(EpisodeHistory)), pagingSpec, countTemplate);
 
-            return pagingSpec;
+            return Task.FromResult(pagingSpec);
         }
 
         private SqlBuilder PagedBuilder(int[] languages, int[] qualities, bool joinQualityRanks)

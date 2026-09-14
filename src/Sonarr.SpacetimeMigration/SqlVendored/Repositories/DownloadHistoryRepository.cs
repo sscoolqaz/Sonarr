@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -12,14 +13,15 @@ namespace NzbDrone.Core.Download.History
         {
         }
 
-        public List<DownloadHistory> FindByDownloadId(string downloadId)
+        public Task<List<DownloadHistory>> FindByDownloadId(string downloadId)
         {
-            return Query(h => h.DownloadId == downloadId).OrderByDescending(h => h.Date).ToList();
+            return Task.FromResult(Query(h => h.DownloadId == downloadId).OrderByDescending(h => h.Date).ToList());
         }
 
-        public void DeleteBySeriesIds(List<int> seriesIds)
+        public Task DeleteBySeriesIds(List<int> seriesIds)
         {
             Delete(r => seriesIds.Contains(r.SeriesId));
+            return Task.CompletedTask;
         }
     }
 }

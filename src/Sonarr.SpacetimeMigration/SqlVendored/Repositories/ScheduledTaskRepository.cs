@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
@@ -12,12 +13,12 @@ namespace NzbDrone.Core.Jobs
         {
         }
 
-        public ScheduledTask GetDefinition(Type type)
+        public Task<ScheduledTask> GetDefinition(Type type)
         {
-            return Query(c => c.TypeName == type.FullName).Single();
+            return Task.FromResult(Query(c => c.TypeName == type.FullName).Single());
         }
 
-        public void SetLastExecutionTime(int id, DateTime executionTime, DateTime startTime)
+        public Task SetLastExecutionTime(int id, DateTime executionTime, DateTime startTime)
         {
             var task = new ScheduledTask
                 {
@@ -26,7 +27,9 @@ namespace NzbDrone.Core.Jobs
                     LastStartTime = startTime
                 };
 
-            SetFields(task, scheduledTask => scheduledTask.LastExecution, scheduledTask => scheduledTask.LastStartTime);
+            SetFields(task, scheduledTask => scheduledTask.LastExecution, scheduledTask => scheduledTask.LastStartTime).GetAwaiter().GetResult();
+
+            return Task.CompletedTask;
         }
     }
 }

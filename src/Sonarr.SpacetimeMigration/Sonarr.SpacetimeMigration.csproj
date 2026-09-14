@@ -5,7 +5,13 @@
     <Nullable>disable</Nullable>
     <RootNamespace>Sonarr.SpacetimeMigration</RootNamespace>
     <!-- SA1200 fires on using-outside-namespace in vendored files; suppress the same as the main solution -->
-    <NoWarn>$(NoWarn);CS1591;SA1200</NoWarn>
+    <!-- CA1849 flags every synchronous Dapper/ADO.NET call in the vendored SQL layer as a
+         sync-over-async violation. Those calls are genuinely synchronous SQLite reads/writes
+         from a one-time offline CLI tool (see BasicRepository.cs's doc comment) - the public
+         IBasicRepository<TModel> surface only wraps already-computed results in
+         Task.FromResult/Task.CompletedTask to satisfy the shared async interface; it is not
+         real asynchrony, so there is no async counterpart worth awaiting here. -->
+    <NoWarn>$(NoWarn);CS1591;SA1200;CA1849</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\NzbDrone.Core\Sonarr.Core.csproj" />
