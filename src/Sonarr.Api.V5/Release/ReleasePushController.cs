@@ -26,7 +26,11 @@ public class ReleasePushController : RestController<ReleasePushResource>
 
     private readonly QualityProfile _qualityProfile;
 
-    private static readonly object PushLock = new object();
+    // NOTE: the original synchronous `lock` can't wrap an `await` (CS1996), and the
+    // decision-making/processing calls below are genuinely async now, so a SemaphoreSlim
+    // replaces the lock to serialize pushes without blocking the request thread (see
+    // V3's Indexers/ReleasePushController.cs for the same pattern).
+    private static readonly SemaphoreSlim PushLock = new SemaphoreSlim(1, 1);
 
     public ReleasePushController(IMakeDownloadDecision downloadDecisionMaker,
                              IProcessDownloadDecisions downloadDecisionProcessor,
@@ -41,7 +45,10 @@ public class ReleasePushController : RestController<ReleasePushResource>
         _downloadClientFactory = downloadClientFactory;
         _logger = logger;
 
-        _qualityProfile = qualityProfileService.GetDefaultProfile(string.Empty);
+        // NOTE: C# constructors cannot be async, and this controller is instantiated by DI per
+        // request, so there's no async-all-the-way path here; blocking via GetAwaiter().GetResult()
+        // is the documented boundary (see ProviderControllerBase.cs for the same rationale).
+        _qualityProfile = qualityProfileService.GetDefaultProfile(string.Empty).GetAwaiter().GetResult();
 
         PostValidator.RuleFor(s => s.Title).NotEmpty();
         PostValidator.RuleFor(s => s.DownloadUrl).NotEmpty().When(s => s.MagnetUrl.IsNullOrWhiteSpace());
@@ -52,7 +59,7 @@ public class ReleasePushController : RestController<ReleasePushResource>
 
     [HttpPost]
     [Consumes("application/json")]
-    public Results<Ok<ReleaseResource>, BadRequest> Create([FromBody] ReleasePushResource release)
+    public async Task<Results<Ok<ReleaseResource>, BadRequest>> Create([FromBody] ReleasePushResource release)
     {
         _logger.Info("Release pushed: {0} - {1}", release.Title, release.DownloadUrl ?? release.MagnetUrl);
 
@@ -62,19 +69,25 @@ public class ReleasePushController : RestController<ReleasePushResource>
 
         info.Guid = "PUSH-" + info.DownloadUrl;
 
-        ResolveIndexer(info);
+        await ResolveIndexer(info);
 
-        var downloadClientId = ResolveDownloadClientId(release);
+        var downloadClientId = await ResolveDownloadClientId(release);
 
         DownloadDecision? decision;
 
-        lock (PushLock)
+        await PushLock.WaitAsync();
+
+        try
         {
-            var decisions = _downloadDecisionMaker.GetRssDecision(new List<ReleaseInfo> { info }, true);
+            var decisions = await _downloadDecisionMaker.GetRssDecision(new List<ReleaseInfo> { info }, true);
 
             decision = decisions.FirstOrDefault();
 
-            _downloadDecisionProcessor.ProcessDecision(decision, downloadClientId).GetAwaiter().GetResult();
+            await _downloadDecisionProcessor.ProcessDecision(decision, downloadClientId);
+        }
+        finally
+        {
+            PushLock.Release();
         }
 
         if (decision?.RemoteEpisode.ParsedEpisodeInfo == null)
@@ -85,9 +98,9 @@ public class ReleasePushController : RestController<ReleasePushResource>
         return TypedResults.Ok(decision.MapDecision(1, _qualityProfile));
     }
 
-    private void ResolveIndexer(ReleaseInfo release)
+    private async Task ResolveIndexer(ReleaseInfo release)
     {
-        var indexer = _indexerFactory.ResolveIndexer(release.IndexerId, release.Indexer);
+        var indexer = await _indexerFactory.ResolveIndexer(release.IndexerId, release.Indexer);
 
         if (indexer == null)
         {
@@ -102,9 +115,9 @@ public class ReleasePushController : RestController<ReleasePushResource>
         }
     }
 
-    private int? ResolveDownloadClientId(ReleasePushResource release)
+    private async Task<int?> ResolveDownloadClientId(ReleasePushResource release)
     {
-        var downloadClient = _downloadClientFactory.ResolveDownloadClient(release.DownloadClientId, release.DownloadClientName);
+        var downloadClient = await _downloadClientFactory.ResolveDownloadClient(release.DownloadClientId, release.DownloadClientName);
 
         if (downloadClient == null)
         {

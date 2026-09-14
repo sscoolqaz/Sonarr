@@ -135,7 +135,7 @@ namespace Sonarr.Api.V5.Queue
 
         [HttpGet]
         [Produces("application/json")]
-        public Ok<PagingResource<QueueResource>> GetQueue([FromQuery] PagingRequestResource paging, bool includeUnknownSeriesItems = true, [FromQuery] int[]? seriesIds = null, DownloadProtocol? protocol = null, [FromQuery] int[]? languages = null, [FromQuery] int[]? quality = null, [FromQuery] QueueStatus[]? status = null, [FromQuery] QueueSubresource[]? includeSubresources = null)
+        public async Task<Ok<PagingResource<QueueResource>>> GetQueue([FromQuery] PagingRequestResource paging, bool includeUnknownSeriesItems = true, [FromQuery] int[]? seriesIds = null, DownloadProtocol? protocol = null, [FromQuery] int[]? languages = null, [FromQuery] int[]? quality = null, [FromQuery] QueueStatus[]? status = null, [FromQuery] QueueSubresource[]? includeSubresources = null)
         {
             var pagingResource = new PagingResource<QueueResource>(paging);
             var pagingSpec = pagingResource.MapToPagingSpec<QueueResource, NzbDrone.Core.Queue.Queue>(
@@ -167,10 +167,26 @@ namespace Sonarr.Api.V5.Queue
             var includeSeries = includeSubresources.Contains(QueueSubresource.Series);
             var includeEpisodes = includeSubresources.Contains(QueueSubresource.Episodes);
 
-            return TypedResults.Ok(pagingSpec.ApplyToPage((spec) => GetQueue(spec, seriesIds?.ToHashSet() ?? [], protocol, languages?.ToHashSet() ?? [], quality?.ToHashSet() ?? [], status?.ToHashSet() ?? [], includeUnknownSeriesItems), (q) => MapToResource(q, includeSeries, includeEpisodes)));
+            // NOTE: Sonarr.Http.Extensions.RequestExtensions.ApplyToPage takes a synchronous
+            // Func<PagingSpec,PagingSpec>, but ordering by quality rank now requires awaiting
+            // IQualityProfileRankService.GetRank per item (see below), so we call the paging
+            // helper directly and build the PagingResource by hand instead of bridging to sync.
+            var pagedResult = await GetQueue(pagingSpec, seriesIds?.ToHashSet() ?? [], protocol, languages?.ToHashSet() ?? [], quality?.ToHashSet() ?? [], status?.ToHashSet() ?? [], includeUnknownSeriesItems);
+
+            var resource = new PagingResource<QueueResource>
+            {
+                Page = pagedResult.Page,
+                PageSize = pagedResult.PageSize,
+                SortDirection = pagedResult.SortDirection,
+                SortKey = pagedResult.SortKey,
+                TotalRecords = pagedResult.TotalRecords,
+                Records = pagedResult.Records.ConvertAll(q => MapToResource(q, includeSeries, includeEpisodes))
+            };
+
+            return TypedResults.Ok(resource);
         }
 
-        private PagingSpec<NzbDrone.Core.Queue.Queue> GetQueue(PagingSpec<NzbDrone.Core.Queue.Queue> pagingSpec, HashSet<int> seriesIds, DownloadProtocol? protocol, HashSet<int> languages, HashSet<int> quality, HashSet<QueueStatus> status, bool includeUnknownSeriesItems)
+        private async Task<PagingSpec<NzbDrone.Core.Queue.Queue>> GetQueue(PagingSpec<NzbDrone.Core.Queue.Queue> pagingSpec, HashSet<int> seriesIds, DownloadProtocol? protocol, HashSet<int> languages, HashSet<int> quality, HashSet<QueueStatus> status, bool includeUnknownSeriesItems)
         {
             var ascending = pagingSpec.SortDirection == SortDirection.Ascending;
             var orderByFunc = GetOrderByFunc(pagingSpec);
@@ -256,8 +272,17 @@ namespace Sonarr.Api.V5.Queue
             }
             else if (pagingSpec.SortKey == "quality")
             {
-                double rankOf(NzbDrone.Core.Queue.Queue q) =>
-                    _rankService.GetRank(q.Series?.QualityProfileId, q.Quality?.Quality?.Id);
+                // NOTE: IQualityProfileRankService.GetRank is now async; since a plain OrderBy
+                // key selector can't await per item, we precompute the ranks up front and sort
+                // off the resulting dictionary instead.
+                var ranks = new Dictionary<NzbDrone.Core.Queue.Queue, double>();
+
+                foreach (var q in fullQueue)
+                {
+                    ranks[q] = await _rankService.GetRank(q.Series?.QualityProfileId, q.Quality?.Quality?.Id);
+                }
+
+                double rankOf(NzbDrone.Core.Queue.Queue q) => ranks[q];
 
                 ordered = ascending
                     ? fullQueue.OrderBy(rankOf)

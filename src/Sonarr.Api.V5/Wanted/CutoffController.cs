@@ -8,7 +8,6 @@ using NzbDrone.Core.Tv;
 using NzbDrone.SignalR;
 using Sonarr.Api.V5.Episodes;
 using Sonarr.Http;
-using Sonarr.Http.Extensions;
 
 namespace Sonarr.Api.V5.Wanted;
 
@@ -30,7 +29,7 @@ public class CutoffController : EpisodeControllerWithSignalR
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<PagingResource<EpisodeResource>> GetCutoffUnmetEpisodes(
+    public async Task<Ok<PagingResource<EpisodeResource>>> GetCutoffUnmetEpisodes(
         [FromQuery] PagingRequestResource paging,
         [FromQuery] bool monitored = true,
         [FromQuery] List<int>? seriesIds = null,
@@ -80,7 +79,24 @@ public class CutoffController : EpisodeControllerWithSignalR
         var includeEpisodeFile = includeSubresources.Contains(CutoffSubresource.EpisodeFile);
         var includeImages = includeSubresources.Contains(CutoffSubresource.Images);
 
-        var resource = pagingSpec.ApplyToPage(spec => _episodeCutoffService.EpisodesWhereCutoffUnmet(spec, seriesTags, quality), v => MapToResource(v, includeSeries, includeEpisodeFile, includeImages));
+        // NOTE: Sonarr.Http.Extensions.RequestExtensions.ApplyToPage takes a synchronous
+        // Converter<TModel, TResource>, but mapping an Episode to its resource now requires
+        // awaiting the series lookup (see EpisodeControllerWithSignalR.MapToResource). We build
+        // the PagingResource by hand here instead of bridging to sync inside the mapper.
+        // IEpisodeCutoffService.EpisodesWhereCutoffUnmet itself remains synchronous (NzbDrone.Core
+        // is out of scope for this pass).
+        var pagedResult = _episodeCutoffService.EpisodesWhereCutoffUnmet(pagingSpec, seriesTags, quality);
+        var mappedRecords = await MapToResource(pagedResult.Records, includeSeries, includeEpisodeFile, includeImages);
+
+        var resource = new PagingResource<EpisodeResource>
+        {
+            Page = pagedResult.Page,
+            PageSize = pagedResult.PageSize,
+            SortDirection = pagedResult.SortDirection,
+            SortKey = pagedResult.SortKey,
+            TotalRecords = pagedResult.TotalRecords,
+            Records = mappedRecords
+        };
 
         return TypedResults.Ok(resource);
     }

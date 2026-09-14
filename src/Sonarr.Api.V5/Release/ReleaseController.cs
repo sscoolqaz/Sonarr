@@ -64,7 +64,11 @@ public class ReleaseController : RestController<ReleaseResource>
         _historyService = historyService;
         _logger = logger;
 
-        _qualityProfile = qualityProfileService.GetDefaultProfile(string.Empty);
+        // NOTE: C# constructors cannot be async, and this controller is instantiated by DI per
+        // request, so there's no async-all-the-way path here; blocking via GetAwaiter().GetResult()
+        // is the documented boundary (see ProviderControllerBase.cs / ReleaseControllerBase.cs in
+        // V3 for the same rationale).
+        _qualityProfile = qualityProfileService.GetDefaultProfile(string.Empty).GetAwaiter().GetResult();
         _remoteEpisodeCache = cacheManager.GetCache<RemoteEpisode>(GetType(), "remoteEpisodes");
 
         PostValidator.RuleFor(s => s.Release).NotNull();
@@ -124,8 +128,8 @@ public class ReleaseController : RestController<ReleaseResource>
                     ReleaseSource = remoteEpisode.ReleaseSource
                 };
 
-                remoteEpisode.Series = _seriesService.GetSeries(overrideInfo.SeriesId!.Value);
-                remoteEpisode.Episodes = _episodeService.GetEpisodes(overrideInfo.EpisodeIds);
+                remoteEpisode.Series = await _seriesService.GetSeries(overrideInfo.SeriesId!.Value);
+                remoteEpisode.Episodes = await _episodeService.GetEpisodes(overrideInfo.EpisodeIds);
                 remoteEpisode.ParsedEpisodeInfo.Quality = overrideInfo.Quality;
                 remoteEpisode.Languages = overrideInfo.Languages;
             }
@@ -134,15 +138,15 @@ public class ReleaseController : RestController<ReleaseResource>
             {
                 if (release.SearchInfo?.EpisodeId.HasValue == true)
                 {
-                    var episode = _episodeService.GetEpisode(release.SearchInfo.EpisodeId.Value);
+                    var episode = await _episodeService.GetEpisode(release.SearchInfo.EpisodeId.Value);
 
-                    remoteEpisode.Series = _seriesService.GetSeries(episode.SeriesId);
+                    remoteEpisode.Series = await _seriesService.GetSeries(episode.SeriesId);
                     remoteEpisode.Episodes = new List<Episode> { episode };
                 }
                 else if (release.SearchInfo?.SeriesId.HasValue == true)
                 {
-                    var series = _seriesService.GetSeries(release.SearchInfo.SeriesId.Value);
-                    var episodes = _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, series, true);
+                    var series = await _seriesService.GetSeries(release.SearchInfo.SeriesId.Value);
+                    var episodes = await _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, series, true);
 
                     if (episodes.Empty())
                     {
@@ -159,11 +163,11 @@ public class ReleaseController : RestController<ReleaseResource>
             }
             else if (remoteEpisode.Episodes.Empty())
             {
-                var episodes = _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, remoteEpisode.Series, true);
+                var episodes = await _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, remoteEpisode.Series, true);
 
                 if (episodes.Empty() && release.SearchInfo?.EpisodeId.HasValue == true)
                 {
-                    var episode = _episodeService.GetEpisode(release.SearchInfo.EpisodeId.Value);
+                    var episode = await _episodeService.GetEpisode(release.SearchInfo.EpisodeId.Value);
 
                     episodes = new List<Episode> { episode };
                 }
@@ -210,7 +214,7 @@ public class ReleaseController : RestController<ReleaseResource>
         {
             var decisions = await _releaseSearchService.EpisodeSearch(episodeId, true, true);
             var prioritizedDecisions = _prioritizeDownloadDecision.PrioritizeDecisions(decisions);
-            var history = _historyService.FindByEpisodeId(episodeId);
+            var history = await _historyService.FindByEpisodeId(episodeId);
 
             return MapDecisions(prioritizedDecisions, history);
         }
@@ -231,7 +235,7 @@ public class ReleaseController : RestController<ReleaseResource>
         {
             var decisions = await _releaseSearchService.SeasonSearch(seriesId, seasonNumber, false, false, true, true);
             var prioritizedDecisions = _prioritizeDownloadDecision.PrioritizeDecisions(decisions);
-            var history = _historyService.GetBySeason(seriesId, seasonNumber, null);
+            var history = await _historyService.GetBySeason(seriesId, seasonNumber, null);
 
             return MapDecisions(prioritizedDecisions, history);
         }
@@ -249,7 +253,7 @@ public class ReleaseController : RestController<ReleaseResource>
     private async Task<List<ReleaseResource>> GetRss()
     {
         var reports = await _rssFetcherAndParser.Fetch();
-        var decisions = _downloadDecisionMaker.GetRssDecision(reports);
+        var decisions = await _downloadDecisionMaker.GetRssDecision(reports);
         var prioritizedDecisions = _prioritizeDownloadDecision.PrioritizeDecisions(decisions);
 
         return MapDecisions(prioritizedDecisions, new List<EpisodeHistory>());

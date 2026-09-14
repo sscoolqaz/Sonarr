@@ -64,7 +64,7 @@ public class HistoryController : Controller
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<PagingResource<HistoryResource>> GetHistory([FromQuery] PagingRequestResource paging, [FromQuery(Name = "eventType")] int[]? eventTypes, int? episodeId, string? downloadId, [FromQuery] int[]? seriesIds = null, [FromQuery] int[]? languages = null, [FromQuery] int[]? quality = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
+    public async Task<Ok<PagingResource<HistoryResource>>> GetHistory([FromQuery] PagingRequestResource paging, [FromQuery(Name = "eventType")] int[]? eventTypes, int? episodeId, string? downloadId, [FromQuery] int[]? seriesIds = null, [FromQuery] int[]? languages = null, [FromQuery] int[]? quality = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
     {
         var pagingResource = new PagingResource<HistoryResource>(paging);
         var pagingSpec = pagingResource.MapToPagingSpec<HistoryResource, EpisodeHistory>(
@@ -100,28 +100,34 @@ public class HistoryController : Controller
         var includeSeries = includeSubresources.Contains(HistorySubresource.Series);
         var includeEpisode = includeSubresources.Contains(HistorySubresource.Episode);
 
-        return TypedResults.Ok(pagingSpec.ApplyToPage(h => _historyService.Paged(pagingSpec, languages, quality), h => MapToResource(h, includeSeries, includeEpisode)));
+        var pagedResult = await _historyService.Paged(pagingSpec, languages, quality);
+
+        return TypedResults.Ok(pagingSpec.ApplyToPage(h => pagedResult, h => MapToResource(h, includeSeries, includeEpisode)));
     }
 
     [HttpGet("since")]
     [Produces("application/json")]
-    public Ok<List<HistoryResource>> GetHistorySince(DateTime date, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
+    public async Task<Ok<List<HistoryResource>>> GetHistorySince(DateTime date, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
     {
         var includeSeries = includeSubresources.Contains(HistorySubresource.Series);
         var includeEpisode = includeSubresources.Contains(HistorySubresource.Episode);
 
-        return TypedResults.Ok(_historyService.Since(date, eventType).Select(h => MapToResource(h, includeSeries, includeEpisode)).ToList());
+        var history = await _historyService.Since(date, eventType);
+
+        return TypedResults.Ok(history.Select(h => MapToResource(h, includeSeries, includeEpisode)).ToList());
     }
 
     [HttpGet("series")]
     [Produces("application/json")]
-    public Ok<List<HistoryResource>> GetSeriesHistory(int seriesId, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
+    public async Task<Ok<List<HistoryResource>>> GetSeriesHistory(int seriesId, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
     {
-        var series = _seriesService.GetSeries(seriesId);
+        var series = await _seriesService.GetSeries(seriesId);
         var includeSeries = includeSubresources.Contains(HistorySubresource.Series);
         var includeEpisode = includeSubresources.Contains(HistorySubresource.Episode);
 
-        return TypedResults.Ok(_historyService.GetBySeries(seriesId, eventType).Select(h =>
+        var history = await _historyService.GetBySeries(seriesId, eventType);
+
+        return TypedResults.Ok(history.Select(h =>
         {
             h.Series = series;
 
@@ -131,13 +137,15 @@ public class HistoryController : Controller
 
     [HttpGet("season")]
     [Produces("application/json")]
-    public Ok<List<HistoryResource>> GetSeasonHistory(int seriesId, int seasonNumber, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
+    public async Task<Ok<List<HistoryResource>>> GetSeasonHistory(int seriesId, int seasonNumber, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
     {
-        var series = _seriesService.GetSeries(seriesId);
+        var series = await _seriesService.GetSeries(seriesId);
         var includeSeries = includeSubresources.Contains(HistorySubresource.Series);
         var includeEpisode = includeSubresources.Contains(HistorySubresource.Episode);
 
-        return TypedResults.Ok(_historyService.GetBySeason(seriesId, seasonNumber, eventType).Select(h =>
+        var history = await _historyService.GetBySeason(seriesId, seasonNumber, eventType);
+
+        return TypedResults.Ok(history.Select(h =>
         {
             h.Series = series;
 
@@ -147,14 +155,16 @@ public class HistoryController : Controller
 
     [HttpGet("episode")]
     [Produces("application/json")]
-    public Ok<List<HistoryResource>> GetEpisodeHistory(int episodeId, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
+    public async Task<Ok<List<HistoryResource>>> GetEpisodeHistory(int episodeId, EpisodeHistoryEventType? eventType = null, [FromQuery] HistorySubresource[]? includeSubresources = null)
     {
-        var episode = _episodeService.GetEpisode(episodeId);
-        var series = _seriesService.GetSeries(episode.SeriesId);
+        var episode = await _episodeService.GetEpisode(episodeId);
+        var series = await _seriesService.GetSeries(episode.SeriesId);
         var includeSeries = includeSubresources.Contains(HistorySubresource.Series);
         var includeEpisode = includeSubresources.Contains(HistorySubresource.Episode);
 
-        return TypedResults.Ok(_historyService.GetByEpisode(episodeId, eventType)
+        var history = await _historyService.GetByEpisode(episodeId, eventType);
+
+        return TypedResults.Ok(history
             .Select(h =>
             {
                 h.Series = series;

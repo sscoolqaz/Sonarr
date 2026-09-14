@@ -1,9 +1,9 @@
+using System.Collections.Concurrent;
 using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
-using NzbDrone.Common.TPL;
 using NzbDrone.Core.DataAugmentation.Scene;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
@@ -45,7 +45,11 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
     private readonly IManageCommandQueue _commandQueueManager;
     private readonly IRootFolderService _rootFolderService;
 
-    private readonly LockByIdPool _seriesLockPool = new();
+    // NOTE: the original synchronous `lock` (via LockByIdPool) can't wrap an `await` (CS1996),
+    // and the series lookup/update calls below are genuinely async now, so a per-series
+    // SemaphoreSlim replaces the lock to serialize season-monitored updates without blocking the
+    // request thread (see Release/ReleasePushController.cs for the same pattern).
+    private static readonly ConcurrentDictionary<int, SemaphoreSlim> _seriesLocks = new();
 
     public SeriesController(IBroadcastSignalRMessage signalRBroadcaster,
                         ISeriesService seriesService,
@@ -109,25 +113,31 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<SeriesResource>> AllSeries(int? tvdbId, [FromQuery] SeriesSubresource[]? includeSubresources = null)
+    public async Task<Ok<List<SeriesResource>>> AllSeries(int? tvdbId, [FromQuery] SeriesSubresource[]? includeSubresources = null)
     {
-        var seriesStats = _seriesStatisticsService.SeriesStatistics();
+        var seriesStats = await _seriesStatisticsService.SeriesStatistics();
         var seriesResources = new List<SeriesResource>();
         var includeSeasonImages = includeSubresources.Contains(SeriesSubresource.SeasonImages);
 
         if (tvdbId.HasValue)
         {
-            seriesResources.AddIfNotNull(_seriesService.FindByTvdbId(tvdbId.Value)?.ToResource(includeSeasonImages));
+            var series = await _seriesService.FindByTvdbId(tvdbId.Value);
+            seriesResources.AddIfNotNull(series?.ToResource(includeSeasonImages));
         }
         else
         {
-            seriesResources.AddRange(_seriesService.GetAllSeries().Select(s => s.ToResource(includeSeasonImages)));
+            var allSeries = await _seriesService.GetAllSeries();
+            seriesResources.AddRange(allSeries.Select(s => s.ToResource(includeSeasonImages)));
         }
 
         MapCoversToLocal(seriesResources.ToArray());
         LinkSeriesStatistics(seriesResources, seriesStats.ToDictionary(x => x.SeriesId));
-        PopulateAlternateTitles(seriesResources);
-        seriesResources.ForEach(LinkRootFolderPath);
+        await PopulateAlternateTitles(seriesResources);
+
+        foreach (var resource in seriesResources)
+        {
+            await LinkRootFolderPath(resource);
+        }
 
         return TypedResults.Ok(seriesResources);
     }
@@ -140,13 +150,13 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
 
     [RestGetById]
     [Produces("application/json")]
-    public Results<Ok<SeriesResource>, NotFound> GetResourceByIdWithErrorHandler(int id, [FromQuery] SeriesSubresource[]? includeSubresources = null)
+    public async Task<Results<Ok<SeriesResource>, NotFound>> GetResourceByIdWithErrorHandler(int id, [FromQuery] SeriesSubresource[]? includeSubresources = null)
     {
         var includeSeasonImages = includeSubresources.Contains(SeriesSubresource.SeasonImages);
 
         try
         {
-            var series = GetSeriesResourceById(id, includeSeasonImages);
+            var series = await GetSeriesResourceById(id, includeSeasonImages);
 
             return series == null ? TypedResults.NotFound() : TypedResults.Ok(series);
         }
@@ -156,6 +166,10 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
         }
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override SeriesResource? GetResourceById(int id)
     {
         var includeSubresources = Request?.Query["includeSubresources"].Select(v =>
@@ -170,22 +184,22 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
 
         var includeSeasonImages = includeSubresources.Contains(SeriesSubresource.SeasonImages);
 
-        return GetSeriesResourceById(id, includeSeasonImages);
+        return GetSeriesResourceById(id, includeSeasonImages).GetAwaiter().GetResult();
     }
 
-    private SeriesResource? GetSeriesResourceById(int id, bool includeSeasonImages)
+    private async Task<SeriesResource?> GetSeriesResourceById(int id, bool includeSeasonImages)
     {
-        var series = _seriesService.GetSeries(id);
+        var series = await _seriesService.GetSeries(id);
 
-        return GetSeriesResource(series, includeSeasonImages);
+        return await GetSeriesResource(series, includeSeasonImages);
     }
 
     [RestPostById]
     [Consumes("application/json")]
     [Produces("application/json")]
-    public Results<Created<SeriesResource>, NotFound> AddSeries([FromBody] SeriesResource seriesResource)
+    public async Task<Results<Created<SeriesResource>, NotFound>> AddSeries([FromBody] SeriesResource seriesResource)
     {
-        var series = _addSeriesService.AddSeries(seriesResource.ToModel());
+        var series = await _addSeriesService.AddSeries(seriesResource.ToModel());
 
         return TypedCreated(series.Id);
     }
@@ -193,16 +207,16 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
     [RestPutById]
     [Consumes("application/json")]
     [Produces("application/json")]
-    public Results<Accepted<SeriesResource>, NotFound> UpdateSeries([FromBody] SeriesResource seriesResource, [FromQuery] bool moveFiles = false)
+    public async Task<Results<Accepted<SeriesResource>, NotFound>> UpdateSeries([FromBody] SeriesResource seriesResource, [FromQuery] bool moveFiles = false)
     {
-        var series = _seriesService.GetSeries(seriesResource.Id);
+        var series = await _seriesService.GetSeries(seriesResource.Id);
 
         if (moveFiles)
         {
             var sourcePath = series.Path;
             var destinationPath = seriesResource.Path;
 
-            _commandQueueManager.Push(new MoveSeriesCommand
+            await _commandQueueManager.Push(new MoveSeriesCommand
             {
                 SeriesId = series.Id,
                 SourcePath = sourcePath,
@@ -213,7 +227,7 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
 
         var model = seriesResource.ToModel(series);
 
-        _seriesService.UpdateSeries(model);
+        await _seriesService.UpdateSeries(model);
 
         BroadcastResourceChange(ModelAction.Updated, seriesResource);
 
@@ -223,11 +237,14 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
     [HttpPut("{id}/season")]
     [Consumes("application/json")]
     [Produces("application/json")]
-    public Results<Ok<SeasonResource>, NotFound> UpdateSeasonMonitored([FromRoute] int id, [FromBody] SeasonResource seasonResource)
+    public async Task<Results<Ok<SeasonResource>, NotFound>> UpdateSeasonMonitored([FromRoute] int id, [FromBody] SeasonResource seasonResource)
     {
-        lock (_seriesLockPool.GetLock(id))
+        var seriesLock = _seriesLocks.GetOrAdd(id, _ => new SemaphoreSlim(1, 1));
+        await seriesLock.WaitAsync();
+
+        try
         {
-            var series = _seriesService.GetSeries(id);
+            var series = await _seriesService.GetSeries(id);
             var season = series.Seasons.FirstOrDefault(s => s.SeasonNumber == seasonResource.SeasonNumber);
 
             if (season == null)
@@ -237,23 +254,27 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
 
             season.Monitored = seasonResource.Monitored;
 
-            _seriesService.UpdateSeries(series);
+            await _seriesService.UpdateSeries(series);
 
-            BroadcastResourceChange(ModelAction.Updated, GetSeriesResource(series, false)!);
+            BroadcastResourceChange(ModelAction.Updated, (await GetSeriesResource(series, false))!);
 
             return TypedResults.Ok(season.ToResource());
+        }
+        finally
+        {
+            seriesLock.Release();
         }
     }
 
     [RestDeleteById]
-    public NoContent DeleteSeries(int id, bool deleteFiles = false, bool addImportListExclusion = false)
+    public async Task<NoContent> DeleteSeries(int id, bool deleteFiles = false, bool addImportListExclusion = false)
     {
-        _seriesService.DeleteSeries(new List<int> { id }, deleteFiles, addImportListExclusion);
+        await _seriesService.DeleteSeries(new List<int> { id }, deleteFiles, addImportListExclusion);
 
         return TypedResults.NoContent();
     }
 
-    private SeriesResource? GetSeriesResource(NzbDrone.Core.Tv.Series? series, bool includeSeasonImages)
+    private async Task<SeriesResource?> GetSeriesResource(NzbDrone.Core.Tv.Series? series, bool includeSeasonImages)
     {
         if (series == null)
         {
@@ -262,9 +283,9 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
 
         var resource = series.ToResource(includeSeasonImages);
         MapCoversToLocal(resource);
-        FetchAndLinkSeriesStatistics(resource);
-        PopulateAlternateTitles(resource);
-        LinkRootFolderPath(resource);
+        await FetchAndLinkSeriesStatistics(resource);
+        await PopulateAlternateTitles(resource);
+        await LinkRootFolderPath(resource);
 
         return resource;
     }
@@ -277,9 +298,9 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
         }
     }
 
-    private void FetchAndLinkSeriesStatistics(SeriesResource resource)
+    private async Task FetchAndLinkSeriesStatistics(SeriesResource resource)
     {
-        LinkSeriesStatistics(resource, _seriesStatisticsService.SeriesStatistics(resource.Id, resource.QualityProfileId));
+        LinkSeriesStatistics(resource, await _seriesStatisticsService.SeriesStatistics(resource.Id, resource.QualityProfileId));
     }
 
     private void LinkSeriesStatistics(List<SeriesResource> resources, Dictionary<int, SeriesStatistics> seriesStatistics)
@@ -311,17 +332,17 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
         }
     }
 
-    private void PopulateAlternateTitles(List<SeriesResource> resources)
+    private async Task PopulateAlternateTitles(List<SeriesResource> resources)
     {
         foreach (var resource in resources)
         {
-            PopulateAlternateTitles(resource);
+            await PopulateAlternateTitles(resource);
         }
     }
 
-    private void PopulateAlternateTitles(SeriesResource resource)
+    private async Task PopulateAlternateTitles(SeriesResource resource)
     {
-        var mappings = _sceneMappingService.FindByTvdbId(resource.TvdbId);
+        var mappings = await _sceneMappingService.FindByTvdbId(resource.TvdbId);
 
         if (mappings == null)
         {
@@ -331,9 +352,9 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
         resource.AlternateTitles = mappings.ConvertAll(AlternateTitleResourceMapper.ToResource);
     }
 
-    private void LinkRootFolderPath(SeriesResource resource)
+    private async Task LinkRootFolderPath(SeriesResource resource)
     {
-        resource.RootFolderPath = _rootFolderService.GetBestRootFolderPath(resource.Path);
+        resource.RootFolderPath = await _rootFolderService.GetBestRootFolderPath(resource.Path);
     }
 
     [NonAction]
@@ -359,10 +380,13 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
         BroadcastResourceChange(ModelAction.Updated, message.Series.Id);
     }
 
+    // NOTE: IHandle<TEvent> is a shared eventing interface (50+ implementers app-wide) with a
+    // synchronous void Handle(...) signature; converting it is out of scope for this pass, so we
+    // bridge to the now-async GetSeriesResource here as the documented boundary.
     [NonAction]
     public void Handle(SeriesEditedEvent message)
     {
-        var resource = GetSeriesResource(message.Series, false);
+        var resource = GetSeriesResource(message.Series, false).GetAwaiter().GetResult();
 
         if (resource == null)
         {
@@ -378,7 +402,7 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
     {
         foreach (var series in message.Series)
         {
-            var resource = GetSeriesResource(series, false);
+            var resource = GetSeriesResource(series, false).GetAwaiter().GetResult();
 
             if (resource == null)
             {
@@ -400,7 +424,7 @@ public class SeriesController : RestControllerWithSignalR<SeriesResource, NzbDro
     {
         foreach (var series in message.Series)
         {
-            var resource = GetSeriesResource(series, false);
+            var resource = GetSeriesResource(series, false).GetAwaiter().GetResult();
 
             if (resource == null)
             {

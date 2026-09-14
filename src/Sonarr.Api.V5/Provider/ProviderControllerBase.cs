@@ -42,16 +42,26 @@ namespace Sonarr.Api.V5.Provider
             _bulkResourceMapper = bulkResourceMapper;
 
             SharedValidator.RuleFor(c => c.Name).NotEmpty();
-            SharedValidator.RuleFor(c => c.Name).Must((v, c) => !_providerFactory.All().Any(p => p.Name.EqualsIgnoreCase(c) && p.Id != v.Id)).WithMessage("Should be unique");
+
+            // NOTE: FluentValidation's synchronous `Must()` predicate can't await; the request
+            // validation pipeline (RestController.ValidateResource) is itself synchronous
+            // framework code out of scope for this pass, so we bridge here as the documented
+            // boundary rather than converting FluentValidation's Must to MustAsync app-wide.
+            SharedValidator.RuleFor(c => c.Name).Must((v, c) => !_providerFactory.All().GetAwaiter().GetResult().Any(p => p.Name.EqualsIgnoreCase(c) && p.Id != v.Id)).WithMessage("Should be unique");
             SharedValidator.RuleFor(c => c.Implementation).NotEmpty();
             SharedValidator.RuleFor(c => c.ConfigContract).NotEmpty();
 
             PostValidator.RuleFor(c => c.Fields).NotNull();
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used by
+        // every controller in the app (Accepted/Created/BroadcastResourceChange helpers all call it
+        // synchronously); converting it to Task-returning is out of scope for this pass (see task
+        // instructions re: framework seams). Blocking here via GetAwaiter().GetResult() is the
+        // documented boundary.
         protected override TProviderResource GetResourceById(int id)
         {
-            var definition = _providerFactory.Get(id);
+            var definition = _providerFactory.Get(id).GetAwaiter().GetResult();
             _providerFactory.SetProviderCharacteristics(definition);
 
             return _resourceMapper.ToResource(definition);
@@ -59,9 +69,9 @@ namespace Sonarr.Api.V5.Provider
 
         [HttpGet]
         [Produces("application/json")]
-        public Ok<List<TProviderResource>> GetAll()
+        public async Task<Ok<List<TProviderResource>>> GetAll()
         {
-            var providerDefinitions = _providerFactory.All();
+            var providerDefinitions = await _providerFactory.All();
 
             var result = new List<TProviderResource>(providerDefinitions.Count);
 
@@ -78,16 +88,16 @@ namespace Sonarr.Api.V5.Provider
         [RestPostById]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public Results<Created<TProviderResource>, NotFound> CreateProvider([FromBody] TProviderResource providerResource, [FromQuery] bool skipTesting = false, [FromQuery] SkipValidation skipValidation = SkipValidation.None)
+        public async Task<Results<Created<TProviderResource>, NotFound>> CreateProvider([FromBody] TProviderResource providerResource, [FromQuery] bool skipTesting = false, [FromQuery] SkipValidation skipValidation = SkipValidation.None)
         {
             var providerDefinition = GetDefinition(providerResource, null, skipValidation, false);
 
             if (providerDefinition.Enable && !skipTesting)
             {
-                Test(providerDefinition, skipValidation);
+                await Test(providerDefinition, skipValidation);
             }
 
-            providerDefinition = _providerFactory.Create(providerDefinition);
+            providerDefinition = await _providerFactory.Create(providerDefinition);
 
             return TypedCreated(providerDefinition.Id);
         }
@@ -95,9 +105,9 @@ namespace Sonarr.Api.V5.Provider
         [RestPutById]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public Results<Accepted<TProviderResource>, NotFound> UpdateProvider([FromRoute] int id, [FromBody] TProviderResource providerResource, [FromQuery] bool skipTesting = false, [FromQuery] SkipValidation skipValidation = SkipValidation.None)
+        public async Task<Results<Accepted<TProviderResource>, NotFound>> UpdateProvider([FromRoute] int id, [FromBody] TProviderResource providerResource, [FromQuery] bool skipTesting = false, [FromQuery] SkipValidation skipValidation = SkipValidation.None)
         {
-            var existingDefinition = _providerFactory.Find(id);
+            var existingDefinition = await _providerFactory.Find(id);
 
             if (existingDefinition == null)
             {
@@ -112,12 +122,12 @@ namespace Sonarr.Api.V5.Provider
             // Only test existing definitions if it is enabled, skipTesting isn't set and the definition has changed.
             if (providerDefinition.Enable && !skipTesting && hasDefinitionChanged)
             {
-                Test(providerDefinition, skipValidation);
+                await Test(providerDefinition, skipValidation);
             }
 
             if (hasDefinitionChanged)
             {
-                _providerFactory.Update(providerDefinition);
+                await _providerFactory.Update(providerDefinition);
             }
 
             return TypedAccepted(existingDefinition.Id);
@@ -126,14 +136,14 @@ namespace Sonarr.Api.V5.Provider
         [HttpPut("bulk")]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public virtual Results<Ok<IEnumerable<TProviderResource>>, BadRequest> UpdateProvider([FromBody] TBulkProviderResource providerResource)
+        public virtual async Task<Results<Ok<IEnumerable<TProviderResource>>, BadRequest>> UpdateProvider([FromBody] TBulkProviderResource providerResource)
         {
             if (!providerResource.Ids.Any())
             {
                 throw new BadRequestException("ids must be provided");
             }
 
-            var definitionsToUpdate = _providerFactory.Get(providerResource.Ids).ToList();
+            var definitionsToUpdate = (await _providerFactory.Get(providerResource.Ids)).ToList();
 
             foreach (var definition in definitionsToUpdate)
             {
@@ -161,7 +171,9 @@ namespace Sonarr.Api.V5.Provider
 
             _bulkResourceMapper.UpdateModel(providerResource, definitionsToUpdate);
 
-            return TypedResults.Ok(_providerFactory.Update(definitionsToUpdate).Select(x => _resourceMapper.ToResource(x)));
+            var updated = await _providerFactory.Update(definitionsToUpdate);
+
+            return TypedResults.Ok(updated.Select(x => _resourceMapper.ToResource(x)));
         }
 
         private TProviderDefinition GetDefinition(TProviderResource providerResource, TProviderDefinition? existingDefinition, SkipValidation skipValidation, bool forceValidate)
@@ -177,18 +189,18 @@ namespace Sonarr.Api.V5.Provider
         }
 
         [RestDeleteById]
-        public NoContent DeleteProvider(int id)
+        public async Task<NoContent> DeleteProvider(int id)
         {
-            _providerFactory.Delete(id);
+            await _providerFactory.Delete(id);
 
             return TypedResults.NoContent();
         }
 
         [HttpDelete("bulk")]
         [Consumes("application/json")]
-        public virtual NoContent DeleteProviders([FromBody] TBulkProviderResource resource)
+        public virtual async Task<NoContent> DeleteProviders([FromBody] TBulkProviderResource resource)
         {
-            _providerFactory.Delete(resource.Ids);
+            await _providerFactory.Delete(resource.Ids);
 
             return TypedResults.NoContent();
         }
@@ -219,21 +231,21 @@ namespace Sonarr.Api.V5.Provider
         [SkipValidation(true, false)]
         [HttpPost("test")]
         [Consumes("application/json")]
-        public NoContent Test([FromBody] TProviderResource providerResource, [FromQuery] SkipValidation skipValidation = SkipValidation.None)
+        public async Task<NoContent> Test([FromBody] TProviderResource providerResource, [FromQuery] SkipValidation skipValidation = SkipValidation.None)
         {
-            var existingDefinition = providerResource.Id > 0 ? _providerFactory.Find(providerResource.Id) : null;
+            var existingDefinition = providerResource.Id > 0 ? await _providerFactory.Find(providerResource.Id) : null;
             var providerDefinition = GetDefinition(providerResource, existingDefinition, skipValidation, true);
 
-            Test(providerDefinition, skipValidation);
+            await Test(providerDefinition, skipValidation);
 
             return TypedResults.NoContent();
         }
 
         [HttpPost("testall")]
         [Produces("application/json")]
-        public Results<Ok<List<ProviderTestAllResult>>, BadRequest<List<ProviderTestAllResult>>> TestAll()
+        public async Task<Results<Ok<List<ProviderTestAllResult>>, BadRequest<List<ProviderTestAllResult>>>> TestAll()
         {
-            var providerDefinitions = _providerFactory.All()
+            var providerDefinitions = (await _providerFactory.All())
                                                       .Where(c => c.Settings.Validate().IsValid && c.Enable)
                                                       .ToList();
             var result = new List<ProviderTestAllResult>();
@@ -243,7 +255,7 @@ namespace Sonarr.Api.V5.Provider
                 var validationFailures = new List<ValidationFailure>();
 
                 validationFailures.AddRange(definition.Settings.Validate().Errors);
-                validationFailures.AddRange(_providerFactory.Test(definition).Errors);
+                validationFailures.AddRange((await _providerFactory.Test(definition)).Errors);
 
                 result.Add(new ProviderTestAllResult
                 {
@@ -259,9 +271,9 @@ namespace Sonarr.Api.V5.Provider
         [HttpPost("action/{name}")]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public Results<ContentHttpResult, BadRequest> RequestAction([FromRoute] string name, [FromBody] TProviderResource providerResource)
+        public async Task<Results<ContentHttpResult, BadRequest>> RequestAction([FromRoute] string name, [FromBody] TProviderResource providerResource)
         {
-            var existingDefinition = providerResource.Id > 0 ? _providerFactory.Find(providerResource.Id) : null;
+            var existingDefinition = providerResource.Id > 0 ? await _providerFactory.Find(providerResource.Id) : null;
             var providerDefinition = GetDefinition(providerResource, existingDefinition, SkipValidation.All, false);
 
             var query = Request.Query.ToDictionary(x => x.Key, x => x.Value.ToString());
@@ -296,9 +308,9 @@ namespace Sonarr.Api.V5.Provider
             VerifyValidationResult(validationResult, skipValidation);
         }
 
-        protected virtual void Test(TProviderDefinition definition, SkipValidation skipValidation)
+        protected virtual async Task Test(TProviderDefinition definition, SkipValidation skipValidation)
         {
-            var validationResult = _providerFactory.Test(definition);
+            var validationResult = await _providerFactory.Test(definition);
 
             VerifyValidationResult(validationResult, skipValidation);
         }

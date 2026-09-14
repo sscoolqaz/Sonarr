@@ -17,8 +17,8 @@ public class UpdateSettingsController : SettingsController<UpdateSettingsResourc
             .When(c => c.UpdateMechanism == UpdateMechanism.Script);
     }
 
-    protected override UpdateSettingsResource ToResource(IConfigFileProvider configFile, IConfigService model)
+    protected override Task<UpdateSettingsResource> ToResource(IConfigFileProvider configFile, IConfigService model)
     {
-        return UpdateSettingsResourceMapper.ToResource(configFile);
+        return Task.FromResult(UpdateSettingsResourceMapper.ToResource(configFile));
     }
 }

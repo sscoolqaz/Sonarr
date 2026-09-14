@@ -22,11 +22,13 @@ public class ManualImportController : Controller
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<ManualImportResource>> GetMediaFiles(string? folder, int? seriesId, int? seasonNumber, [FromQuery] string[]? downloadIds = null, bool filterExistingFiles = true)
+    public async Task<Ok<List<ManualImportResource>>> GetMediaFiles(string? folder, int? seriesId, int? seasonNumber, [FromQuery] string[]? downloadIds = null, bool filterExistingFiles = true)
     {
         if (seriesId.HasValue && downloadIds == null)
         {
-            return TypedResults.Ok(_manualImportService.GetMediaFiles(seriesId.Value, seasonNumber)
+            var seriesFiles = await _manualImportService.GetMediaFiles(seriesId.Value, seasonNumber);
+
+            return TypedResults.Ok(seriesFiles
                 .ToResource()
                 .Select(AddQualityWeight)
                 .ToList());
@@ -38,7 +40,7 @@ public class ManualImportController : Controller
 
             foreach (var downloadId in downloadIds.Distinct())
             {
-                files.AddRange(_manualImportService.GetMediaFiles(null, downloadId, seriesId, filterExistingFiles));
+                files.AddRange(await _manualImportService.GetMediaFiles(null, downloadId, seriesId, filterExistingFiles));
             }
 
             return TypedResults.Ok(files.ToResource()
@@ -46,7 +48,9 @@ public class ManualImportController : Controller
                 .ToList());
         }
 
-        return TypedResults.Ok(_manualImportService.GetMediaFiles(folder, null, seriesId, filterExistingFiles)
+        var folderFiles = await _manualImportService.GetMediaFiles(folder, null, seriesId, filterExistingFiles);
+
+        return TypedResults.Ok(folderFiles
             .ToResource()
             .Select(AddQualityWeight)
             .ToList());
@@ -54,7 +58,7 @@ public class ManualImportController : Controller
 
     [HttpPost]
     [Consumes("application/json")]
-    public Results<Ok<List<ManualImportResource>>, BadRequest> ReprocessItems([FromBody] List<ManualImportReprocessResource> items)
+    public async Task<Results<Ok<List<ManualImportResource>>, BadRequest>> ReprocessItems([FromBody] List<ManualImportReprocessResource> items)
     {
         if (items is { Count: 0 })
         {
@@ -65,7 +69,7 @@ public class ManualImportController : Controller
 
         foreach (var item in items)
         {
-            var processedItem = _manualImportService.ReprocessItem(item.Path, item.DownloadId, item.SeriesId, item.SeasonNumber, item.EpisodeIds ?? new List<int>(), item.ReleaseGroup, item.Quality, item.Languages, item.IndexerFlags, item.ReleaseType);
+            var processedItem = await _manualImportService.ReprocessItem(item.Path, item.DownloadId, item.SeriesId, item.SeasonNumber, item.EpisodeIds ?? new List<int>(), item.ReleaseGroup, item.Quality, item.Languages, item.IndexerFlags, item.ReleaseType);
 
             // Only use the processed item's languages, quality, and release group if the user hasn't specified them.
             // Languages won't be returned when reprocessing if the season/episode isn't filled in yet and we don't want to return no languages to the client.

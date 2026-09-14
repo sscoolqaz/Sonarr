@@ -40,15 +40,19 @@ public class CommandController : RestControllerWithSignalR<CommandResource, Comm
         PostValidator.RuleFor(c => c.Name).NotBlank();
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override CommandResource GetResourceById(int id)
     {
-        return _commandQueueManager.Get(id).ToResource();
+        return _commandQueueManager.Get(id).GetAwaiter().GetResult().ToResource();
     }
 
     [RestPostById]
     [Consumes("application/json")]
     [Produces("application/json")]
-    public Results<Created<CommandResource>, NotFound> StartCommand([FromBody] CommandResource commandResource)
+    public async Task<Results<Created<CommandResource>, NotFound>> StartCommand([FromBody] CommandResource commandResource)
     {
         var commandType =
             _knownTypes.GetImplementations(typeof(Command))
@@ -58,7 +62,7 @@ public class CommandController : RestControllerWithSignalR<CommandResource, Comm
         Request.Body.Seek(0, SeekOrigin.Begin);
         using (var reader = new StreamReader(Request.Body))
         {
-            var body = reader.ReadToEnd();
+            var body = await reader.ReadToEndAsync();
             var command = STJson.Deserialize(body, commandType) as Command;
 
             if (command == null)
@@ -70,7 +74,7 @@ public class CommandController : RestControllerWithSignalR<CommandResource, Comm
             command.SendUpdatesToClient = true;
             command.ClientUserAgent = Request.Headers["UserAgent"];
 
-            var trackedCommand = _commandQueueManager.Push(command, commandResource.Priority, CommandTrigger.Manual);
+            var trackedCommand = await _commandQueueManager.Push(command, commandResource.Priority, CommandTrigger.Manual);
 
             return TypedCreated(trackedCommand.Id);
         }

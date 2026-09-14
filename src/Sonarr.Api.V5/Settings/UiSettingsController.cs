@@ -24,8 +24,8 @@ public class UiSettingsController : SettingsController<UiSettingsResource>
                        .WithMessage("The UI Language value cannot be less than 1");
     }
 
-    protected override UiSettingsResource ToResource(IConfigFileProvider configFile, IConfigService model)
+    protected override Task<UiSettingsResource> ToResource(IConfigFileProvider configFile, IConfigService model)
     {
-        return UiSettingsResourceMapper.ToResource(configFile, model);
+        return Task.FromResult(UiSettingsResourceMapper.ToResource(configFile, model));
     }
 }

@@ -30,7 +30,7 @@ public class ParseController : Controller
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<ParseResource> Parse(string? title, string? path)
+    public async Task<Ok<ParseResource>> Parse(string? title, string? path)
     {
         if (title.IsNullOrWhiteSpace())
         {
@@ -50,11 +50,11 @@ public class ParseController : Controller
             });
         }
 
-        var remoteEpisode = _parsingService.Map(parsedEpisodeInfo, 0, 0, null);
+        var remoteEpisode = await _parsingService.Map(parsedEpisodeInfo, 0, 0, null);
 
         if (remoteEpisode != null)
         {
-            _aggregationService.Augment(remoteEpisode);
+            await _aggregationService.Augment(remoteEpisode);
 
             remoteEpisode.CustomFormats = _formatCalculator.ParseCustomFormat(remoteEpisode, 0);
             remoteEpisode.CustomFormatScore = remoteEpisode.Series?.QualityProfile?.Value.CalculateCustomFormatScore(remoteEpisode.CustomFormats) ?? 0;

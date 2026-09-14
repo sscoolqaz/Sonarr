@@ -26,7 +26,7 @@ public class BlocklistController : Controller
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<PagingResource<BlocklistResource>> GetBlocklist([FromQuery] PagingRequestResource paging, [FromQuery] int[]? seriesIds = null, [FromQuery] DownloadProtocol[]? protocols = null)
+    public async Task<Ok<PagingResource<BlocklistResource>>> GetBlocklist([FromQuery] PagingRequestResource paging, [FromQuery] int[]? seriesIds = null, [FromQuery] DownloadProtocol[]? protocols = null)
     {
         var pagingResource = new PagingResource<BlocklistResource>(paging);
         var pagingSpec = pagingResource.MapToPagingSpec<BlocklistResource, NzbDrone.Core.Blocklisting.Blocklist>(
@@ -51,22 +51,24 @@ public class BlocklistController : Controller
             pagingSpec.FilterExpressions.Add(b => protocols.Contains(b.Protocol));
         }
 
-        return TypedResults.Ok(pagingSpec.ApplyToPage(b => _blocklistService.Paged(pagingSpec), b => BlocklistResourceMapper.MapToResource(b, _formatCalculator)));
+        var pagedResult = await _blocklistService.Paged(pagingSpec);
+
+        return TypedResults.Ok(pagingSpec.ApplyToPage(b => pagedResult, b => BlocklistResourceMapper.MapToResource(b, _formatCalculator)));
     }
 
     [RestDeleteById]
-    public NoContent DeleteBlocklist(int id)
+    public async Task<NoContent> DeleteBlocklist(int id)
     {
-        _blocklistService.Delete(id);
+        await _blocklistService.Delete(id);
 
         return TypedResults.NoContent();
     }
 
     [HttpDelete("bulk")]
     [Produces("application/json")]
-    public NoContent Remove([FromBody] BlocklistBulkResource resource)
+    public async Task<NoContent> Remove([FromBody] BlocklistBulkResource resource)
     {
-        _blocklistService.Delete(resource.Ids);
+        await _blocklistService.Delete(resource.Ids);
 
         return TypedResults.NoContent();
     }

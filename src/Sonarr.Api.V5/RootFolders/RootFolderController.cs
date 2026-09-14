@@ -42,33 +42,37 @@ public class RootFolderController : RestControllerWithSignalR<RootFolderResource
                        .SetValidator(folderWritableValidator);
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override RootFolderResource GetResourceById(int id)
     {
         var timeout = Request?.GetBooleanQueryParameter("timeout", true) ?? true;
 
-        return _rootFolderService.Get(id, timeout).ToResource();
+        return _rootFolderService.Get(id, timeout).GetAwaiter().GetResult().ToResource();
     }
 
     [RestPostById]
     [Consumes("application/json")]
-    public Results<Created<RootFolderResource>, NotFound> CreateRootFolder([FromBody] RootFolderResource rootFolderResource)
+    public async Task<Results<Created<RootFolderResource>, NotFound>> CreateRootFolder([FromBody] RootFolderResource rootFolderResource)
     {
         var model = rootFolderResource.ToModel();
 
-        return TypedCreated(_rootFolderService.Add(model).Id);
+        return TypedCreated((await _rootFolderService.Add(model)).Id);
     }
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<RootFolderResource>> GetRootFolders()
+    public async Task<Ok<List<RootFolderResource>>> GetRootFolders()
     {
-        return TypedResults.Ok(_rootFolderService.AllWithUnmappedFolders().ToResource());
+        return TypedResults.Ok((await _rootFolderService.AllWithUnmappedFolders()).ToResource());
     }
 
     [RestDeleteById]
-    public NoContent DeleteFolder(int id)
+    public async Task<NoContent> DeleteFolder(int id)
     {
-        _rootFolderService.Remove(id);
+        await _rootFolderService.Remove(id);
 
         return TypedResults.NoContent();
     }

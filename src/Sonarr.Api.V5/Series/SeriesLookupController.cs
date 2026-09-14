@@ -27,14 +27,16 @@ public class SeriesLookupController : Controller
     }
 
     [HttpGet]
-    public Ok<IEnumerable<SeriesResource>> Search([FromQuery] string term)
+    public async Task<Ok<IEnumerable<SeriesResource>>> Search([FromQuery] string term)
     {
         var tvDbResults = _searchProxy.SearchForNewSeries(term);
-        return TypedResults.Ok(MapToResource(tvDbResults));
+        return TypedResults.Ok(await MapToResource(tvDbResults));
     }
 
-    private IEnumerable<SeriesResource> MapToResource(IEnumerable<NzbDrone.Core.Tv.Series> series)
+    private async Task<IEnumerable<SeriesResource>> MapToResource(IEnumerable<NzbDrone.Core.Tv.Series> series)
     {
+        var result = new List<SeriesResource>();
+
         foreach (var currentSeries in series)
         {
             var resource = currentSeries.ToResource();
@@ -48,11 +50,13 @@ public class SeriesLookupController : Controller
                 resource.RemotePoster = poster.RemoteUrl;
             }
 
-            resource.Folder = _fileNameBuilder.GetSeriesFolder(currentSeries);
+            resource.Folder = await _fileNameBuilder.GetSeriesFolder(currentSeries);
             resource.Statistics = new SeriesStatistics().ToResource(resource.Seasons);
-            resource.IsExcluded = _importListExclusionService.FindByTvdbId(currentSeries.TvdbId) is not null;
+            resource.IsExcluded = await _importListExclusionService.FindByTvdbId(currentSeries.TvdbId) is not null;
 
-            yield return resource;
+            result.Add(resource);
         }
+
+        return result;
     }
 }

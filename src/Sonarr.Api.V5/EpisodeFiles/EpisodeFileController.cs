@@ -47,10 +47,14 @@ public class EpisodeFileController : RestControllerWithSignalR<EpisodeFileResour
         _upgradableSpecification = upgradableSpecification;
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override EpisodeFileResource GetResourceById(int id)
     {
-        var episodeFile = _mediaFileService.Get(id);
-        var series = _seriesService.GetSeries(episodeFile.SeriesId);
+        var episodeFile = _mediaFileService.Get(id).GetAwaiter().GetResult();
+        var series = _seriesService.GetSeries(episodeFile.SeriesId).GetAwaiter().GetResult();
 
         var resource = episodeFile.ToResource(series, _upgradableSpecification, _formatCalculator);
 
@@ -59,7 +63,7 @@ public class EpisodeFileController : RestControllerWithSignalR<EpisodeFileResour
 
     [HttpGet]
     [Produces("application/json")]
-    public Results<Ok<List<EpisodeFileResource>>, BadRequest> GetEpisodeFiles(int? seriesId, [FromQuery] List<int>? episodeFileIds)
+    public async Task<Results<Ok<List<EpisodeFileResource>>, BadRequest>> GetEpisodeFiles(int? seriesId, [FromQuery] List<int>? episodeFileIds)
     {
         if (!seriesId.HasValue && episodeFileIds?.Any() == false)
         {
@@ -68,8 +72,8 @@ public class EpisodeFileController : RestControllerWithSignalR<EpisodeFileResour
 
         if (seriesId.HasValue)
         {
-            var series = _seriesService.GetSeries(seriesId.Value);
-            var files = _mediaFileService.GetFilesBySeries(seriesId.Value);
+            var series = await _seriesService.GetSeries(seriesId.Value);
+            var files = await _mediaFileService.GetFilesBySeries(seriesId.Value);
 
             if (files == null)
             {
@@ -80,20 +84,24 @@ public class EpisodeFileController : RestControllerWithSignalR<EpisodeFileResour
         }
         else
         {
-            var episodeFiles = _mediaFileService.Get(episodeFileIds);
+            var episodeFiles = await _mediaFileService.Get(episodeFileIds);
+            var result = new List<EpisodeFileResource>();
 
-            return TypedResults.Ok(episodeFiles.GroupBy(e => e.SeriesId)
-                               .SelectMany(f => f.ToList()
-                                                 .ConvertAll(e => e.ToResource(_seriesService.GetSeries(f.Key), _upgradableSpecification, _formatCalculator)))
-                               .ToList());
+            foreach (var group in episodeFiles.GroupBy(e => e.SeriesId))
+            {
+                var series = await _seriesService.GetSeries(group.Key);
+                result.AddRange(group.ToList().ConvertAll(e => e.ToResource(series, _upgradableSpecification, _formatCalculator)));
+            }
+
+            return TypedResults.Ok(result);
         }
     }
 
     [RestPutById]
     [Consumes("application/json")]
-    public Results<Accepted<EpisodeFileResource>, NotFound> SetQuality([FromBody] EpisodeFileResource episodeFileResource)
+    public async Task<Results<Accepted<EpisodeFileResource>, NotFound>> SetQuality([FromBody] EpisodeFileResource episodeFileResource)
     {
-        var episodeFile = _mediaFileService.Get(episodeFileResource.Id);
+        var episodeFile = await _mediaFileService.Get(episodeFileResource.Id);
         episodeFile.Quality = episodeFileResource.Quality;
 
         if (episodeFileResource.SceneName != null && SceneChecker.IsSceneTitle(episodeFileResource.SceneName))
@@ -106,37 +114,37 @@ public class EpisodeFileController : RestControllerWithSignalR<EpisodeFileResour
             episodeFile.ReleaseGroup = episodeFileResource.ReleaseGroup;
         }
 
-        _mediaFileService.Update(episodeFile);
+        await _mediaFileService.Update(episodeFile);
         return TypedAccepted(episodeFile.Id);
     }
 
     [RestDeleteById]
-    public Results<NoContent, NotFound> DeleteEpisodeFile(int id)
+    public async Task<Results<NoContent, NotFound>> DeleteEpisodeFile(int id)
     {
-        var episodeFile = _mediaFileService.Get(id);
+        var episodeFile = await _mediaFileService.Get(id);
 
         if (episodeFile == null)
         {
             throw new NzbDroneClientException(HttpStatusCode.NotFound, "Episode file not found");
         }
 
-        var series = _seriesService.GetSeries(episodeFile.SeriesId);
+        var series = await _seriesService.GetSeries(episodeFile.SeriesId);
 
-        _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
+        await _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
 
         return TypedResults.NoContent();
     }
 
     [HttpDelete("bulk")]
     [Consumes("application/json")]
-    public NoContent DeleteEpisodeFiles([FromBody] EpisodeFileListResource resource)
+    public async Task<NoContent> DeleteEpisodeFiles([FromBody] EpisodeFileListResource resource)
     {
-        var episodeFiles = _mediaFileService.GetFiles(resource.EpisodeFileIds);
-        var series = _seriesService.GetSeries(episodeFiles.First().SeriesId);
+        var episodeFiles = await _mediaFileService.GetFiles(resource.EpisodeFileIds);
+        var series = await _seriesService.GetSeries(episodeFiles.First().SeriesId);
 
         foreach (var episodeFile in episodeFiles)
         {
-            _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
+            await _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
         }
 
         return TypedResults.NoContent();
@@ -144,9 +152,9 @@ public class EpisodeFileController : RestControllerWithSignalR<EpisodeFileResour
 
     [HttpPut("bulk")]
     [Consumes("application/json")]
-    public Ok<List<EpisodeFileResource>> SetPropertiesBulk([FromBody] List<EpisodeFileResource> resources)
+    public async Task<Ok<List<EpisodeFileResource>>> SetPropertiesBulk([FromBody] List<EpisodeFileResource> resources)
     {
-        var episodeFiles = _mediaFileService.GetFiles(resources.Select(r => r.Id));
+        var episodeFiles = await _mediaFileService.GetFiles(resources.Select(r => r.Id));
 
         foreach (var episodeFile in episodeFiles)
         {
@@ -184,9 +192,9 @@ public class EpisodeFileController : RestControllerWithSignalR<EpisodeFileResour
             }
         }
 
-        _mediaFileService.Update(episodeFiles);
+        await _mediaFileService.Update(episodeFiles);
 
-        var series = _seriesService.GetSeries(episodeFiles.First().SeriesId);
+        var series = await _seriesService.GetSeries(episodeFiles.First().SeriesId);
 
         return TypedResults.Ok(episodeFiles.ConvertAll(f => f.ToResource(series, _upgradableSpecification, _formatCalculator)));
     }

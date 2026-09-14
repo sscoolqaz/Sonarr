@@ -63,8 +63,8 @@ public class MediaManagementSettingsController : SettingsController<MediaManagem
         });
     }
 
-    protected override MediaManagementSettingsResource ToResource(IConfigFileProvider configFile, IConfigService model)
+    protected override Task<MediaManagementSettingsResource> ToResource(IConfigFileProvider configFile, IConfigService model)
     {
-        return MediaManagementConfigResourceMapper.ToResource(model);
+        return Task.FromResult(MediaManagementConfigResourceMapper.ToResource(model));
     }
 }

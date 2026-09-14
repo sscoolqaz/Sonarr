@@ -28,14 +28,18 @@ public class ImportListExclusionController : RestController<ImportListExclusionR
         SharedValidator.RuleFor(c => c.Title).NotEmpty();
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override ImportListExclusionResource GetResourceById(int id)
     {
-        return _importListExclusionService.Get(id).ToResource();
+        return _importListExclusionService.Get(id).GetAwaiter().GetResult().ToResource();
     }
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<PagingResource<ImportListExclusionResource>> GetImportListExclusions([FromQuery] PagingRequestResource paging)
+    public async Task<Ok<PagingResource<ImportListExclusionResource>>> GetImportListExclusions([FromQuery] PagingRequestResource paging)
     {
         var pagingResource = new PagingResource<ImportListExclusionResource>(paging);
         var pageSpec = pagingResource.MapToPagingSpec<ImportListExclusionResource, ImportListExclusion>(
@@ -48,40 +52,42 @@ public class ImportListExclusionController : RestController<ImportListExclusionR
             "id",
             SortDirection.Descending);
 
-        return TypedResults.Ok(pageSpec.ApplyToPage(_importListExclusionService.Paged, ImportListExclusionResourceMapper.ToResource));
+        var pagedResult = await _importListExclusionService.Paged(pageSpec);
+
+        return TypedResults.Ok(pageSpec.ApplyToPage(s => pagedResult, ImportListExclusionResourceMapper.ToResource));
     }
 
     [RestPostById]
     [Consumes("application/json")]
-    public Results<Created<ImportListExclusionResource>, NotFound> AddImportListExclusion([FromBody] ImportListExclusionResource resource)
+    public async Task<Results<Created<ImportListExclusionResource>, NotFound>> AddImportListExclusion([FromBody] ImportListExclusionResource resource)
     {
-        var importListExclusion = _importListExclusionService.Add(resource.ToModel());
+        var importListExclusion = await _importListExclusionService.Add(resource.ToModel());
 
         return TypedCreated(importListExclusion.Id);
     }
 
     [RestPutById]
     [Consumes("application/json")]
-    public Results<Accepted<ImportListExclusionResource>, NotFound> UpdateImportListExclusion([FromBody] ImportListExclusionResource resource)
+    public async Task<Results<Accepted<ImportListExclusionResource>, NotFound>> UpdateImportListExclusion([FromBody] ImportListExclusionResource resource)
     {
-        _importListExclusionService.Update(resource.ToModel());
+        await _importListExclusionService.Update(resource.ToModel());
 
         return TypedAccepted(resource.Id);
     }
 
     [RestDeleteById]
-    public NoContent DeleteImportListExclusion(int id)
+    public async Task<NoContent> DeleteImportListExclusion(int id)
     {
-        _importListExclusionService.Delete(id);
+        await _importListExclusionService.Delete(id);
 
         return TypedResults.NoContent();
     }
 
     [HttpDelete("bulk")]
     [Consumes("application/json")]
-    public NoContent DeleteImportListExclusions([FromBody] ImportListExclusionBulkResource resource)
+    public async Task<NoContent> DeleteImportListExclusions([FromBody] ImportListExclusionBulkResource resource)
     {
-        _importListExclusionService.Delete(resource.Ids.ToList());
+        await _importListExclusionService.Delete(resource.Ids.ToList());
 
         return TypedResults.NoContent();
     }

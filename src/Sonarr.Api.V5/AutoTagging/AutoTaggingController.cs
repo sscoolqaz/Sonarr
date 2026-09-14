@@ -26,8 +26,13 @@ public class AutoTaggingController : RestController<AutoTaggingResource>
         _specifications = specifications;
 
         SharedValidator.RuleFor(c => c.Name).NotEmpty();
+
+        // NOTE: FluentValidation's synchronous `Must()` predicate can't await; the request
+        // validation pipeline (RestController.ValidateResource) is itself synchronous framework
+        // code out of scope for this pass, so we bridge here as the documented boundary (see
+        // ProviderControllerBase.cs).
         SharedValidator.RuleFor(c => c.Name)
-            .Must((v, c) => !_autoTaggingService.All().Any(f => f.Name == c && f.Id != v.Id)).WithMessage("Must be unique.");
+            .Must((v, c) => !_autoTaggingService.All().GetAwaiter().GetResult().Any(f => f.Name == c && f.Id != v.Id)).WithMessage("Must be unique.");
         SharedValidator.RuleFor(c => c.Tags).NotEmpty();
         SharedValidator.RuleFor(c => c).Custom((autoTag, context) =>
         {
@@ -43,46 +48,50 @@ public class AutoTaggingController : RestController<AutoTaggingResource>
         });
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override AutoTaggingResource GetResourceById(int id)
     {
-        return _autoTaggingService.GetById(id).ToResource();
+        return _autoTaggingService.GetById(id).GetAwaiter().GetResult().ToResource();
     }
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<AutoTaggingResource>> GetAll()
+    public async Task<Ok<List<AutoTaggingResource>>> GetAll()
     {
-        return TypedResults.Ok(_autoTaggingService.All().ToResource());
+        return TypedResults.Ok((await _autoTaggingService.All()).ToResource());
     }
 
     [RestPostById]
     [Consumes("application/json")]
-    public Results<Created<AutoTaggingResource>, NotFound> Create([FromBody] AutoTaggingResource autoTagResource)
+    public async Task<Results<Created<AutoTaggingResource>, NotFound>> Create([FromBody] AutoTaggingResource autoTagResource)
     {
         var model = autoTagResource.ToModel(_specifications);
 
         Validate(model);
 
-        return TypedCreated(_autoTaggingService.Insert(model).Id);
+        return TypedCreated((await _autoTaggingService.Insert(model)).Id);
     }
 
     [RestPutById]
     [Consumes("application/json")]
-    public Results<Accepted<AutoTaggingResource>, NotFound> Update([FromBody] AutoTaggingResource resource)
+    public async Task<Results<Accepted<AutoTaggingResource>, NotFound>> Update([FromBody] AutoTaggingResource resource)
     {
         var model = resource.ToModel(_specifications);
 
         Validate(model);
 
-        _autoTaggingService.Update(model);
+        await _autoTaggingService.Update(model);
 
         return TypedAccepted(model.Id);
     }
 
     [RestDeleteById]
-    public NoContent DeleteAutoTagging(int id)
+    public async Task<NoContent> DeleteAutoTagging(int id)
     {
-        _autoTaggingService.Delete(id);
+        await _autoTaggingService.Delete(id);
 
         return TypedResults.NoContent();
     }

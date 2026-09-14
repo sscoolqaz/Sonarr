@@ -88,7 +88,11 @@ public class GeneralSettingsController : SettingsController<GeneralSettingsResou
 
     private bool IsMatchingPassword(GeneralSettingsResource resource)
     {
-        var user = _userService.FindUser();
+        // NOTE: FluentValidation's synchronous `Must()` predicate can't await; the request
+        // validation pipeline (RestController.ValidateResource) is itself synchronous framework
+        // code out of scope for this pass, so we bridge here as the documented boundary (see
+        // ProviderControllerBase.cs).
+        var user = _userService.FindUser().GetAwaiter().GetResult();
 
         if (user != null && user.Password == resource.Password)
         {
@@ -103,11 +107,11 @@ public class GeneralSettingsController : SettingsController<GeneralSettingsResou
         return false;
     }
 
-    protected override GeneralSettingsResource ToResource(IConfigFileProvider configFile, IConfigService model)
+    protected override async Task<GeneralSettingsResource> ToResource(IConfigFileProvider configFile, IConfigService model)
     {
         var resource = GeneralSettingsResourceMapper.ToResource(configFile, model);
 
-        var user = _userService.FindUser();
+        var user = await _userService.FindUser();
 
         resource.Username = user?.Username ?? string.Empty;
         resource.Password = user?.Password ?? string.Empty;
@@ -116,15 +120,15 @@ public class GeneralSettingsController : SettingsController<GeneralSettingsResou
         return resource;
     }
 
-    public override Results<Accepted<GeneralSettingsResource>, NotFound> SaveSettings(GeneralSettingsResource resource)
+    public override async Task<Results<Accepted<GeneralSettingsResource>, NotFound>> SaveSettings(GeneralSettingsResource resource)
     {
         resource.TrustedNetworks = IPNetworkParser.NormalizeList(resource.TrustedNetworks);
 
         if (resource.Username.IsNotNullOrWhiteSpace() && resource.Password.IsNotNullOrWhiteSpace())
         {
-            _userService.Upsert(resource.Username, resource.Password);
+            await _userService.Upsert(resource.Username, resource.Password);
         }
 
-        return base.SaveSettings(resource);
+        return await base.SaveSettings(resource);
     }
 }

@@ -23,7 +23,7 @@ namespace Sonarr.Api.V5.Logs
 
         [HttpGet]
         [Produces("application/json")]
-        public Ok<PagingResource<LogResource>> GetLogs([FromQuery] PagingRequestResource paging, string? level)
+        public async Task<Ok<PagingResource<LogResource>>> GetLogs([FromQuery] PagingRequestResource paging, string? level)
         {
             if (!_configFileProvider.LogDbEnabled)
             {
@@ -67,7 +67,9 @@ namespace Sonarr.Api.V5.Logs
                 }
             }
 
-            var response = pageSpec.ApplyToPage(_logService.Paged, LogResourceMapper.ToResource);
+            var pagedResult = await _logService.Paged(pageSpec);
+
+            var response = pageSpec.ApplyToPage(h => pagedResult, LogResourceMapper.ToResource);
 
             if (pageSpec.SortKey == "id")
             {

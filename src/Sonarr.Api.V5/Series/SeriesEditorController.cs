@@ -25,9 +25,9 @@ public class SeriesEditorController : Controller
     }
 
     [HttpPut]
-    public Results<Ok<List<SeriesResource>>, BadRequest> SaveAll([FromBody] SeriesEditorResource resource)
+    public async Task<Results<Ok<List<SeriesResource>>, BadRequest>> SaveAll([FromBody] SeriesEditorResource resource)
     {
-        var seriesToUpdate = _seriesService.GetSeries(resource.SeriesIds);
+        var seriesToUpdate = await _seriesService.GetSeries(resource.SeriesIds);
         var seriesToMove = new List<BulkMoveSeries>();
 
         foreach (var series in seriesToUpdate)
@@ -86,7 +86,7 @@ public class SeriesEditorController : Controller
                 }
             }
 
-            var validationResult = _seriesEditorValidator.Validate(series);
+            var validationResult = await _seriesEditorValidator.ValidateAsync(series);
 
             if (!validationResult.IsValid)
             {
@@ -96,20 +96,20 @@ public class SeriesEditorController : Controller
 
         if (resource.MoveFiles && seriesToMove.Any())
         {
-            _commandQueueManager.Push(new BulkMoveSeriesCommand
+            await _commandQueueManager.Push(new BulkMoveSeriesCommand
             {
                 DestinationRootFolder = resource.RootFolderPath,
                 Series = seriesToMove
             });
         }
 
-        return TypedResults.Ok(_seriesService.UpdateSeries(seriesToUpdate, !resource.MoveFiles).ToResource());
+        return TypedResults.Ok((await _seriesService.UpdateSeries(seriesToUpdate, !resource.MoveFiles)).ToResource());
     }
 
     [HttpDelete]
-    public NoContent DeleteSeries([FromBody] SeriesEditorResource resource)
+    public async Task<NoContent> DeleteSeries([FromBody] SeriesEditorResource resource)
     {
-        _seriesService.DeleteSeries(resource.SeriesIds, resource.DeleteFiles, resource.AddImportListExclusion);
+        await _seriesService.DeleteSeries(resource.SeriesIds, resource.DeleteFiles, resource.AddImportListExclusion);
 
         return TypedResults.NoContent();
     }

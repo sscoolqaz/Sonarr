@@ -11,8 +11,8 @@ public class DownloadClientSettingsController : SettingsController<DownloadClien
     {
     }
 
-    protected override DownloadClientSettingsResource ToResource(IConfigFileProvider configFile, IConfigService model)
+    protected override Task<DownloadClientSettingsResource> ToResource(IConfigFileProvider configFile, IConfigService model)
     {
-        return DownloadClientSettingsResourceMapper.ToResource(model);
+        return Task.FromResult(DownloadClientSettingsResourceMapper.ToResource(model));
     }
 }

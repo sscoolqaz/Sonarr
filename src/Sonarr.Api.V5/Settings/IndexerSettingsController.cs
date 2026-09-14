@@ -22,9 +22,9 @@ namespace Sonarr.Api.V5.Settings
                            .IsValidRssSyncInterval();
         }
 
-        protected override IndexerSettingsResource ToResource(IConfigFileProvider configFile, IConfigService model)
+        protected override Task<IndexerSettingsResource> ToResource(IConfigFileProvider configFile, IConfigService model)
         {
-            return IndexerConfigResourceMapper.ToResource(model);
+            return Task.FromResult(IndexerConfigResourceMapper.ToResource(model));
         }
     }
 }

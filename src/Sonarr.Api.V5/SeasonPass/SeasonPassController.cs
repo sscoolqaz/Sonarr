@@ -20,9 +20,9 @@ public class SeasonPassController : Controller
 
     [HttpPost]
     [Consumes("application/json")]
-    public NoContent UpdateAll([FromBody] SeasonPassResource resource)
+    public async Task<NoContent> UpdateAll([FromBody] SeasonPassResource resource)
     {
-        var seriesToUpdate = _seriesService.GetSeries(resource.Series.Select(s => s.Id));
+        var seriesToUpdate = await _seriesService.GetSeries(resource.Series.Select(s => s.Id));
 
         foreach (var s in resource.Series)
         {
@@ -51,7 +51,7 @@ public class SeasonPassController : Controller
                 series.Monitored = false;
             }
 
-            _episodeMonitoredService.SetEpisodeMonitoredStatus(series, resource.MonitoringOptions.ToModel());
+            await _episodeMonitoredService.SetEpisodeMonitoredStatus(series, resource.MonitoringOptions.ToModel());
         }
 
         return TypedResults.NoContent();

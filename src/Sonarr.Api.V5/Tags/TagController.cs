@@ -33,37 +33,41 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>,
             .WithMessage("Allowed characters a-z, 0-9 and -");
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override TagResource GetResourceById(int id)
     {
-        return _tagService.GetTag(id).ToResource();
+        return _tagService.GetTag(id).GetAwaiter().GetResult().ToResource();
     }
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<TagResource>> GetAll()
+    public async Task<Ok<List<TagResource>>> GetAll()
     {
-        return TypedResults.Ok(_tagService.All().ToResource());
+        return TypedResults.Ok((await _tagService.All()).ToResource());
     }
 
     [RestPostById]
     [Consumes("application/json")]
-    public Results<Created<TagResource>, NotFound> Create([FromBody] TagResource resource)
+    public async Task<Results<Created<TagResource>, NotFound>> Create([FromBody] TagResource resource)
     {
-        return TypedCreated(_tagService.Add(resource.ToModel()).Id);
+        return TypedCreated((await _tagService.Add(resource.ToModel())).Id);
     }
 
     [RestPutById]
     [Consumes("application/json")]
-    public Results<Accepted<TagResource>, NotFound> Update([FromBody] TagResource resource)
+    public async Task<Results<Accepted<TagResource>, NotFound>> Update([FromBody] TagResource resource)
     {
-        _tagService.Update(resource.ToModel());
+        await _tagService.Update(resource.ToModel());
         return TypedAccepted(resource.Id);
     }
 
     [RestDeleteById]
-    public NoContent DeleteTag(int id)
+    public async Task<NoContent> DeleteTag(int id)
     {
-        _tagService.Delete(id);
+        await _tagService.Delete(id);
 
         return TypedResults.NoContent();
     }

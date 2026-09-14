@@ -18,8 +18,8 @@ public class StatisticsController : Controller
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<StatisticsResource> GetLibraryStatistics([FromQuery] StatisticsFilter filter)
+    public async Task<Ok<StatisticsResource>> GetLibraryStatistics([FromQuery] StatisticsFilter filter)
     {
-        return TypedResults.Ok(_statisticsService.GetLibraryStatistics(filter).MapToResource());
+        return TypedResults.Ok((await _statisticsService.GetLibraryStatistics(filter)).MapToResource());
     }
 }

@@ -17,15 +17,19 @@ public class TagDetailsController : RestController<TagDetailsResource>
         _tagService = tagService;
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override TagDetailsResource GetResourceById(int id)
     {
-        return _tagService.Details(id).ToResource();
+        return _tagService.Details(id).GetAwaiter().GetResult().ToResource();
     }
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<TagDetailsResource>> GetAll()
+    public async Task<Ok<List<TagDetailsResource>>> GetAll()
     {
-        return TypedResults.Ok(_tagService.Details().ToResource());
+        return TypedResults.Ok((await _tagService.Details()).ToResource());
     }
 }

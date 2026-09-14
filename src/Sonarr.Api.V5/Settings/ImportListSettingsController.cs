@@ -19,8 +19,8 @@ public class ImportListSettingsController : SettingsController<ImportListSetting
                        .When(c => c.ListSyncLevel == ListSyncLevelType.KeepAndTag);
     }
 
-    protected override ImportListSettingsResource ToResource(IConfigFileProvider configFile, IConfigService model)
+    protected override Task<ImportListSettingsResource> ToResource(IConfigFileProvider configFile, IConfigService model)
     {
-        return ImportListSettingsResourceMapper.ToResource(model);
+        return Task.FromResult(ImportListSettingsResourceMapper.ToResource(model));
     }
 }

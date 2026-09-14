@@ -25,9 +25,9 @@ namespace Sonarr.Api.V5.Update
 
         [HttpGet]
         [Produces("application/json")]
-        public Ok<List<UpdateResource>> GetRecentUpdates()
+        public async Task<Ok<List<UpdateResource>>> GetRecentUpdates()
         {
-            var resources = _recentUpdateProvider.GetRecentUpdatePackages()
+            var resources = (await _recentUpdateProvider.GetRecentUpdatePackages())
                                                  .OrderByDescending(u => u.Version)
                                                  .ToResource();
 
@@ -53,7 +53,7 @@ namespace Sonarr.Api.V5.Update
                     return TypedResults.Ok(resources);
                 }
 
-                var updateHistory = _updateHistoryService.InstalledSince(resources.Last().ReleaseDate);
+                var updateHistory = await _updateHistoryService.InstalledSince(resources.Last().ReleaseDate);
                 var installDates = updateHistory
                                                         .DistinctBy(v => v.Version)
                                                         .ToDictionary(v => v.Version);

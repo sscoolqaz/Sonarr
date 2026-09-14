@@ -30,18 +30,22 @@ namespace Sonarr.Api.V5.Calendar
 
         [HttpGet]
         [Produces("application/json")]
-        public Ok<List<EpisodeResource>> GetCalendar(DateTime? start, DateTime? end, bool includeUnmonitored = false, bool includeSpecials = true, string tags = "", [FromQuery] CalendarSubresource[]? includeSubresources = null)
+        public async Task<Ok<List<EpisodeResource>>> GetCalendar(DateTime? start, DateTime? end, bool includeUnmonitored = false, bool includeSpecials = true, string tags = "", [FromQuery] CalendarSubresource[]? includeSubresources = null)
         {
             var startUse = start ?? DateTime.Today;
             var endUse = end ?? DateTime.Today.AddDays(2);
-            var episodes = _episodeService.EpisodesBetweenDates(startUse, endUse, includeUnmonitored, includeSpecials);
-            var allSeries = _seriesService.GetAllSeries();
+            var episodes = await _episodeService.EpisodesBetweenDates(startUse, endUse, includeUnmonitored, includeSpecials);
+            var allSeries = await _seriesService.GetAllSeries();
             var parsedTags = new List<int>();
             var result = new List<Episode>();
 
             if (tags.IsNotNullOrWhiteSpace())
             {
-                parsedTags.AddRange(tags.Split(',').Select(_tagService.GetTag).Select(t => t.Id));
+                foreach (var tag in tags.Split(','))
+                {
+                    var resolvedTag = await _tagService.GetTag(tag);
+                    parsedTags.Add(resolvedTag.Id);
+                }
             }
 
             foreach (var episode in episodes)
@@ -65,7 +69,7 @@ namespace Sonarr.Api.V5.Calendar
             var includeEpisodeFile = includeSubresources.Contains(CalendarSubresource.EpisodeFile);
             var includeEpisodeImages = includeSubresources.Contains(CalendarSubresource.Images);
 
-            var resources = MapToResource(result, includeSeries, includeEpisodeFile, includeEpisodeImages);
+            var resources = await MapToResource(result, includeSeries, includeEpisodeFile, includeEpisodeImages);
 
             return TypedResults.Ok(resources.OrderBy(e => e.AirDateUtc).ToList());
         }

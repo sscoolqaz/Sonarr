@@ -1,3 +1,4 @@
+using FluentValidation;
 using FluentValidation.Validators;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Organizer;
@@ -15,7 +16,15 @@ public class SeriesFolderAsRootFolderValidator : PropertyValidator
 
     protected override string GetDefaultMessageTemplate() => "Root folder path '{rootFolderPath}' contains series folder '{seriesFolder}'";
 
+    public override bool ShouldValidateAsynchronously(IValidationContext context) => true;
+
     protected override bool IsValid(PropertyValidatorContext context)
+    {
+        // Bridge for callers still on the synchronous FluentValidation path (see SeriesExistsValidator).
+        return IsValidAsync(context, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    protected override async Task<bool> IsValidAsync(PropertyValidatorContext context, CancellationToken cancellation)
     {
         if (context.PropertyValue == null)
         {
@@ -36,7 +45,7 @@ public class SeriesFolderAsRootFolderValidator : PropertyValidator
 
         var rootFolder = new DirectoryInfo(rootFolderPath).Name;
         var series = seriesResource.ToModel();
-        var seriesFolder = _fileNameBuilder.GetSeriesFolder(series);
+        var seriesFolder = await _fileNameBuilder.GetSeriesFolder(series);
 
         context.MessageFormatter.AppendArgument("rootFolderPath", rootFolderPath);
         context.MessageFormatter.AppendArgument("seriesFolder", seriesFolder);

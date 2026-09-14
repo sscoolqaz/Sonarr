@@ -36,47 +36,56 @@ public class NamingSettingsController : RestController<NamingSettingsResource>
         SharedValidator.RuleFor(c => c.CustomColonReplacementFormat).ValidCustomColonReplacement().When(c => c.ColonReplacementFormat == (int)ColonReplacementFormat.Custom);
     }
 
+    // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+    // app-wide (see ProviderControllerBase.cs for the full rationale); blocking here via
+    // GetAwaiter().GetResult() is the documented boundary rather than converting that shared
+    // base class.
     protected override NamingSettingsResource GetResourceById(int id)
     {
-        return _namingConfigService.GetConfig().ToResource();
+        return _namingConfigService.GetConfig().GetAwaiter().GetResult().ToResource();
+    }
+
+    private async Task<NamingSettingsResource> GetResourceByIdAsync(int id)
+    {
+        return (await _namingConfigService.GetConfig()).ToResource();
     }
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<NamingSettingsResource> GetNamingConfig()
+    public async Task<Ok<NamingSettingsResource>> GetNamingConfig()
     {
-        return TypedResults.Ok(GetResourceById(1));
+        return TypedResults.Ok(await GetResourceByIdAsync(1));
     }
 
     [RestPutById]
     [Consumes("application/json")]
-    public Results<Accepted<NamingSettingsResource>, NotFound> UpdateNamingConfig([FromBody] NamingSettingsResource resource)
+    public async Task<Results<Accepted<NamingSettingsResource>, NotFound>> UpdateNamingConfig([FromBody] NamingSettingsResource resource)
     {
         var nameSpec = resource.ToModel();
-        ValidateFormatResult(nameSpec);
+        await ValidateFormatResult(nameSpec);
 
-        _namingConfigService.Save(nameSpec);
+        await _namingConfigService.Save(nameSpec);
 
         return TypedAccepted(resource.Id);
     }
 
     [HttpGet("examples")]
     [Produces("application/json")]
-    public Ok<NamingExampleResource> GetExamples([FromQuery] NamingSettingsResource settings)
+    public async Task<Ok<NamingExampleResource>> GetExamples([FromQuery] NamingSettingsResource settings)
     {
         if (settings.Id == 0)
         {
-            settings = GetResourceById(1);
+            settings = await GetResourceByIdAsync(1);
         }
 
         var nameSpec = settings.ToModel();
         var sampleResource = new NamingExampleResource();
 
-        var singleEpisodeSampleResult = _filenameSampleService.GetStandardSample(nameSpec);
-        var multiEpisodeSampleResult = _filenameSampleService.GetMultiEpisodeSample(nameSpec);
-        var dailyEpisodeSampleResult = _filenameSampleService.GetDailySample(nameSpec);
-        var animeEpisodeSampleResult = _filenameSampleService.GetAnimeSample(nameSpec);
-        var animeMultiEpisodeSampleResult = _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
+        var singleEpisodeSampleResult = await _filenameSampleService.GetStandardSample(nameSpec);
+        var multiEpisodeSampleResult = await _filenameSampleService.GetMultiEpisodeSample(nameSpec);
+        var dailyEpisodeSampleResult = await _filenameSampleService.GetDailySample(nameSpec);
+        var animeEpisodeSampleResult = await _filenameSampleService.GetAnimeSample(nameSpec);
+        var animeMultiEpisodeSampleResult = await _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
 
         sampleResource.SingleEpisodeExample = _filenameValidationService.ValidateStandardFilename(singleEpisodeSampleResult) != null
                 ? null
@@ -100,26 +109,26 @@ public class NamingSettingsController : RestController<NamingSettingsResource>
 
         sampleResource.SeriesFolderExample = nameSpec.SeriesFolderFormat.IsNullOrWhiteSpace()
             ? null
-            : _filenameSampleService.GetSeriesFolderSample(nameSpec);
+            : await _filenameSampleService.GetSeriesFolderSample(nameSpec);
 
         sampleResource.SeasonFolderExample = nameSpec.SeasonFolderFormat.IsNullOrWhiteSpace()
             ? null
-            : _filenameSampleService.GetSeasonFolderSample(nameSpec);
+            : await _filenameSampleService.GetSeasonFolderSample(nameSpec);
 
         sampleResource.SpecialsFolderExample = nameSpec.SpecialsFolderFormat.IsNullOrWhiteSpace()
             ? null
-            : _filenameSampleService.GetSpecialsFolderSample(nameSpec);
+            : await _filenameSampleService.GetSpecialsFolderSample(nameSpec);
 
         return TypedResults.Ok(sampleResource);
     }
 
-    private void ValidateFormatResult(NamingConfig nameSpec)
+    private async Task ValidateFormatResult(NamingConfig nameSpec)
     {
-        var singleEpisodeSampleResult = _filenameSampleService.GetStandardSample(nameSpec);
-        var multiEpisodeSampleResult = _filenameSampleService.GetMultiEpisodeSample(nameSpec);
-        var dailyEpisodeSampleResult = _filenameSampleService.GetDailySample(nameSpec);
-        var animeEpisodeSampleResult = _filenameSampleService.GetAnimeSample(nameSpec);
-        var animeMultiEpisodeSampleResult = _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
+        var singleEpisodeSampleResult = await _filenameSampleService.GetStandardSample(nameSpec);
+        var multiEpisodeSampleResult = await _filenameSampleService.GetMultiEpisodeSample(nameSpec);
+        var dailyEpisodeSampleResult = await _filenameSampleService.GetDailySample(nameSpec);
+        var animeEpisodeSampleResult = await _filenameSampleService.GetAnimeSample(nameSpec);
+        var animeMultiEpisodeSampleResult = await _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
 
         var singleEpisodeValidationResult = _filenameValidationService.ValidateStandardFilename(singleEpisodeSampleResult);
         var multiEpisodeValidationResult = _filenameValidationService.ValidateStandardFilename(multiEpisodeSampleResult);

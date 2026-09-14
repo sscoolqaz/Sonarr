@@ -19,19 +19,19 @@ public class RenameEpisodeController : Controller
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<RenameEpisodeResource>> GetEpisodes(int seriesId, int? seasonNumber)
+    public async Task<Ok<List<RenameEpisodeResource>>> GetEpisodes(int seriesId, int? seasonNumber)
     {
         if (seasonNumber.HasValue)
         {
-            return TypedResults.Ok(_renameEpisodeFileService.GetRenamePreviews(seriesId, seasonNumber.Value).ToResource());
+            return TypedResults.Ok((await _renameEpisodeFileService.GetRenamePreviews(seriesId, seasonNumber.Value)).ToResource());
         }
 
-        return TypedResults.Ok(_renameEpisodeFileService.GetRenamePreviews(seriesId).ToResource());
+        return TypedResults.Ok((await _renameEpisodeFileService.GetRenamePreviews(seriesId)).ToResource());
     }
 
     [HttpGet("bulk")]
     [Produces("application/json")]
-    public Results<Ok<List<RenameEpisodeResource>>, BadRequest> GetEpisodes([FromQuery] List<int> seriesIds)
+    public async Task<Results<Ok<List<RenameEpisodeResource>>, BadRequest>> GetEpisodes([FromQuery] List<int> seriesIds)
     {
         if (seriesIds is { Count: 0 })
         {
@@ -43,6 +43,6 @@ public class RenameEpisodeController : Controller
             throw new BadRequestException("seriesIds must be positive integers");
         }
 
-        return TypedResults.Ok(_renameEpisodeFileService.GetRenamePreviews(seriesIds).ToResource());
+        return TypedResults.Ok((await _renameEpisodeFileService.GetRenamePreviews(seriesIds)).ToResource());
     }
 }

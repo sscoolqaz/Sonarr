@@ -21,10 +21,10 @@ public class SeriesFolderController : Controller
 
     [HttpGet("{id}/folder")]
     [Produces("application/json")]
-    public Ok<object> GetFolder([FromRoute] int id)
+    public async Task<Ok<object>> GetFolder([FromRoute] int id)
     {
-        var series = _seriesService.GetSeries(id);
-        var folder = _fileNameBuilder.GetSeriesFolder(series);
+        var series = await _seriesService.GetSeries(id);
+        var folder = await _fileNameBuilder.GetSeriesFolder(series);
 
         return TypedResults.Ok<object>(new
         {

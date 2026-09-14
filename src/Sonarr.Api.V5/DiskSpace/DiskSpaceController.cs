@@ -18,8 +18,8 @@ public class DiskSpaceController : Controller
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<List<DiskSpaceResource>> GetFreeSpace()
+    public async Task<Ok<List<DiskSpaceResource>>> GetFreeSpace()
     {
-        return TypedResults.Ok(_diskSpaceService.GetFreeSpace().ConvertAll(DiskSpaceResourceMapper.MapToResource));
+        return TypedResults.Ok((await _diskSpaceService.GetFreeSpace()).ConvertAll(DiskSpaceResourceMapper.MapToResource));
     }
 }

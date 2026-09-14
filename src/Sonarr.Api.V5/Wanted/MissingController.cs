@@ -8,7 +8,6 @@ using NzbDrone.Core.Tv;
 using NzbDrone.SignalR;
 using Sonarr.Api.V5.Episodes;
 using Sonarr.Http;
-using Sonarr.Http.Extensions;
 
 namespace Sonarr.Api.V5.Wanted;
 
@@ -26,7 +25,7 @@ public class MissingController : EpisodeControllerWithSignalR
 
     [HttpGet]
     [Produces("application/json")]
-    public Ok<PagingResource<EpisodeResource>> GetMissingEpisodes(
+    public async Task<Ok<PagingResource<EpisodeResource>>> GetMissingEpisodes(
         [FromQuery] PagingRequestResource paging,
         [FromQuery] bool monitored = true,
         [FromQuery] bool includeSpecials = true,
@@ -74,7 +73,23 @@ public class MissingController : EpisodeControllerWithSignalR
         var includeSeries = includeSubresources.Contains(MissingSubresource.Series);
         var includeImages = includeSubresources.Contains(MissingSubresource.Images);
 
-        var resource = pagingSpec.ApplyToPage(spec => _episodeService.EpisodesWithoutFiles(spec, includeSpecials, seriesTags), v => MapToResource(v, includeSeries, false, includeImages));
+        var pagedResult = await _episodeService.EpisodesWithoutFiles(pagingSpec, includeSpecials, seriesTags);
+
+        // NOTE: Sonarr.Http.Extensions.RequestExtensions.ApplyToPage takes a synchronous
+        // Converter<TModel, TResource>, but mapping an Episode to its resource now requires
+        // awaiting the series lookup (see EpisodeControllerWithSignalR.MapToResource). We build
+        // the PagingResource by hand here instead of bridging to sync inside the mapper.
+        var mappedRecords = await MapToResource(pagedResult.Records, includeSeries, false, includeImages);
+
+        var resource = new PagingResource<EpisodeResource>
+        {
+            Page = pagedResult.Page,
+            PageSize = pagedResult.PageSize,
+            SortDirection = pagedResult.SortDirection,
+            SortKey = pagedResult.SortKey,
+            TotalRecords = pagedResult.TotalRecords,
+            Records = mappedRecords
+        };
 
         return TypedResults.Ok(resource);
     }

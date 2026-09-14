@@ -25,7 +25,7 @@ public class EpisodeController : EpisodeControllerWithSignalR
 
     [HttpGet]
     [Produces("application/json")]
-    public Results<Ok<List<EpisodeResource>>, BadRequest> GetEpisodes(int? seriesId, int? seasonNumber, [FromQuery]List<int> episodeIds, int? episodeFileId, [FromQuery] EpisodeSubresource[]? includeSubresources = null)
+    public async Task<Results<Ok<List<EpisodeResource>>, BadRequest>> GetEpisodes(int? seriesId, int? seasonNumber, [FromQuery]List<int> episodeIds, int? episodeFileId, [FromQuery] EpisodeSubresource[]? includeSubresources = null)
     {
         var includeSeries = includeSubresources.Contains(EpisodeSubresource.Series);
         var includeEpisodeFile = includeSubresources.Contains(EpisodeSubresource.EpisodeFile);
@@ -35,18 +35,18 @@ public class EpisodeController : EpisodeControllerWithSignalR
         {
             if (seasonNumber.HasValue)
             {
-                return TypedResults.Ok(MapToResource(_episodeService.GetEpisodesBySeason(seriesId.Value, seasonNumber.Value), includeSeries, includeEpisodeFile, includeImages));
+                return TypedResults.Ok(await MapToResource(await _episodeService.GetEpisodesBySeason(seriesId.Value, seasonNumber.Value), includeSeries, includeEpisodeFile, includeImages));
             }
 
-            return TypedResults.Ok(MapToResource(_episodeService.GetEpisodeBySeries(seriesId.Value), includeSeries, includeEpisodeFile, includeImages));
+            return TypedResults.Ok(await MapToResource(await _episodeService.GetEpisodeBySeries(seriesId.Value), includeSeries, includeEpisodeFile, includeImages));
         }
         else if (episodeIds.Any())
         {
-            return TypedResults.Ok(MapToResource(_episodeService.GetEpisodes(episodeIds), includeSeries, includeEpisodeFile, includeImages));
+            return TypedResults.Ok(await MapToResource(await _episodeService.GetEpisodes(episodeIds), includeSeries, includeEpisodeFile, includeImages));
         }
         else if (episodeFileId.HasValue)
         {
-            return TypedResults.Ok(MapToResource(_episodeService.GetEpisodesByFileId(episodeFileId.Value), includeSeries, includeEpisodeFile, includeImages));
+            return TypedResults.Ok(await MapToResource(await _episodeService.GetEpisodesByFileId(episodeFileId.Value), includeSeries, includeEpisodeFile, includeImages));
         }
 
         throw new BadRequestException("seriesId or episodeIds must be provided");
@@ -54,31 +54,31 @@ public class EpisodeController : EpisodeControllerWithSignalR
 
     [RestPutById]
     [Consumes("application/json")]
-    public Ok<EpisodeResource> SetEpisodeMonitored([FromRoute] int id, [FromBody] EpisodeResource resource)
+    public async Task<Ok<EpisodeResource>> SetEpisodeMonitored([FromRoute] int id, [FromBody] EpisodeResource resource)
     {
-        _episodeService.SetEpisodeMonitored(id, resource.Monitored);
+        await _episodeService.SetEpisodeMonitored(id, resource.Monitored);
 
-        resource = MapToResource(_episodeService.GetEpisode(id), false, false, false);
+        resource = await MapToResource(await _episodeService.GetEpisode(id), false, false, false);
 
         return TypedResults.Ok(resource);
     }
 
     [HttpPut("monitor")]
     [Consumes("application/json")]
-    public Ok<List<EpisodeResource>> SetEpisodesMonitored([FromBody] EpisodesMonitoredResource resource, [FromQuery] EpisodeSubresource[]? includeSubresources = null)
+    public async Task<Ok<List<EpisodeResource>>> SetEpisodesMonitored([FromBody] EpisodesMonitoredResource resource, [FromQuery] EpisodeSubresource[]? includeSubresources = null)
     {
         var includeImages = includeSubresources.Contains(EpisodeSubresource.Images);
 
         if (resource.EpisodeIds.Count == 1)
         {
-            _episodeService.SetEpisodeMonitored(resource.EpisodeIds.First(), resource.Monitored);
+            await _episodeService.SetEpisodeMonitored(resource.EpisodeIds.First(), resource.Monitored);
         }
         else
         {
-            _episodeService.SetMonitored(resource.EpisodeIds, resource.Monitored);
+            await _episodeService.SetMonitored(resource.EpisodeIds, resource.Monitored);
         }
 
-        var resources = MapToResource(_episodeService.GetEpisodes(resource.EpisodeIds), false, false, includeImages);
+        var resources = await MapToResource(await _episodeService.GetEpisodes(resource.EpisodeIds), false, false, includeImages);
 
         return TypedResults.Ok(resources);
     }

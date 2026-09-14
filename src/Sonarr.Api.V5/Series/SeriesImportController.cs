@@ -19,11 +19,11 @@ namespace Sonarr.Api.V5.Series
         [HttpPost]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public Ok<List<SeriesResource>> Import([FromBody] List<SeriesResource> resource)
+        public async Task<Ok<List<SeriesResource>>> Import([FromBody] List<SeriesResource> resource)
         {
             var newSeries = resource.ToModel();
 
-            return TypedResults.Ok(_addSeriesService.AddSeries(newSeries).ToResource());
+            return TypedResults.Ok((await _addSeriesService.AddSeries(newSeries)).ToResource());
         }
     }
 }
