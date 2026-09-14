@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
@@ -25,9 +26,9 @@ namespace Sonarr.Api.V3.Series
         }
 
         [HttpPut]
-        public object SaveAll([FromBody] SeriesEditorResource resource)
+        public async Task<object> SaveAll([FromBody] SeriesEditorResource resource)
         {
-            var seriesToUpdate = _seriesService.GetSeries(resource.SeriesIds);
+            var seriesToUpdate = await _seriesService.GetSeries(resource.SeriesIds);
             var seriesToMove = new List<BulkMoveSeries>();
 
             foreach (var series in seriesToUpdate)
@@ -86,7 +87,7 @@ namespace Sonarr.Api.V3.Series
                     }
                 }
 
-                var validationResult = _seriesEditorValidator.Validate(series);
+                var validationResult = await _seriesEditorValidator.ValidateAsync(series);
 
                 if (!validationResult.IsValid)
                 {
@@ -96,20 +97,20 @@ namespace Sonarr.Api.V3.Series
 
             if (resource.MoveFiles && seriesToMove.Any())
             {
-                _commandQueueManager.Push(new BulkMoveSeriesCommand
+                await _commandQueueManager.Push(new BulkMoveSeriesCommand
                 {
                     DestinationRootFolder = resource.RootFolderPath,
                     Series = seriesToMove
                 });
             }
 
-            return Accepted(_seriesService.UpdateSeries(seriesToUpdate, !resource.MoveFiles).ToResource());
+            return Accepted((await _seriesService.UpdateSeries(seriesToUpdate, !resource.MoveFiles)).ToResource());
         }
 
         [HttpDelete]
-        public object DeleteSeries([FromBody] SeriesEditorResource resource)
+        public async Task<object> DeleteSeries([FromBody] SeriesEditorResource resource)
         {
-            _seriesService.DeleteSeries(resource.SeriesIds, resource.DeleteFiles, resource.AddImportListExclusion);
+            await _seriesService.DeleteSeries(resource.SeriesIds, resource.DeleteFiles, resource.AddImportListExclusion);
 
             return new { };
         }

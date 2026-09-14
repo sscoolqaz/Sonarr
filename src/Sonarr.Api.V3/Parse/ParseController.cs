@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.CustomFormats;
@@ -28,7 +29,7 @@ namespace Sonarr.Api.V3.Parse
 
         [HttpGet]
         [Produces("application/json")]
-        public ParseResource Parse(string title, string path)
+        public async Task<ParseResource> Parse(string title, string path)
         {
             if (title.IsNullOrWhiteSpace())
             {
@@ -45,11 +46,11 @@ namespace Sonarr.Api.V3.Parse
                 };
             }
 
-            var remoteEpisode = _parsingService.Map(parsedEpisodeInfo, 0, 0, null);
+            var remoteEpisode = await _parsingService.Map(parsedEpisodeInfo, 0, 0, null);
 
             if (remoteEpisode != null)
             {
-                _aggregationService.Augment(remoteEpisode);
+                await _aggregationService.Augment(remoteEpisode);
 
                 remoteEpisode.CustomFormats = _formatCalculator.ParseCustomFormat(remoteEpisode, 0);
                 remoteEpisode.CustomFormatScore = remoteEpisode?.Series?.QualityProfile?.Value.CalculateCustomFormatScore(remoteEpisode.CustomFormats) ?? 0;

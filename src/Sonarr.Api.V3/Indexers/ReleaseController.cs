@@ -105,8 +105,8 @@ namespace Sonarr.Api.V3.Indexers
                         ReleaseSource = remoteEpisode.ReleaseSource
                     };
 
-                    remoteEpisode.Series = _seriesService.GetSeries(release.SeriesId!.Value);
-                    remoteEpisode.Episodes = _episodeService.GetEpisodes(release.EpisodeIds);
+                    remoteEpisode.Series = await _seriesService.GetSeries(release.SeriesId!.Value);
+                    remoteEpisode.Episodes = await _episodeService.GetEpisodes(release.EpisodeIds);
                     remoteEpisode.ParsedEpisodeInfo.Quality = release.Quality;
                     remoteEpisode.Languages = release.Languages;
                 }
@@ -115,15 +115,15 @@ namespace Sonarr.Api.V3.Indexers
                 {
                     if (release.EpisodeId.HasValue)
                     {
-                        var episode = _episodeService.GetEpisode(release.EpisodeId.Value);
+                        var episode = await _episodeService.GetEpisode(release.EpisodeId.Value);
 
-                        remoteEpisode.Series = _seriesService.GetSeries(episode.SeriesId);
+                        remoteEpisode.Series = await _seriesService.GetSeries(episode.SeriesId);
                         remoteEpisode.Episodes = new List<Episode> { episode };
                     }
                     else if (release.SeriesId.HasValue)
                     {
-                        var series = _seriesService.GetSeries(release.SeriesId.Value);
-                        var episodes = _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, series, true);
+                        var series = await _seriesService.GetSeries(release.SeriesId.Value);
+                        var episodes = await _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, series, true);
 
                         if (episodes.Empty())
                         {
@@ -140,11 +140,11 @@ namespace Sonarr.Api.V3.Indexers
                 }
                 else if (remoteEpisode.Episodes.Empty())
                 {
-                    var episodes = _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, remoteEpisode.Series, true);
+                    var episodes = await _parsingService.GetEpisodes(remoteEpisode.ParsedEpisodeInfo, remoteEpisode.Series, true);
 
                     if (episodes.Empty() && release.EpisodeId.HasValue)
                     {
-                        var episode = _episodeService.GetEpisode(release.EpisodeId.Value);
+                        var episode = await _episodeService.GetEpisode(release.EpisodeId.Value);
 
                         episodes = new List<Episode> { episode };
                     }
@@ -228,7 +228,7 @@ namespace Sonarr.Api.V3.Indexers
         private async Task<List<ReleaseResource>> GetRss()
         {
             var reports = await _rssFetcherAndParser.Fetch();
-            var decisions = _downloadDecisionMaker.GetRssDecision(reports);
+            var decisions = await _downloadDecisionMaker.GetRssDecision(reports);
             var prioritizedDecisions = _prioritizeDownloadDecision.PrioritizeDecisions(decisions);
 
             return MapDecisions(prioritizedDecisions);

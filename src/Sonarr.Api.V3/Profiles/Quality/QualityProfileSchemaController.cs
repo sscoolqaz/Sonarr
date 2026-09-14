@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Profiles.Qualities;
 using Sonarr.Http;
@@ -15,9 +16,9 @@ namespace Sonarr.Api.V3.Profiles.Quality
         }
 
         [HttpGet]
-        public QualityProfileResource GetSchema()
+        public async Task<QualityProfileResource> GetSchema()
         {
-            var qualityProfile = _profileService.GetDefaultProfile(string.Empty);
+            var qualityProfile = await _profileService.GetDefaultProfile(string.Empty);
 
             return qualityProfile.ToResource();
         }

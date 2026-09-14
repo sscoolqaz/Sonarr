@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Tv;
 using Sonarr.Http;
@@ -19,9 +20,9 @@ namespace Sonarr.Api.V3.SeasonPass
 
         [HttpPost]
         [Consumes("application/json")]
-        public IActionResult UpdateAll([FromBody] SeasonPassResource resource)
+        public async Task<IActionResult> UpdateAll([FromBody] SeasonPassResource resource)
         {
-            var seriesToUpdate = _seriesService.GetSeries(resource.Series.Select(s => s.Id));
+            var seriesToUpdate = await _seriesService.GetSeries(resource.Series.Select(s => s.Id));
 
             foreach (var s in resource.Series)
             {
@@ -50,7 +51,7 @@ namespace Sonarr.Api.V3.SeasonPass
                     series.Monitored = false;
                 }
 
-                _episodeMonitoredService.SetEpisodeMonitoredStatus(series, resource.MonitoringOptions);
+                await _episodeMonitoredService.SetEpisodeMonitoredStatus(series, resource.MonitoringOptions);
             }
 
             return Accepted(new object());

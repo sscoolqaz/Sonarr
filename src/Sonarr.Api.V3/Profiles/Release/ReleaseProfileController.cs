@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
@@ -21,6 +22,11 @@ namespace Sonarr.Api.V3.Profiles.Release
         {
             _releaseProfileService = releaseProfileService;
 
+            // NOTE: FluentValidation's synchronous `Custom()`/`WithMessage()` callbacks can't
+            // await; the request validation pipeline (RestController.ValidateResource) is itself
+            // synchronous framework code out of scope for this pass, so we bridge here as the
+            // documented boundary (see ProviderControllerBase.cs) rather than converting
+            // FluentValidation's Custom to CustomAsync app-wide.
             SharedValidator.RuleFor(d => d).Custom((restriction, context) =>
             {
                 if (restriction.MapRequired().Empty() && restriction.MapIgnored().Empty() && !restriction.AirDateRestriction && !restriction.AllowSeasonPackWithoutAllEpisodesAired)
@@ -38,7 +44,7 @@ namespace Sonarr.Api.V3.Profiles.Release
                     context.AddFailure(nameof(ReleaseProfileResource.Ignored), "'Must not contain' should not contain whitespaces or an empty string");
                 }
 
-                if (restriction.Enabled && restriction.IndexerId != 0 && !indexerFactory.Exists(restriction.IndexerId))
+                if (restriction.Enabled && restriction.IndexerId != 0 && !indexerFactory.Exists(restriction.IndexerId).GetAwaiter().GetResult())
                 {
                     context.AddFailure(nameof(ReleaseProfileResource.IndexerId), "Indexer does not exist");
                 }
@@ -47,42 +53,45 @@ namespace Sonarr.Api.V3.Profiles.Release
             SharedValidator.RuleFor(d => d.Tags.Intersect(d.ExcludedTags))
                 .Empty()
                 .WithName("ExcludedTags")
-                .WithMessage(d => $"'{string.Join(", ", tagService.GetTags(d.Tags.Intersect(d.ExcludedTags)).Select(t => t.Label))}' cannot be in both 'Tags' and 'Excluded Tags'");
+                .WithMessage(d => $"'{string.Join(", ", tagService.GetTags(d.Tags.Intersect(d.ExcludedTags)).GetAwaiter().GetResult().Select(t => t.Label))}' cannot be in both 'Tags' and 'Excluded Tags'");
         }
 
         [RestPostById]
-        public ActionResult<ReleaseProfileResource> Create([FromBody] ReleaseProfileResource resource)
+        public async Task<ActionResult<ReleaseProfileResource>> Create([FromBody] ReleaseProfileResource resource)
         {
             var model = resource.ToModel();
-            model = _releaseProfileService.Add(model);
+            model = await _releaseProfileService.Add(model);
             return Created(model.Id);
         }
 
         [RestDeleteById]
-        public void DeleteProfile(int id)
+        public async Task DeleteProfile(int id)
         {
-            _releaseProfileService.Delete(id);
+            await _releaseProfileService.Delete(id);
         }
 
         [RestPutById]
-        public ActionResult<ReleaseProfileResource> Update([FromBody] ReleaseProfileResource resource)
+        public async Task<ActionResult<ReleaseProfileResource>> Update([FromBody] ReleaseProfileResource resource)
         {
             var model = resource.ToModel();
 
-            _releaseProfileService.Update(model);
+            await _releaseProfileService.Update(model);
 
             return Accepted(model.Id);
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override ReleaseProfileResource GetResourceById(int id)
         {
-            return _releaseProfileService.Get(id).ToResource();
+            return _releaseProfileService.Get(id).GetAwaiter().GetResult().ToResource();
         }
 
         [HttpGet]
-        public List<ReleaseProfileResource> GetAll()
+        public async Task<List<ReleaseProfileResource>> GetAll()
         {
-            return _releaseProfileService.All().ToResource();
+            return (await _releaseProfileService.All()).ToResource();
         }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Configuration;
@@ -23,7 +24,7 @@ namespace Sonarr.Api.V3.Logs
 
         [HttpGet]
         [Produces("application/json")]
-        public PagingResource<LogResource> GetLogs([FromQuery] PagingRequestResource paging, string level)
+        public async Task<PagingResource<LogResource>> GetLogs([FromQuery] PagingRequestResource paging, string level)
         {
             if (!_configFileProvider.LogDbEnabled)
             {
@@ -67,7 +68,9 @@ namespace Sonarr.Api.V3.Logs
                 }
             }
 
-            var response = pageSpec.ApplyToPage(_logService.Paged, LogResourceMapper.ToResource);
+            var pagedResult = await _logService.Paged(pageSpec);
+
+            var response = pageSpec.ApplyToPage(p => pagedResult, LogResourceMapper.ToResource);
 
             if (pageSpec.SortKey == "id")
             {

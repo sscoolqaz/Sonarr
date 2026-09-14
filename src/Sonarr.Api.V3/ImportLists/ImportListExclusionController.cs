@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Datastore;
@@ -29,22 +30,25 @@ namespace Sonarr.Api.V3.ImportLists
             SharedValidator.RuleFor(c => c.Title).NotEmpty();
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override ImportListExclusionResource GetResourceById(int id)
         {
-            return _importListExclusionService.Get(id).ToResource();
+            return _importListExclusionService.Get(id).GetAwaiter().GetResult().ToResource();
         }
 
         [HttpGet]
         [Produces("application/json")]
         [Obsolete("Deprecated")]
-        public List<ImportListExclusionResource> GetImportListExclusions()
+        public async Task<List<ImportListExclusionResource>> GetImportListExclusions()
         {
-            return _importListExclusionService.All().ToResource();
+            return (await _importListExclusionService.All()).ToResource();
         }
 
         [HttpGet("paged")]
         [Produces("application/json")]
-        public PagingResource<ImportListExclusionResource> GetImportListExclusionsPaged([FromQuery] PagingRequestResource paging)
+        public async Task<PagingResource<ImportListExclusionResource>> GetImportListExclusionsPaged([FromQuery] PagingRequestResource paging)
         {
             var pagingResource = new PagingResource<ImportListExclusionResource>(paging);
             var pageSpec = pagingResource.MapToPagingSpec<ImportListExclusionResource, ImportListExclusion>(
@@ -57,37 +61,39 @@ namespace Sonarr.Api.V3.ImportLists
                 "id",
                 SortDirection.Descending);
 
-            return pageSpec.ApplyToPage(_importListExclusionService.Paged, ImportListExclusionResourceMapper.ToResource);
+            var pagedResult = await _importListExclusionService.Paged(pageSpec);
+
+            return pageSpec.ApplyToPage(p => pagedResult, ImportListExclusionResourceMapper.ToResource);
         }
 
         [RestPostById]
         [Consumes("application/json")]
-        public ActionResult<ImportListExclusionResource> AddImportListExclusion([FromBody] ImportListExclusionResource resource)
+        public async Task<ActionResult<ImportListExclusionResource>> AddImportListExclusion([FromBody] ImportListExclusionResource resource)
         {
-            var importListExclusion = _importListExclusionService.Add(resource.ToModel());
+            var importListExclusion = await _importListExclusionService.Add(resource.ToModel());
 
             return Created(importListExclusion.Id);
         }
 
         [RestPutById]
         [Consumes("application/json")]
-        public ActionResult<ImportListExclusionResource> UpdateImportListExclusion([FromBody] ImportListExclusionResource resource)
+        public async Task<ActionResult<ImportListExclusionResource>> UpdateImportListExclusion([FromBody] ImportListExclusionResource resource)
         {
-            _importListExclusionService.Update(resource.ToModel());
+            await _importListExclusionService.Update(resource.ToModel());
             return Accepted(resource.Id);
         }
 
         [RestDeleteById]
-        public void DeleteImportListExclusion(int id)
+        public async Task DeleteImportListExclusion(int id)
         {
-            _importListExclusionService.Delete(id);
+            await _importListExclusionService.Delete(id);
         }
 
         [HttpDelete("bulk")]
         [Produces("application/json")]
-        public object DeleteImportListExclusions([FromBody] ImportListExclusionBulkResource resource)
+        public async Task<object> DeleteImportListExclusions([FromBody] ImportListExclusionBulkResource resource)
         {
-            _importListExclusionService.Delete(resource.Ids.ToList());
+            await _importListExclusionService.Delete(resource.Ids.ToList());
 
             return new { };
         }

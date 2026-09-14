@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Tv;
@@ -18,10 +19,10 @@ public class SeriesFolderController : Controller
     }
 
     [HttpGet("{id}/folder")]
-    public object GetFolder([FromRoute] int id)
+    public async Task<object> GetFolder([FromRoute] int id)
     {
-        var series = _seriesService.GetSeries(id);
-        var folder = _fileNameBuilder.GetSeriesFolder(series);
+        var series = await _seriesService.GetSeries(id);
+        var folder = await _fileNameBuilder.GetSeriesFolder(series);
 
         return new
         {

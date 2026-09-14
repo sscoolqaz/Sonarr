@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Datastore.Events;
@@ -48,10 +49,13 @@ namespace Sonarr.Api.V3.EpisodeFiles
             _upgradableSpecification = upgradableSpecification;
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override EpisodeFileResource GetResourceById(int id)
         {
-            var episodeFile = _mediaFileService.Get(id);
-            var series = _seriesService.GetSeries(episodeFile.SeriesId);
+            var episodeFile = _mediaFileService.Get(id).GetAwaiter().GetResult();
+            var series = _seriesService.GetSeries(episodeFile.SeriesId).GetAwaiter().GetResult();
 
             var resource = episodeFile.ToResource(series, _upgradableSpecification, _formatCalculator);
 
@@ -60,7 +64,7 @@ namespace Sonarr.Api.V3.EpisodeFiles
 
         [HttpGet]
         [Produces("application/json")]
-        public List<EpisodeFileResource> GetEpisodeFiles(int? seriesId, [FromQuery] List<int> episodeFileIds)
+        public async Task<List<EpisodeFileResource>> GetEpisodeFiles(int? seriesId, [FromQuery] List<int> episodeFileIds)
         {
             if (!seriesId.HasValue && !episodeFileIds.Any())
             {
@@ -69,8 +73,8 @@ namespace Sonarr.Api.V3.EpisodeFiles
 
             if (seriesId.HasValue)
             {
-                var series = _seriesService.GetSeries(seriesId.Value);
-                var files = _mediaFileService.GetFilesBySeries(seriesId.Value);
+                var series = await _seriesService.GetSeries(seriesId.Value);
+                var files = await _mediaFileService.GetFilesBySeries(seriesId.Value);
 
                 if (files == null)
                 {
@@ -82,20 +86,31 @@ namespace Sonarr.Api.V3.EpisodeFiles
             }
             else
             {
-                var episodeFiles = _mediaFileService.Get(episodeFileIds);
+                var episodeFiles = await _mediaFileService.Get(episodeFileIds);
+                var seriesById = new Dictionary<int, NzbDrone.Core.Tv.Series>();
 
-                return episodeFiles.GroupBy(e => e.SeriesId)
-                                   .SelectMany(f => f.ToList()
-                                                     .ConvertAll(e => e.ToResource(_seriesService.GetSeries(f.Key), _upgradableSpecification, _formatCalculator)))
-                                   .ToList();
+                var result = new List<EpisodeFileResource>();
+
+                foreach (var group in episodeFiles.GroupBy(e => e.SeriesId))
+                {
+                    if (!seriesById.TryGetValue(group.Key, out var series))
+                    {
+                        series = await _seriesService.GetSeries(group.Key);
+                        seriesById[group.Key] = series;
+                    }
+
+                    result.AddRange(group.ToList().ConvertAll(e => e.ToResource(series, _upgradableSpecification, _formatCalculator)));
+                }
+
+                return result;
             }
         }
 
         [RestPutById]
         [Consumes("application/json")]
-        public ActionResult<EpisodeFileResource> SetQuality([FromBody] EpisodeFileResource episodeFileResource)
+        public async Task<ActionResult<EpisodeFileResource>> SetQuality([FromBody] EpisodeFileResource episodeFileResource)
         {
-            var episodeFile = _mediaFileService.Get(episodeFileResource.Id);
+            var episodeFile = await _mediaFileService.Get(episodeFileResource.Id);
             episodeFile.Quality = episodeFileResource.Quality;
 
             if (episodeFileResource.SceneName != null && SceneChecker.IsSceneTitle(episodeFileResource.SceneName))
@@ -108,16 +123,16 @@ namespace Sonarr.Api.V3.EpisodeFiles
                 episodeFile.ReleaseGroup = episodeFileResource.ReleaseGroup;
             }
 
-            _mediaFileService.Update(episodeFile);
+            await _mediaFileService.Update(episodeFile);
             return Accepted(episodeFile.Id);
         }
 
         [Obsolete("Use bulk endpoint instead")]
         [HttpPut("editor")]
         [Consumes("application/json")]
-        public object SetQuality([FromBody] EpisodeFileListResource resource)
+        public async Task<object> SetQuality([FromBody] EpisodeFileListResource resource)
         {
-            var episodeFiles = _mediaFileService.GetFiles(resource.EpisodeFileIds);
+            var episodeFiles = await _mediaFileService.GetFiles(resource.EpisodeFileIds);
 
             foreach (var episodeFile in episodeFiles)
             {
@@ -142,38 +157,38 @@ namespace Sonarr.Api.V3.EpisodeFiles
                 }
             }
 
-            _mediaFileService.Update(episodeFiles);
+            await _mediaFileService.Update(episodeFiles);
 
-            var series = _seriesService.GetSeries(episodeFiles.First().SeriesId);
+            var series = await _seriesService.GetSeries(episodeFiles.First().SeriesId);
 
             return Accepted(episodeFiles.ConvertAll(f => f.ToResource(series, _upgradableSpecification, _formatCalculator)));
         }
 
         [RestDeleteById]
-        public void DeleteEpisodeFile(int id)
+        public async Task DeleteEpisodeFile(int id)
         {
-            var episodeFile = _mediaFileService.Get(id);
+            var episodeFile = await _mediaFileService.Get(id);
 
             if (episodeFile == null)
             {
                 throw new NzbDroneClientException(HttpStatusCode.NotFound, "Episode file not found");
             }
 
-            var series = _seriesService.GetSeries(episodeFile.SeriesId);
+            var series = await _seriesService.GetSeries(episodeFile.SeriesId);
 
-            _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
+            await _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
         }
 
         [HttpDelete("bulk")]
         [Consumes("application/json")]
-        public object DeleteEpisodeFiles([FromBody] EpisodeFileListResource resource)
+        public async Task<object> DeleteEpisodeFiles([FromBody] EpisodeFileListResource resource)
         {
-            var episodeFiles = _mediaFileService.GetFiles(resource.EpisodeFileIds);
-            var series = _seriesService.GetSeries(episodeFiles.First().SeriesId);
+            var episodeFiles = await _mediaFileService.GetFiles(resource.EpisodeFileIds);
+            var series = await _seriesService.GetSeries(episodeFiles.First().SeriesId);
 
             foreach (var episodeFile in episodeFiles)
             {
-                _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
+                await _mediaFileDeletionService.DeleteEpisodeFile(series, episodeFile);
             }
 
             return new { };
@@ -181,9 +196,9 @@ namespace Sonarr.Api.V3.EpisodeFiles
 
         [HttpPut("bulk")]
         [Consumes("application/json")]
-        public object SetPropertiesBulk([FromBody] List<EpisodeFileResource> resources)
+        public async Task<object> SetPropertiesBulk([FromBody] List<EpisodeFileResource> resources)
         {
-            var episodeFiles = _mediaFileService.GetFiles(resources.Select(r => r.Id));
+            var episodeFiles = await _mediaFileService.GetFiles(resources.Select(r => r.Id));
 
             foreach (var episodeFile in episodeFiles)
             {
@@ -221,9 +236,9 @@ namespace Sonarr.Api.V3.EpisodeFiles
                 }
             }
 
-            _mediaFileService.Update(episodeFiles);
+            await _mediaFileService.Update(episodeFiles);
 
-            var series = _seriesService.GetSeries(episodeFiles.First().SeriesId);
+            var series = await _seriesService.GetSeries(episodeFiles.First().SeriesId);
 
             return Accepted(episodeFiles.ConvertAll(f => f.ToResource(series, _upgradableSpecification, _formatCalculator)));
         }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Tags;
 using Sonarr.Http;
@@ -16,16 +17,19 @@ namespace Sonarr.Api.V3.Tags
             _tagService = tagService;
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override TagDetailsResource GetResourceById(int id)
         {
-            return _tagService.Details(id).ToResource();
+            return _tagService.Details(id).GetAwaiter().GetResult().ToResource();
         }
 
         [HttpGet]
         [Produces("application/json")]
-        public List<TagDetailsResource> GetAll()
+        public async Task<List<TagDetailsResource>> GetAll()
         {
-            return _tagService.Details().ToResource();
+            return (await _tagService.Details()).ToResource();
         }
     }
 }

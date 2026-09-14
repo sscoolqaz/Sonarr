@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
@@ -25,9 +26,9 @@ namespace Sonarr.Api.V3.Update
 
         [HttpGet]
         [Produces("application/json")]
-        public List<UpdateResource> GetRecentUpdates()
+        public async Task<List<UpdateResource>> GetRecentUpdates()
         {
-            var resources = _recentUpdateProvider.GetRecentUpdatePackages()
+            var resources = (await _recentUpdateProvider.GetRecentUpdatePackages())
                                                  .OrderByDescending(u => u.Version)
                                                  .ToResource();
 
@@ -53,7 +54,7 @@ namespace Sonarr.Api.V3.Update
                     return resources;
                 }
 
-                var updateHistory = _updateHistoryService.InstalledSince(resources.Last().ReleaseDate);
+                var updateHistory = await _updateHistoryService.InstalledSince(resources.Last().ReleaseDate);
                 var installDates = updateHistory
                                                         .DistinctBy(v => v.Version)
                                                         .ToDictionary(v => v.Version);

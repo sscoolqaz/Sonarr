@@ -58,7 +58,9 @@ namespace Sonarr.Api.V3.Queue
             _downloadClientProvider = downloadClientProvider;
             _blocklistService = blocklistService;
 
-            _qualityComparer = new QualityModelComparer(qualityProfileService.GetDefaultProfile(string.Empty));
+            // NOTE: C# constructors cannot be async; blocking via GetAwaiter().GetResult() here is
+            // the documented boundary (same rationale as ReleaseControllerBase's constructor).
+            _qualityComparer = new QualityModelComparer(qualityProfileService.GetDefaultProfile(string.Empty).GetAwaiter().GetResult());
         }
 
         [NonAction]

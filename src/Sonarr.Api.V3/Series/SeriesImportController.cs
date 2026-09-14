@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Tv;
 using Sonarr.Http;
@@ -16,11 +17,11 @@ namespace Sonarr.Api.V3.Series
         }
 
         [HttpPost]
-        public object Import([FromBody] List<SeriesResource> resource)
+        public async Task<object> Import([FromBody] List<SeriesResource> resource)
         {
             var newSeries = resource.ToModel();
 
-            return _addSeriesService.AddSeries(newSeries).ToResource();
+            return (await _addSeriesService.AddSeries(newSeries)).ToResource();
         }
     }
 }

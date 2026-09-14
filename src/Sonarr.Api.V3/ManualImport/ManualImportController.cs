@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Languages;
@@ -24,19 +25,19 @@ namespace Sonarr.Api.V3.ManualImport
 
         [HttpGet]
         [Produces("application/json")]
-        public List<ManualImportResource> GetMediaFiles(string folder, string downloadId, int? seriesId, int? seasonNumber, bool filterExistingFiles = true)
+        public async Task<List<ManualImportResource>> GetMediaFiles(string folder, string downloadId, int? seriesId, int? seasonNumber, bool filterExistingFiles = true)
         {
             if (seriesId.HasValue && downloadId.IsNullOrWhiteSpace())
             {
-                return _manualImportService.GetMediaFiles(seriesId.Value, seasonNumber).ToResource().Select(AddQualityWeight).ToList();
+                return (await _manualImportService.GetMediaFiles(seriesId.Value, seasonNumber)).ToResource().Select(AddQualityWeight).ToList();
             }
 
-            return _manualImportService.GetMediaFiles(folder, downloadId, seriesId, filterExistingFiles).ToResource().Select(AddQualityWeight).ToList();
+            return (await _manualImportService.GetMediaFiles(folder, downloadId, seriesId, filterExistingFiles)).ToResource().Select(AddQualityWeight).ToList();
         }
 
         [HttpPost]
         [Consumes("application/json")]
-        public object ReprocessItems([FromBody] List<ManualImportReprocessResource> items)
+        public async Task<object> ReprocessItems([FromBody] List<ManualImportReprocessResource> items)
         {
             if (items is { Count: 0 })
             {
@@ -45,7 +46,7 @@ namespace Sonarr.Api.V3.ManualImport
 
             foreach (var item in items)
             {
-                var processedItem = _manualImportService.ReprocessItem(item.Path, item.DownloadId, item.SeriesId, item.SeasonNumber, item.EpisodeIds ?? new List<int>(), item.ReleaseGroup, item.Quality, item.Languages, item.IndexerFlags, item.ReleaseType);
+                var processedItem = await _manualImportService.ReprocessItem(item.Path, item.DownloadId, item.SeriesId, item.SeasonNumber, item.EpisodeIds ?? new List<int>(), item.ReleaseGroup, item.Quality, item.Languages, item.IndexerFlags, item.ReleaseType);
 
                 item.SeasonNumber = processedItem.SeasonNumber;
                 item.Episodes = processedItem.Episodes.ToResource();

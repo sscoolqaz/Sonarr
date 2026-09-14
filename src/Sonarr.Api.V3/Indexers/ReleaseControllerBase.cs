@@ -12,9 +12,13 @@ namespace Sonarr.Api.V3.Indexers
     {
         private readonly QualityProfile _qualityProfile;
 
+        // NOTE: C# constructors cannot be async, and this base class is instantiated by DI for
+        // every release controller, so there's no async-all-the-way path here; blocking via
+        // GetAwaiter().GetResult() is the documented boundary (same rationale as the
+        // GetResourceById framework seam in TagController/RootFolderController).
         public ReleaseControllerBase(IQualityProfileService qualityProfileService)
         {
-            _qualityProfile = qualityProfileService.GetDefaultProfile(string.Empty);
+            _qualityProfile = qualityProfileService.GetDefaultProfile(string.Empty).GetAwaiter().GetResult();
         }
 
         [NonAction]

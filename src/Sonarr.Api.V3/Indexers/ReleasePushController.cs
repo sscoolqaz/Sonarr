@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +25,10 @@ namespace Sonarr.Api.V3.Indexers
         private readonly IDownloadClientFactory _downloadClientFactory;
         private readonly Logger _logger;
 
-        private static readonly object PushLock = new object();
+        // NOTE: the original synchronous `lock` can't wrap an `await` (CS1996), and the
+        // decision-making/processing calls below are genuinely async now, so a SemaphoreSlim
+        // replaces the lock to serialize pushes without blocking the request thread.
+        private static readonly SemaphoreSlim PushLock = new SemaphoreSlim(1, 1);
 
         public ReleasePushController(IMakeDownloadDecision downloadDecisionMaker,
                                  IProcessDownloadDecisions downloadDecisionProcessor,
@@ -48,7 +53,7 @@ namespace Sonarr.Api.V3.Indexers
 
         [HttpPost]
         [Consumes("application/json")]
-        public ActionResult<List<ReleaseResource>> Create([FromBody] ReleaseResource release)
+        public async Task<ActionResult<List<ReleaseResource>>> Create([FromBody] ReleaseResource release)
         {
             _logger.Info("Release pushed: {0} - {1}", release.Title, release.DownloadUrl ?? release.MagnetUrl);
 
@@ -58,19 +63,25 @@ namespace Sonarr.Api.V3.Indexers
 
             info.Guid = "PUSH-" + info.DownloadUrl;
 
-            ResolveIndexer(info);
+            await ResolveIndexer(info);
 
-            var downloadClientId = ResolveDownloadClientId(release);
+            var downloadClientId = await ResolveDownloadClientId(release);
 
             DownloadDecision decision;
 
-            lock (PushLock)
+            await PushLock.WaitAsync();
+
+            try
             {
-                var decisions = _downloadDecisionMaker.GetRssDecision(new List<ReleaseInfo> { info }, true);
+                var decisions = await _downloadDecisionMaker.GetRssDecision(new List<ReleaseInfo> { info }, true);
 
                 decision = decisions.FirstOrDefault();
 
-                _downloadDecisionProcessor.ProcessDecision(decision, downloadClientId).GetAwaiter().GetResult();
+                await _downloadDecisionProcessor.ProcessDecision(decision, downloadClientId);
+            }
+            finally
+            {
+                PushLock.Release();
             }
 
             if (decision?.RemoteEpisode.ParsedEpisodeInfo == null)
@@ -81,9 +92,9 @@ namespace Sonarr.Api.V3.Indexers
             return MapDecisions(new[] { decision });
         }
 
-        private void ResolveIndexer(ReleaseInfo release)
+        private async Task ResolveIndexer(ReleaseInfo release)
         {
-            var indexer = _indexerFactory.ResolveIndexer(release.IndexerId, release.Indexer);
+            var indexer = await _indexerFactory.ResolveIndexer(release.IndexerId, release.Indexer);
 
             if (indexer == null)
             {
@@ -98,9 +109,9 @@ namespace Sonarr.Api.V3.Indexers
             }
         }
 
-        private int? ResolveDownloadClientId(ReleaseResource release)
+        private async Task<int?> ResolveDownloadClientId(ReleaseResource release)
         {
-            var downloadClient = _downloadClientFactory.ResolveDownloadClient(release.DownloadClientId, release.DownloadClient);
+            var downloadClient = await _downloadClientFactory.ResolveDownloadClient(release.DownloadClientId, release.DownloadClient);
 
             if (downloadClient == null)
             {

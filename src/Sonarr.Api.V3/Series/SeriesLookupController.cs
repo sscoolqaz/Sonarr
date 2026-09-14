@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.MediaCover;
 using NzbDrone.Core.MetadataSource;
@@ -24,14 +25,16 @@ namespace Sonarr.Api.V3.Series
         }
 
         [HttpGet]
-        public IEnumerable<SeriesResource> Search([FromQuery] string term)
+        public async Task<IEnumerable<SeriesResource>> Search([FromQuery] string term)
         {
             var tvDbResults = _searchProxy.SearchForNewSeries(term);
-            return MapToResource(tvDbResults);
+            return await MapToResource(tvDbResults);
         }
 
-        private IEnumerable<SeriesResource> MapToResource(IEnumerable<NzbDrone.Core.Tv.Series> series)
+        private async Task<List<SeriesResource>> MapToResource(IEnumerable<NzbDrone.Core.Tv.Series> series)
         {
+            var result = new List<SeriesResource>();
+
             foreach (var currentSeries in series)
             {
                 var resource = currentSeries.ToResource();
@@ -45,11 +48,13 @@ namespace Sonarr.Api.V3.Series
                     resource.RemotePoster = poster.RemoteUrl;
                 }
 
-                resource.Folder = _fileNameBuilder.GetSeriesFolder(currentSeries);
+                resource.Folder = await _fileNameBuilder.GetSeriesFolder(currentSeries);
                 resource.Statistics = new SeriesStatistics().ToResource(resource.Seasons);
 
-                yield return resource;
+                result.Add(resource);
             }
+
+            return result;
         }
     }
 }

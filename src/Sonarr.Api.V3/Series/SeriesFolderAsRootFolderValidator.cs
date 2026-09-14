@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using FluentValidation;
 using FluentValidation.Validators;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Organizer;
@@ -17,7 +20,15 @@ namespace Sonarr.Api.V3.Series
 
         protected override string GetDefaultMessageTemplate() => "Root folder path '{rootFolderPath}' contains series folder '{seriesFolder}'";
 
+        public override bool ShouldValidateAsynchronously(IValidationContext context) => true;
+
         protected override bool IsValid(PropertyValidatorContext context)
+        {
+            // Bridge for callers still on the synchronous FluentValidation path (see RootFolderValidator).
+            return IsValidAsync(context, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        protected override async Task<bool> IsValidAsync(PropertyValidatorContext context, CancellationToken cancellation)
         {
             if (context.PropertyValue == null)
             {
@@ -38,7 +49,7 @@ namespace Sonarr.Api.V3.Series
 
             var rootFolder = new DirectoryInfo(rootFolderPath!).Name;
             var series = seriesResource.ToModel();
-            var seriesFolder = _fileNameBuilder.GetSeriesFolder(series);
+            var seriesFolder = await _fileNameBuilder.GetSeriesFolder(series);
 
             context.MessageFormatter.AppendArgument("rootFolderPath", rootFolderPath);
             context.MessageFormatter.AppendArgument("seriesFolder", seriesFolder);

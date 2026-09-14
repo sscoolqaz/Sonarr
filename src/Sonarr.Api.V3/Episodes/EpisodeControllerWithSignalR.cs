@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Datastore.Events;
@@ -51,20 +52,23 @@ namespace Sonarr.Api.V3.Episodes
             _formatCalculator = formatCalculator;
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override EpisodeResource GetResourceById(int id)
         {
-            var episode = _episodeService.GetEpisode(id);
-            var resource = MapToResource(episode, true, true, true);
+            var episode = _episodeService.GetEpisode(id).GetAwaiter().GetResult();
+            var resource = MapToResource(episode, true, true, true).GetAwaiter().GetResult();
             return resource;
         }
 
-        protected EpisodeResource MapToResource(Episode episode, bool includeSeries, bool includeEpisodeFile, bool includeImages)
+        protected async Task<EpisodeResource> MapToResource(Episode episode, bool includeSeries, bool includeEpisodeFile, bool includeImages)
         {
             var resource = episode.ToResource();
 
             if (includeSeries || includeEpisodeFile || includeImages)
             {
-                var series = episode.Series ?? _seriesService.GetSeries(episode.SeriesId);
+                var series = episode.Series ?? await _seriesService.GetSeries(episode.SeriesId);
 
                 if (includeSeries)
                 {
@@ -85,7 +89,7 @@ namespace Sonarr.Api.V3.Episodes
             return resource;
         }
 
-        protected List<EpisodeResource> MapToResource(List<Episode> episodes, bool includeSeries, bool includeEpisodeFile, bool includeImages)
+        protected async Task<List<EpisodeResource>> MapToResource(List<Episode> episodes, bool includeSeries, bool includeEpisodeFile, bool includeImages)
         {
             var result = episodes.ToResource();
 
@@ -97,7 +101,7 @@ namespace Sonarr.Api.V3.Episodes
                     var episode = episodes[i];
                     var resource = result[i];
 
-                    var series = episode.Series ?? seriesDict.GetValueOrDefault(episodes[i].SeriesId) ?? _seriesService.GetSeries(episodes[i].SeriesId);
+                    var series = episode.Series ?? seriesDict.GetValueOrDefault(episodes[i].SeriesId) ?? await _seriesService.GetSeries(episodes[i].SeriesId);
                     seriesDict[series.Id] = series;
 
                     if (includeSeries)

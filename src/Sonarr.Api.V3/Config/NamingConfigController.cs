@@ -61,7 +61,7 @@ namespace Sonarr.Api.V3.Config
         public async Task<ActionResult<NamingConfigResource>> UpdateNamingConfig([FromBody] NamingConfigResource resource)
         {
             var nameSpec = resource.ToModel();
-            ValidateFormatResult(nameSpec);
+            await ValidateFormatResult(nameSpec);
 
             await _namingConfigService.Save(nameSpec);
 
@@ -79,11 +79,11 @@ namespace Sonarr.Api.V3.Config
             var nameSpec = settings.ToModel();
             var sampleResource = new NamingExampleResource();
 
-            var singleEpisodeSampleResult = _filenameSampleService.GetStandardSample(nameSpec);
-            var multiEpisodeSampleResult = _filenameSampleService.GetMultiEpisodeSample(nameSpec);
-            var dailyEpisodeSampleResult = _filenameSampleService.GetDailySample(nameSpec);
-            var animeEpisodeSampleResult = _filenameSampleService.GetAnimeSample(nameSpec);
-            var animeMultiEpisodeSampleResult = _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
+            var singleEpisodeSampleResult = await _filenameSampleService.GetStandardSample(nameSpec);
+            var multiEpisodeSampleResult = await _filenameSampleService.GetMultiEpisodeSample(nameSpec);
+            var dailyEpisodeSampleResult = await _filenameSampleService.GetDailySample(nameSpec);
+            var animeEpisodeSampleResult = await _filenameSampleService.GetAnimeSample(nameSpec);
+            var animeMultiEpisodeSampleResult = await _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
 
             sampleResource.SingleEpisodeExample = _filenameValidationService.ValidateStandardFilename(singleEpisodeSampleResult) != null
                     ? null
@@ -107,26 +107,26 @@ namespace Sonarr.Api.V3.Config
 
             sampleResource.SeriesFolderExample = nameSpec.SeriesFolderFormat.IsNullOrWhiteSpace()
                 ? null
-                : _filenameSampleService.GetSeriesFolderSample(nameSpec);
+                : await _filenameSampleService.GetSeriesFolderSample(nameSpec);
 
             sampleResource.SeasonFolderExample = nameSpec.SeasonFolderFormat.IsNullOrWhiteSpace()
                 ? null
-                : _filenameSampleService.GetSeasonFolderSample(nameSpec);
+                : await _filenameSampleService.GetSeasonFolderSample(nameSpec);
 
             sampleResource.SpecialsFolderExample = nameSpec.SpecialsFolderFormat.IsNullOrWhiteSpace()
                 ? null
-                : _filenameSampleService.GetSpecialsFolderSample(nameSpec);
+                : await _filenameSampleService.GetSpecialsFolderSample(nameSpec);
 
             return sampleResource;
         }
 
-        private void ValidateFormatResult(NamingConfig nameSpec)
+        private async Task ValidateFormatResult(NamingConfig nameSpec)
         {
-            var singleEpisodeSampleResult = _filenameSampleService.GetStandardSample(nameSpec);
-            var multiEpisodeSampleResult = _filenameSampleService.GetMultiEpisodeSample(nameSpec);
-            var dailyEpisodeSampleResult = _filenameSampleService.GetDailySample(nameSpec);
-            var animeEpisodeSampleResult = _filenameSampleService.GetAnimeSample(nameSpec);
-            var animeMultiEpisodeSampleResult = _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
+            var singleEpisodeSampleResult = await _filenameSampleService.GetStandardSample(nameSpec);
+            var multiEpisodeSampleResult = await _filenameSampleService.GetMultiEpisodeSample(nameSpec);
+            var dailyEpisodeSampleResult = await _filenameSampleService.GetDailySample(nameSpec);
+            var animeEpisodeSampleResult = await _filenameSampleService.GetAnimeSample(nameSpec);
+            var animeMultiEpisodeSampleResult = await _filenameSampleService.GetAnimeMultiEpisodeSample(nameSpec);
 
             var singleEpisodeValidationResult = _filenameValidationService.ValidateStandardFilename(singleEpisodeSampleResult);
             var multiEpisodeValidationResult = _filenameValidationService.ValidateStandardFilename(multiEpisodeSampleResult);

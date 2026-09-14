@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Blocklisting;
 using NzbDrone.Core.CustomFormats;
@@ -27,7 +28,7 @@ namespace Sonarr.Api.V3.Blocklist
 
         [HttpGet]
         [Produces("application/json")]
-        public PagingResource<BlocklistResource> GetBlocklist([FromQuery] PagingRequestResource paging, [FromQuery] int[] seriesIds = null, [FromQuery] DownloadProtocol[] protocols = null)
+        public async Task<PagingResource<BlocklistResource>> GetBlocklist([FromQuery] PagingRequestResource paging, [FromQuery] int[] seriesIds = null, [FromQuery] DownloadProtocol[] protocols = null)
         {
             var pagingResource = new PagingResource<BlocklistResource>(paging);
             var pagingSpec = pagingResource.MapToPagingSpec<BlocklistResource, NzbDrone.Core.Blocklisting.Blocklist>(
@@ -51,20 +52,22 @@ namespace Sonarr.Api.V3.Blocklist
                 pagingSpec.FilterExpressions.Add(b => protocols.Contains(b.Protocol));
             }
 
-            return pagingSpec.ApplyToPage(b => _blocklistService.Paged(pagingSpec), b => BlocklistResourceMapper.MapToResource(b, _formatCalculator));
+            var pagedResult = await _blocklistService.Paged(pagingSpec);
+
+            return pagingSpec.ApplyToPage(b => pagedResult, b => BlocklistResourceMapper.MapToResource(b, _formatCalculator));
         }
 
         [RestDeleteById]
-        public void DeleteBlocklist(int id)
+        public async Task DeleteBlocklist(int id)
         {
-            _blocklistService.Delete(id);
+            await _blocklistService.Delete(id);
         }
 
         [HttpDelete("bulk")]
         [Produces("application/json")]
-        public object Remove([FromBody] BlocklistBulkResource resource)
+        public async Task<object> Remove([FromBody] BlocklistBulkResource resource)
         {
-            _blocklistService.Delete(resource.Ids);
+            await _blocklistService.Delete(resource.Ids);
 
             return new { };
         }

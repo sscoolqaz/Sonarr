@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Ical.Net;
 using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
@@ -28,7 +29,7 @@ namespace Sonarr.Api.V3.Calendar
         }
 
         [HttpGet("Sonarr.ics")]
-        public IActionResult GetCalendarFeed(int pastDays = 7, int futureDays = 28, string tags = "", bool unmonitored = false, bool premieresOnly = false, bool asAllDay = false)
+        public async Task<IActionResult> GetCalendarFeed(int pastDays = 7, int futureDays = 28, string tags = "", bool unmonitored = false, bool premieresOnly = false, bool asAllDay = false)
         {
             var start = DateTime.Today.AddDays(-pastDays);
             var end = DateTime.Today.AddDays(futureDays);
@@ -36,11 +37,15 @@ namespace Sonarr.Api.V3.Calendar
 
             if (tags.IsNotNullOrWhiteSpace())
             {
-                parsedTags.AddRange(tags.Split(',').Select(_tagService.GetTag).Select(t => t.Id));
+                foreach (var tag in tags.Split(','))
+                {
+                    var parsedTag = await _tagService.GetTag(tag);
+                    parsedTags.Add(parsedTag.Id);
+                }
             }
 
-            var episodes = _episodeService.EpisodesBetweenDates(start, end, unmonitored, true);
-            var allSeries = _seriesService.GetAllSeries();
+            var episodes = await _episodeService.EpisodesBetweenDates(start, end, unmonitored, true);
+            var allSeries = await _seriesService.GetAllSeries();
             var calendar = new Ical.Net.Calendar
             {
                 ProductId = "-//sonarr.tv//Sonarr//EN"

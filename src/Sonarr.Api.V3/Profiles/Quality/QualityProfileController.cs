@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
@@ -25,9 +26,14 @@ namespace Sonarr.Api.V3.Profiles.Quality
             SharedValidator.RuleFor(c => c.Cutoff).ValidCutoff();
             SharedValidator.RuleFor(c => c.Items).ValidItems();
 
+            // NOTE: FluentValidation's synchronous `Must()` predicate can't await; the request
+            // validation pipeline (RestController.ValidateResource) is itself synchronous
+            // framework code out of scope for this pass, so we bridge here as the documented
+            // boundary (see ProviderControllerBase.cs) rather than converting FluentValidation's
+            // Must to MustAsync app-wide.
             SharedValidator.RuleFor(c => c.FormatItems).Must(items =>
             {
-                var all = formatService.All().Select(f => f.Id).ToList();
+                var all = formatService.All().GetAwaiter().GetResult().Select(f => f.Id).ToList();
                 var ids = items.Select(i => i.Format);
 
                 return all.Except(ids).Empty();
@@ -48,40 +54,43 @@ namespace Sonarr.Api.V3.Profiles.Quality
 
         [RestPostById]
         [Consumes("application/json")]
-        public ActionResult<QualityProfileResource> Create([FromBody] QualityProfileResource resource)
+        public async Task<ActionResult<QualityProfileResource>> Create([FromBody] QualityProfileResource resource)
         {
             var model = resource.ToModel();
-            model = _profileService.Add(model);
+            model = await _profileService.Add(model);
             return Created(model.Id);
         }
 
         [RestDeleteById]
-        public void DeleteProfile(int id)
+        public async Task DeleteProfile(int id)
         {
-            _profileService.Delete(id);
+            await _profileService.Delete(id);
         }
 
         [RestPutById]
         [Consumes("application/json")]
-        public ActionResult<QualityProfileResource> Update([FromBody] QualityProfileResource resource)
+        public async Task<ActionResult<QualityProfileResource>> Update([FromBody] QualityProfileResource resource)
         {
             var model = resource.ToModel();
 
-            _profileService.Update(model);
+            await _profileService.Update(model);
 
             return Accepted(model.Id);
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override QualityProfileResource GetResourceById(int id)
         {
-            return _profileService.Get(id).ToResource();
+            return _profileService.Get(id).GetAwaiter().GetResult().ToResource();
         }
 
         [HttpGet]
         [Produces("application/json")]
-        public List<QualityProfileResource> GetAll()
+        public async Task<List<QualityProfileResource>> GetAll()
         {
-            return _profileService.All().ToResource();
+            return (await _profileService.All()).ToResource();
         }
     }
 }

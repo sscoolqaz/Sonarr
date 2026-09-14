@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.CustomFormats;
@@ -62,7 +63,7 @@ namespace Sonarr.Api.V3.History
 
         [HttpGet]
         [Produces("application/json")]
-        public PagingResource<HistoryResource> GetHistory([FromQuery] PagingRequestResource paging, bool includeSeries, bool includeEpisode, [FromQuery(Name = "eventType")] int[] eventTypes, int? episodeId, string downloadId, [FromQuery] int[] seriesIds = null, [FromQuery] int[] languages = null, [FromQuery] int[] quality = null)
+        public async Task<PagingResource<HistoryResource>> GetHistory([FromQuery] PagingRequestResource paging, bool includeSeries, bool includeEpisode, [FromQuery(Name = "eventType")] int[] eventTypes, int? episodeId, string downloadId, [FromQuery] int[] seriesIds = null, [FromQuery] int[] languages = null, [FromQuery] int[] quality = null)
         {
             var pagingResource = new PagingResource<HistoryResource>(paging);
             var pagingSpec = pagingResource.MapToPagingSpec<HistoryResource, EpisodeHistory>(
@@ -94,25 +95,27 @@ namespace Sonarr.Api.V3.History
                 pagingSpec.FilterExpressions.Add(h => seriesIds.Contains(h.SeriesId));
             }
 
-            return pagingSpec.ApplyToPage(h => _historyService.Paged(pagingSpec, languages, quality), h => MapToResource(h, includeSeries, includeEpisode));
+            var pagedResult = await _historyService.Paged(pagingSpec, languages, quality);
+
+            return pagingSpec.ApplyToPage(h => pagedResult, h => MapToResource(h, includeSeries, includeEpisode));
         }
 
         [HttpGet("since")]
         [Produces("application/json")]
-        public List<HistoryResource> GetHistorySince(DateTime date, EpisodeHistoryEventType? eventType = null, bool includeSeries = false, bool includeEpisode = false)
+        public async Task<List<HistoryResource>> GetHistorySince(DateTime date, EpisodeHistoryEventType? eventType = null, bool includeSeries = false, bool includeEpisode = false)
         {
-            return _historyService.Since(date, eventType).Select(h => MapToResource(h, includeSeries, includeEpisode)).ToList();
+            return (await _historyService.Since(date, eventType)).Select(h => MapToResource(h, includeSeries, includeEpisode)).ToList();
         }
 
         [HttpGet("series")]
         [Produces("application/json")]
-        public List<HistoryResource> GetSeriesHistory(int seriesId, int? seasonNumber, EpisodeHistoryEventType? eventType = null, bool includeSeries = false, bool includeEpisode = false)
+        public async Task<List<HistoryResource>> GetSeriesHistory(int seriesId, int? seasonNumber, EpisodeHistoryEventType? eventType = null, bool includeSeries = false, bool includeEpisode = false)
         {
-            var series = _seriesService.GetSeries(seriesId);
+            var series = await _seriesService.GetSeries(seriesId);
 
             if (seasonNumber.HasValue)
             {
-                return _historyService.GetBySeason(seriesId, seasonNumber.Value, eventType).Select(h =>
+                return (await _historyService.GetBySeason(seriesId, seasonNumber.Value, eventType)).Select(h =>
                 {
                     h.Series = series;
 
@@ -120,7 +123,7 @@ namespace Sonarr.Api.V3.History
                 }).ToList();
             }
 
-            return _historyService.GetBySeries(seriesId, eventType).Select(h =>
+            return (await _historyService.GetBySeries(seriesId, eventType)).Select(h =>
             {
                 h.Series = series;
 

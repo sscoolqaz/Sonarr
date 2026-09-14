@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Profiles.Delay;
@@ -35,52 +36,55 @@ namespace Sonarr.Api.V3.Profiles.Delay
 
         [RestPostById]
         [Consumes("application/json")]
-        public ActionResult<DelayProfileResource> Create([FromBody] DelayProfileResource resource)
+        public async Task<ActionResult<DelayProfileResource>> Create([FromBody] DelayProfileResource resource)
         {
             var model = resource.ToModel();
-            model = _delayProfileService.Add(model);
+            model = await _delayProfileService.Add(model);
 
             return Created(model.Id);
         }
 
         [RestDeleteById]
-        public void DeleteProfile(int id)
+        public async Task DeleteProfile(int id)
         {
             if (id == 1)
             {
                 throw new MethodNotAllowedException("Cannot delete global delay profile");
             }
 
-            _delayProfileService.Delete(id);
+            await _delayProfileService.Delete(id);
         }
 
         [RestPutById]
         [Consumes("application/json")]
-        public ActionResult<DelayProfileResource> Update([FromBody] DelayProfileResource resource)
+        public async Task<ActionResult<DelayProfileResource>> Update([FromBody] DelayProfileResource resource)
         {
             var model = resource.ToModel();
-            _delayProfileService.Update(model);
+            await _delayProfileService.Update(model);
             return Accepted(model.Id);
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override DelayProfileResource GetResourceById(int id)
         {
-            return _delayProfileService.Get(id).ToResource();
+            return _delayProfileService.Get(id).GetAwaiter().GetResult().ToResource();
         }
 
         [HttpGet]
         [Produces("application/json")]
-        public List<DelayProfileResource> GetAll()
+        public async Task<List<DelayProfileResource>> GetAll()
         {
-            return _delayProfileService.All().ToResource();
+            return (await _delayProfileService.All()).ToResource();
         }
 
         [HttpPut("reorder/{id}")]
-        public List<DelayProfileResource> Reorder([FromRoute] int id, [FromQuery] int? after)
+        public async Task<List<DelayProfileResource>> Reorder([FromRoute] int id, [FromQuery] int? after)
         {
             ValidateId(id);
 
-            return _delayProfileService.Reorder(id, after).ToResource();
+            return (await _delayProfileService.Reorder(id, after)).ToResource();
         }
     }
 }

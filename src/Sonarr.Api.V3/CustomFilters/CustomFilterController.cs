@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.CustomFilters;
 using Sonarr.Http;
@@ -17,39 +18,42 @@ namespace Sonarr.Api.V3.CustomFilters
             _customFilterService = customFilterService;
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override CustomFilterResource GetResourceById(int id)
         {
-            return _customFilterService.Get(id).ToResource();
+            return _customFilterService.Get(id).GetAwaiter().GetResult().ToResource();
         }
 
         [HttpGet]
         [Produces("application/json")]
-        public List<CustomFilterResource> GetCustomFilters()
+        public async Task<List<CustomFilterResource>> GetCustomFilters()
         {
-            return _customFilterService.All().ToResource();
+            return (await _customFilterService.All()).ToResource();
         }
 
         [RestPostById]
         [Consumes("application/json")]
-        public ActionResult<CustomFilterResource> AddCustomFilter([FromBody] CustomFilterResource resource)
+        public async Task<ActionResult<CustomFilterResource>> AddCustomFilter([FromBody] CustomFilterResource resource)
         {
-            var customFilter = _customFilterService.Add(resource.ToModel());
+            var customFilter = await _customFilterService.Add(resource.ToModel());
 
             return Created(customFilter.Id);
         }
 
         [RestPutById]
         [Consumes("application/json")]
-        public ActionResult<CustomFilterResource> UpdateCustomFilter([FromBody] CustomFilterResource resource)
+        public async Task<ActionResult<CustomFilterResource>> UpdateCustomFilter([FromBody] CustomFilterResource resource)
         {
-            _customFilterService.Update(resource.ToModel());
+            await _customFilterService.Update(resource.ToModel());
             return Accepted(resource.Id);
         }
 
         [RestDeleteById]
-        public void DeleteCustomResource(int id)
+        public async Task DeleteCustomResource(int id)
         {
-            _customFilterService.Delete(id);
+            await _customFilterService.Delete(id);
         }
     }
 }

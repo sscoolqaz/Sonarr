@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Composition;
 using NzbDrone.Common.Serializer;
@@ -43,15 +44,18 @@ namespace Sonarr.Api.V3.Commands
             PostValidator.RuleFor(c => c.Name).NotBlank();
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override CommandResource GetResourceById(int id)
         {
-            return _commandQueueManager.Get(id).ToResource();
+            return _commandQueueManager.Get(id).GetAwaiter().GetResult().ToResource();
         }
 
         [RestPostById]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public ActionResult<CommandResource> StartCommand([FromBody] CommandResource commandResource)
+        public async Task<ActionResult<CommandResource>> StartCommand([FromBody] CommandResource commandResource)
         {
             var commandType =
                 _knownTypes.GetImplementations(typeof(Command))
@@ -61,7 +65,7 @@ namespace Sonarr.Api.V3.Commands
             Request.Body.Seek(0, SeekOrigin.Begin);
             using (var reader = new StreamReader(Request.Body))
             {
-                var body = reader.ReadToEnd();
+                var body = await reader.ReadToEndAsync();
                 var priority = commandType == typeof(ManualImportCommand)
                     ? CommandPriority.High
                     : CommandPriority.Normal;
@@ -72,7 +76,7 @@ namespace Sonarr.Api.V3.Commands
                 command.SendUpdatesToClient = true;
                 command.ClientUserAgent = Request.Headers["UserAgent"];
 
-                var trackedCommand = _commandQueueManager.Push(command, priority, CommandTrigger.Manual);
+                var trackedCommand = await _commandQueueManager.Push(command, priority, CommandTrigger.Manual);
 
                 return Created(trackedCommand.Id);
             }

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.Disk;
@@ -94,9 +95,14 @@ namespace Sonarr.Api.V3.Config
             SharedValidator.RuleFor(c => c.BackupRetention).InclusiveBetween(1, 90);
         }
 
+        // NOTE: FluentValidation's synchronous `Must()` predicate can't await; the request
+        // validation pipeline (RestController.ValidateResource) is itself synchronous
+        // framework code out of scope for this pass, so we bridge here as the documented
+        // boundary (see ProviderControllerBase.cs) rather than converting FluentValidation's
+        // Must to MustAsync app-wide.
         private bool IsMatchingPassword(HostConfigResource resource)
         {
-            var user = _userService.FindUser();
+            var user = _userService.FindUser().GetAwaiter().GetResult();
 
             if (user != null && user.Password == resource.Password)
             {
@@ -111,18 +117,21 @@ namespace Sonarr.Api.V3.Config
             return false;
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // TagController/RootFolderController).
         protected override HostConfigResource GetResourceById(int id)
         {
-            return GetHostConfig();
+            return GetHostConfig().GetAwaiter().GetResult();
         }
 
         [HttpGet]
-        public HostConfigResource GetHostConfig()
+        public async Task<HostConfigResource> GetHostConfig()
         {
             var resource = _configFileProvider.ToResource(_configService);
             resource.Id = 1;
 
-            var user = _userService.FindUser();
+            var user = await _userService.FindUser();
 
             resource.Username = user?.Username ?? string.Empty;
             resource.Password = user?.Password ?? string.Empty;
@@ -132,7 +141,7 @@ namespace Sonarr.Api.V3.Config
         }
 
         [RestPutById]
-        public ActionResult<HostConfigResource> SaveHostConfig([FromBody] HostConfigResource resource)
+        public async Task<ActionResult<HostConfigResource>> SaveHostConfig([FromBody] HostConfigResource resource)
         {
             resource.TrustedNetworks = IPNetworkParser.NormalizeList(resource.TrustedNetworks);
 
@@ -145,7 +154,7 @@ namespace Sonarr.Api.V3.Config
 
             if (resource.Username.IsNotNullOrWhiteSpace() && resource.Password.IsNotNullOrWhiteSpace())
             {
-                _userService.Upsert(resource.Username, resource.Password);
+                await _userService.Upsert(resource.Username, resource.Password);
             }
 
             return Accepted(resource.Id);

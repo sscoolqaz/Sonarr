@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Datastore;
@@ -8,7 +9,6 @@ using NzbDrone.Core.Tv;
 using NzbDrone.SignalR;
 using Sonarr.Api.V3.Episodes;
 using Sonarr.Http;
-using Sonarr.Http.Extensions;
 
 namespace Sonarr.Api.V3.Wanted
 {
@@ -30,7 +30,7 @@ namespace Sonarr.Api.V3.Wanted
 
         [HttpGet]
         [Produces("application/json")]
-        public PagingResource<EpisodeResource> GetCutoffUnmetEpisodes([FromQuery] PagingRequestResource paging, bool includeSeries = false, bool includeEpisodeFile = false, bool includeImages = false, bool monitored = true)
+        public async Task<PagingResource<EpisodeResource>> GetCutoffUnmetEpisodes([FromQuery] PagingRequestResource paging, bool includeSeries = false, bool includeEpisodeFile = false, bool includeImages = false, bool monitored = true)
         {
             var pagingResource = new PagingResource<EpisodeResource>(paging);
             var pagingSpec = pagingResource.MapToPagingSpec<EpisodeResource, Episode>(
@@ -52,9 +52,18 @@ namespace Sonarr.Api.V3.Wanted
                 pagingSpec.FilterExpressions.Add(v => v.Monitored == false || v.Series.Monitored == false);
             }
 
-            var resource = pagingSpec.ApplyToPage(spec => _episodeCutoffService.EpisodesWhereCutoffUnmet(spec), v => MapToResource(v, includeSeries, includeEpisodeFile, includeImages));
+            var pagedSpec = _episodeCutoffService.EpisodesWhereCutoffUnmet(pagingSpec);
+            var mappedRecords = await MapToResource(pagedSpec.Records, includeSeries, includeEpisodeFile, includeImages);
 
-            return resource;
+            return new PagingResource<EpisodeResource>
+            {
+                Page = pagedSpec.Page,
+                PageSize = pagedSpec.PageSize,
+                SortDirection = pagedSpec.SortDirection,
+                SortKey = pagedSpec.SortKey,
+                TotalRecords = pagedSpec.TotalRecords,
+                Records = mappedRecords
+            };
         }
     }
 }
