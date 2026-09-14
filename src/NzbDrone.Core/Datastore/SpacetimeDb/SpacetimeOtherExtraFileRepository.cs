@@ -1,5 +1,9 @@
+using System;
 using NzbDrone.Core.Extras.Others;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbOtherExtraFile = SpacetimeDB.Types.OtherExtraFile;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -11,8 +15,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbOtherExtraFile[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.OtherExtraFile.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbOtherExtraFile> Table => Conn.Connection.Db.OtherExtraFile;
+
+        protected override StdbOtherExtraFile FindRowById(int id) => Conn.Connection.Db.OtherExtraFile.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, int? p3, int? p4, string p5, SpacetimeDB.Timestamp p6, SpacetimeDB.Timestamp p7, string p8)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateOtherExtraFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateOtherExtraFile -= Handler);
+        }
 
         protected override OtherExtraFile ToModel(StdbOtherExtraFile row) => new OtherExtraFile
         {
@@ -31,8 +52,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(OtherExtraFile model) => Conn.Connection.Reducers.InsertOtherExtraFile(
             model.SeriesId, model.EpisodeFileId, model.SeasonNumber, model.RelativePath ?? string.Empty, SpacetimeDateTime.ToTimestamp(model.Added), SpacetimeDateTime.ToTimestamp(model.LastUpdated), model.Extension ?? string.Empty);
 
-        public override void MigrateInsert(OtherExtraFile model) => Conn.Connection.Reducers.MigrateInsertOtherExtraFile(
-            model.Id, model.SeriesId, model.EpisodeFileId, model.SeasonNumber, model.RelativePath ?? string.Empty, SpacetimeDateTime.ToTimestamp(model.Added), SpacetimeDateTime.ToTimestamp(model.LastUpdated), model.Extension ?? string.Empty);
+        public override void MigrateInsert(OtherExtraFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertOtherExtraFile(
+            model.Id, model.SeriesId, model.EpisodeFileId, model.SeasonNumber, model.RelativePath ?? string.Empty, SpacetimeDateTime.ToTimestamp(model.Added), SpacetimeDateTime.ToTimestamp(model.LastUpdated), model.Extension ?? string.Empty));
 
         protected override void InvokeUpdateReducer(OtherExtraFile model) => Conn.Connection.Reducers.UpdateOtherExtraFile(
             model.Id, model.SeriesId, model.EpisodeFileId, model.SeasonNumber, model.RelativePath ?? string.Empty, SpacetimeDateTime.ToTimestamp(model.Added), SpacetimeDateTime.ToTimestamp(model.LastUpdated), model.Extension ?? string.Empty);

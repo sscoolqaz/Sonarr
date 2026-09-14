@@ -1,6 +1,5 @@
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Authentication;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Update;
 
 namespace Sonarr.Api.V5.System;
@@ -36,6 +35,5 @@ public class SystemResource
     public required string PackageAuthor { get; set; }
     public UpdateMechanism PackageUpdateMechanism { get; set; }
     public required string PackageUpdateMechanismMessage { get; set; }
-    public required Version DatabaseVersion { get; set; }
-    public DatabaseType DatabaseType { get; set; }
+    public required string DatabaseType { get; set; }
 }

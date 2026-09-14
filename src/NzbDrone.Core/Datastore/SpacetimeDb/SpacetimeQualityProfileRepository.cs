@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -5,6 +6,9 @@ using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles;
 using NzbDrone.Core.Profiles.Qualities;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbQualityProfile = SpacetimeDB.Types.QualityProfile;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -31,8 +35,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             _customFormatService = customFormatService;
         }
 
-        protected override StdbQualityProfile[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.QualityProfile.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbQualityProfile> Table => Conn.Connection.Db.QualityProfile;
+
+        protected override StdbQualityProfile FindRowById(int id) => Conn.Connection.Db.QualityProfile.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2, bool p3, int p4, int p5, int p6, int p7, string p8, string p9)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateQualityProfile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateQualityProfile -= Handler);
+        }
 
         protected override QualityProfile ToModel(StdbQualityProfile row)
         {
@@ -71,11 +92,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // exactly as stored, bypassing the CustomFormat existence check.
         public Dictionary<int, List<int>> GetRawFormatItemIds()
         {
-            return RemoteQuery(string.Empty).ToDictionary(
+            return Query(t => t.Iter().ToDictionary(
                 row => row.Id,
                 row => (JsonSerializer.Deserialize<List<FormatItemDto>>(row.FormatItemsJson, SerializerSettings) ?? new List<FormatItemDto>())
                     .Select(dto => dto.Format)
-                    .ToList());
+                    .ToList()));
         }
 
         private static string SerializeFormatItems(QualityProfile model) =>
@@ -94,7 +115,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SerializeFormatItems(model),
             SerializeItems(model));
 
-        public override void MigrateInsert(QualityProfile model) => Conn.Connection.Reducers.MigrateInsertQualityProfile(
+        public override void MigrateInsert(QualityProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertQualityProfile(
             model.Id,
             model.Name ?? string.Empty,
             model.UpgradeAllowed,
@@ -103,7 +124,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.CutoffFormatScore,
             model.MinUpgradeFormatScore,
             SerializeFormatItems(model),
-            SerializeItems(model));
+            SerializeItems(model)));
 
         protected override void InvokeUpdateReducer(QualityProfile model) => Conn.Connection.Reducers.UpdateQualityProfile(
             model.Id,

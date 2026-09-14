@@ -1,6 +1,10 @@
+using System;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser.Model;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbIndexerStatus = SpacetimeDB.Types.IndexerStatus;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -12,8 +16,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbIndexerStatus[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.IndexerStatus.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbIndexerStatus> Table => Conn.Connection.Db.IndexerStatus;
+
+        protected override StdbIndexerStatus FindRowById(int id) => Conn.Connection.Db.IndexerStatus.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, SpacetimeDB.Timestamp? p3, SpacetimeDB.Timestamp? p4, int p5, SpacetimeDB.Timestamp? p6, string p7)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateIndexerStatus += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateIndexerStatus -= Handler);
+        }
 
         protected override IndexerStatus ToModel(StdbIndexerStatus row) => new IndexerStatus
         {

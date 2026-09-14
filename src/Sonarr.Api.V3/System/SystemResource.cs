@@ -1,7 +1,6 @@
 using System;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Authentication;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Update;
 
 namespace Sonarr.Api.V3.System
@@ -29,7 +28,6 @@ namespace Sonarr.Api.V3.System
         public RuntimeMode Mode { get; set; }
         public string Branch { get; set; }
         public AuthenticationType Authentication { get; set; }
-        public Version SqliteVersion { get; set; }
         public int MigrationVersion { get; set; }
         public string UrlBase { get; set; }
         public Version RuntimeVersion { get; set; }
@@ -39,7 +37,6 @@ namespace Sonarr.Api.V3.System
         public string PackageAuthor { get; set; }
         public UpdateMechanism PackageUpdateMechanism { get; set; }
         public string PackageUpdateMechanismMessage { get; set; }
-        public Version DatabaseVersion { get; set; }
-        public DatabaseType DatabaseType { get; set; }
+        public string DatabaseType { get; set; }
     }
 }

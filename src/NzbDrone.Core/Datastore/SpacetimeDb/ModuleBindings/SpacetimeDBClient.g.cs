@@ -730,6 +730,8 @@ namespace SpacetimeDB.Types
             var eventContext = (ReducerEventContext)context;
             return reducer switch
             {
+                Reducer.ClearModuleAuth args => Reducers.InvokeClearModuleAuth(eventContext, args),
+                Reducer.ConfigureModuleAuth args => Reducers.InvokeConfigureModuleAuth(eventContext, args),
                 Reducer.DeleteAutoTag args => Reducers.InvokeDeleteAutoTag(eventContext, args),
                 Reducer.DeleteBlocklist args => Reducers.InvokeDeleteBlocklist(eventContext, args),
                 Reducer.DeleteCommand args => Reducers.InvokeDeleteCommand(eventContext, args),

@@ -1,5 +1,9 @@
+using System;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbNotificationStatus = SpacetimeDB.Types.NotificationStatus;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -11,8 +15,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbNotificationStatus[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.NotificationStatus.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbNotificationStatus> Table => Conn.Connection.Db.NotificationStatus;
+
+        protected override StdbNotificationStatus FindRowById(int id) => Conn.Connection.Db.NotificationStatus.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, SpacetimeDB.Timestamp? p3, SpacetimeDB.Timestamp? p4, int p5, SpacetimeDB.Timestamp? p6)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateNotificationStatus += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateNotificationStatus -= Handler);
+        }
 
         protected override NotificationStatus ToModel(StdbNotificationStatus row) => new NotificationStatus
         {

@@ -11,7 +11,6 @@ using NzbDrone.Common.Instrumentation;
 using NzbDrone.Common.Instrumentation.Sentry;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Configuration.Events;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Instrumentation
@@ -60,9 +59,6 @@ namespace NzbDrone.Core.Instrumentation
             SetMinimumLogLevel(rules, "appFileDebug", minimumLogLevel <= LogLevel.Debug ? LogLevel.Debug : LogLevel.Off);
             SetMinimumLogLevel(rules, "appFileTrace", minimumLogLevel <= LogLevel.Trace ? LogLevel.Trace : LogLevel.Off);
             ReconfigureFile();
-
-            // Log Sql
-            SqlBuilderExtensions.LogSql = _configFileProvider.LogSql;
 
             // Sentry
             ReconfigureSentry();

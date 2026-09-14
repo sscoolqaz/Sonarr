@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Delay;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbDelayProfile = SpacetimeDB.Types.DelayProfile;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -13,8 +17,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbDelayProfile[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.DelayProfile.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbDelayProfile> Table => Conn.Connection.Db.DelayProfile;
+
+        protected override StdbDelayProfile FindRowById(int id) => Conn.Connection.Db.DelayProfile.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, bool p2, bool p3, int p4, int p5, int p6, int p7, bool p8, bool p9, int p10, string p11)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateDelayProfile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateDelayProfile -= Handler);
+        }
 
         protected override DelayProfile ToModel(StdbDelayProfile row) => new DelayProfile
         {
@@ -45,7 +66,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.MinimumCustomFormatScore,
             SpacetimeJson.Serialize(model.Tags));
 
-        public override void MigrateInsert(DelayProfile model) => Conn.Connection.Reducers.MigrateInsertDelayProfile(
+        public override void MigrateInsert(DelayProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertDelayProfile(
             model.Id,
             model.EnableUsenet,
             model.EnableTorrent,
@@ -56,7 +77,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.BypassIfHighestQuality,
             model.BypassIfAboveCustomFormatScore,
             model.MinimumCustomFormatScore,
-            SpacetimeJson.Serialize(model.Tags));
+            SpacetimeJson.Serialize(model.Tags)));
 
         protected override void InvokeUpdateReducer(DelayProfile model) => Conn.Connection.Reducers.UpdateDelayProfile(
             model.Id,

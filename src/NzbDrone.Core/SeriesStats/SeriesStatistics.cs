@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Parser.Model;
 using NzbDrone.Core.Qualities;
 
 namespace NzbDrone.Core.SeriesStats
 {
-    public class SeriesStatistics : ResultSet
+    public class SeriesStatistics
     {
         public int SeriesId { get; set; }
         public DateTime? NextAiring { get; set; }

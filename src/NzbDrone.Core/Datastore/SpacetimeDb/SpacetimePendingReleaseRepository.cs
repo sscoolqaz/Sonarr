@@ -1,8 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Download.Pending;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser.Model;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbPendingRelease = SpacetimeDB.Types.PendingRelease;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -14,8 +18,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbPendingRelease[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.PendingRelease.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbPendingRelease> Table => Conn.Connection.Db.PendingRelease;
+
+        protected override StdbPendingRelease FindRowById(int id) => Conn.Connection.Db.PendingRelease.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, string p3, SpacetimeDB.Timestamp p4, string p5, string p6, int p7, string p8)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdatePendingRelease += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdatePendingRelease -= Handler);
+        }
 
         protected override PendingRelease ToModel(StdbPendingRelease row) => new PendingRelease
         {
@@ -40,7 +61,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             (int)model.Reason,
             SpacetimeJson.Serialize(model.AdditionalInfo));
 
-        public override void MigrateInsert(PendingRelease model) => Conn.Connection.Reducers.MigrateInsertPendingRelease(
+        public override void MigrateInsert(PendingRelease model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertPendingRelease(
             model.Id,
             model.SeriesId,
             model.Title ?? string.Empty,
@@ -48,7 +69,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.ParsedEpisodeInfo),
             SpacetimeJson.Serialize(model.Release),
             (int)model.Reason,
-            SpacetimeJson.Serialize(model.AdditionalInfo));
+            SpacetimeJson.Serialize(model.AdditionalInfo)));
 
         protected override void InvokeUpdateReducer(PendingRelease model) => Conn.Connection.Reducers.UpdatePendingRelease(
             model.Id,
@@ -71,7 +92,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         }
 
         public List<PendingRelease> AllBySeriesId(int seriesId) =>
-            RemoteQuery($"WHERE SeriesId = {seriesId}").Select(ToModel).ToList();
+            Query(t => t.Iter().Where(r => r.SeriesId == seriesId).Select(ToModel).ToList());
 
         // No production caller (confirmed by the Phase 3 adversarial review) and the join it did
         // in SQL projected no columns from Series anyway - a plain filter is equivalent.

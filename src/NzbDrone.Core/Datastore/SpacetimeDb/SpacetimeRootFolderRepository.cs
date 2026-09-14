@@ -1,5 +1,9 @@
+using System;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.RootFolders;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbRootFolder = SpacetimeDB.Types.RootFolder;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -13,8 +17,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override bool PublishModelEvents => true;
 
-        protected override StdbRootFolder[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.RootFolder.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbRootFolder> Table => Conn.Connection.Db.RootFolder;
+
+        protected override StdbRootFolder FindRowById(int id) => Conn.Connection.Db.RootFolder.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateRootFolder += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateRootFolder -= Handler);
+        }
 
         protected override RootFolder ToModel(StdbRootFolder row) => new RootFolder { Id = row.Id, Path = row.Path };
 
@@ -22,7 +43,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(RootFolder model) => Conn.Connection.Reducers.InsertRootFolder(model.Path ?? string.Empty);
 
-        public override void MigrateInsert(RootFolder model) => Conn.Connection.Reducers.MigrateInsertRootFolder(model.Id, model.Path ?? string.Empty);
+        public override void MigrateInsert(RootFolder model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertRootFolder(model.Id, model.Path ?? string.Empty));
 
         protected override void InvokeUpdateReducer(RootFolder model) => Conn.Connection.Reducers.UpdateRootFolder(model.Id, model.Path ?? string.Empty);
 

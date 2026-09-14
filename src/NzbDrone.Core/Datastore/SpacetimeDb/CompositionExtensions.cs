@@ -42,156 +42,14 @@ using NzbDrone.Core.Update.History;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
 {
-    /// <summary>
-    /// Opt-in override that swaps a growing set of SQL-backed repositories for their
-    /// SpacetimeDB-backed equivalents, gated behind config so the rest of the app is unaffected
-    /// unless explicitly enabled. Phase 4 adds one entity at a time here as each is ported -
-    /// everything not yet listed is still on the normal SQLite path.
-    /// </summary>
     public static class CompositionExtensions
     {
-        // AutoAddServices' reflection scan (NzbDrone.Common/Composition/Extensions.cs) registers
-        // every public IHousekeepingTask implementation in the assembly unconditionally, before
-        // the SpacetimeDb-enabled check even runs - these Spacetime*-prefixed classes included.
-        // Left alone, they'd stay registered and actively run (deleting real rows through their
-        // injected repositories, which resolve to the real SQL-backed ones) even when SpacetimeDb
-        // mode is off, breaking this whole class' "opt-in, rest of the app unaffected" contract.
-        // RemoveAutoRegisteredHousekeepingTasks must be called unconditionally, right after
-        // AutoAddServices and regardless of the SpacetimeDb flag, to strip them back out; only
-        // AddSpacetimeDbRepositories (itself flag-gated) adds them back.
-        private static readonly System.Type[] SpacetimeHousekeepingTaskTypes =
-        {
-            typeof(SpacetimeCleanupOrphanedEpisodes),
-            typeof(SpacetimeCleanupOrphanedEpisodeFiles),
-            typeof(SpacetimeCleanupOrphanedBlocklist),
-            typeof(SpacetimeCleanupOrphanedHistoryItems),
-            typeof(SpacetimeCleanupOrphanedPendingReleases),
-            typeof(SpacetimeCleanupOrphanedExtraFiles),
-            typeof(SpacetimeCleanupOrphanedMetadataFiles),
-            typeof(SpacetimeCleanupOrphanedSubtitleFiles),
-            typeof(SpacetimeCleanupOrphanedIndexerStatus),
-            typeof(SpacetimeCleanupOrphanedDownloadClientStatus),
-            typeof(SpacetimeCleanupOrphanedImportListStatus),
-            typeof(SpacetimeCleanupOrphanedNotificationStatus),
-            typeof(SpacetimeCleanupAbsolutePathMetadataFiles),
-            typeof(SpacetimeCleanupDownloadClientUnavailablePendingReleases),
-            typeof(SpacetimeCleanupDuplicateMetadataFiles),
-            typeof(SpacetimeCleanupQualityProfileFormatItems),
-            typeof(SpacetimeFixFutureRunScheduledTasks),
-            typeof(SpacetimeCleanupUnusedTags)
-        };
-
-        public static IContainer RemoveAutoRegisteredHousekeepingTasks(this IContainer container)
-        {
-            foreach (var type in SpacetimeHousekeepingTaskTypes)
-            {
-                container.Unregister(typeof(IHousekeepingTask), condition: f => f.ImplementationType == type);
-            }
-
-            return container;
-        }
-
-        // AutoAddServices' reflection scan registers every public concrete class against every
-        // interface it implements, unconditionally - by the time any entity here had a second
-        // (Spacetime-backed) implementation added, the real SQL-backed one and its Spacetime
-        // counterpart both became registered under the same single-instance service interface
-        // (e.g. ITagRepository -> TagRepository AND SpacetimeTagRepository), with no SpacetimeDb
-        // flag involved yet. AddSpacetimeDbRepositories's Register<TService,TImpl> below reliably
-        // pins the Spacetime side when the flag is on (Replace guarantees it wins regardless of
-        // scan order), but when the flag is off, nothing ever pins the real side back - DryIoc's
-        // SelectLastRegisteredFactory rule (see Bootstrap.cs's container Rules) then resolves
-        // whichever of the two the reflection scan happened to register last, which depends on
-        // assembly type-enumeration order, not on which one is actually correct to use. This was
-        // never exercised until the SpacetimeDb-disabled path was tested directly: it surfaced as
-        // IUpdateHistoryRepository and ICommandRepository resolving to their Spacetime versions
-        // with SpacetimeDb disabled, throwing on ISpacetimeDbConnection's unresolvable "host"
-        // constructor argument (that instance is only ever registered inside
-        // AddSpacetimeDbRepositories) - breaking ApplicationStartedEvent handling and the entire
-        // /api/v3/command pipeline respectively. This must run unconditionally, right after
-        // AutoAddServices and before the SpacetimeDb-enabled check, mirroring
-        // RemoveAutoRegisteredHousekeepingTasks's placement - it pins the *real* implementation
-        // for every entity that has a Spacetime counterpart, so resolution is deterministic
-        // whether or not AddSpacetimeDbRepositories runs afterward to flip it back.
-        public static IContainer PinRealRepositoriesByDefault(this IContainer container)
-        {
-            Register<ITagRepository, TagRepository>(container);
-            Register<IRootFolderRepository, RootFolderRepository>(container);
-            Register<IRemotePathMappingRepository, RemotePathMappingRepository>(container);
-            Register<IImportListExclusionRepository, ImportListExclusionRepository>(container);
-            Register<ICustomFilterRepository, CustomFilterRepository>(container);
-            Register<IUserRepository, UserRepository>(container);
-            Register<IConfigRepository, ConfigRepository>(container);
-            Register<IQualityProfileRankRepository, QualityProfileRankRepository>(container);
-            Register<IDelayProfileRepository, DelayProfileRepository>(container);
-            Register<IRestrictionRepository, ReleaseProfileRepository>(container);
-            Register<IQualityDefinitionRepository, QualityDefinitionRepository>(container);
-            Register<INamingConfigRepository, NamingConfigRepository>(container);
-            Register<ISceneMappingRepository, SceneMappingRepository>(container);
-            Register<IScheduledTaskRepository, ScheduledTaskRepository>(container);
-            Register<IDownloadHistoryRepository, DownloadHistoryRepository>(container);
-            Register<ICustomFormatRepository, CustomFormatRepository>(container);
-            Register<IAutoTaggingRepository, AutoTaggingRepository>(container);
-            Register<IImportListItemRepository, ImportListItemRepository>(container);
-            Register<ICommandRepository, CommandRepository>(container);
-            Register<IPendingReleaseRepository, PendingReleaseRepository>(container);
-            Register<IUpdateHistoryRepository, UpdateHistoryRepository>(container);
-            Register<IOtherExtraFileRepository, OtherExtraFileRepository>(container);
-            Register<ISubtitleFileRepository, SubtitleFileRepository>(container);
-            Register<IMetadataFileRepository, MetadataFileRepository>(container);
-            Register<IIndexerStatusRepository, IndexerStatusRepository>(container);
-            Register<IDownloadClientStatusRepository, DownloadClientStatusRepository>(container);
-            Register<IImportListStatusRepository, ImportListStatusRepository>(container);
-            Register<INotificationStatusRepository, NotificationStatusRepository>(container);
-            Register<IMediaFileRepository, MediaFileRepository>(container);
-
-            Register<IIndexerRepository, IndexerRepository>(container);
-            Register<IImportListRepository, ImportListRepository>(container);
-            Register<INotificationRepository, NotificationRepository>(container);
-            Register<IDownloadClientRepository, DownloadClientRepository>(container);
-            Register<IMetadataRepository, MetadataRepository>(container);
-            Register<IQualityProfileRepository, QualityProfileRepository>(container);
-            Register<ISeriesRepository, SeriesRepository>(container);
-
-            Register<IEpisodeRepository, EpisodeRepository>(container);
-            Register<IHistoryRepository, HistoryRepository>(container);
-            Register<IBlocklistRepository, BlocklistRepository>(container);
-
-            Register<ISeriesStatisticsRepository, SeriesStatisticsRepository>(container);
-            Register<IStatisticsRepository, StatisticsRepository>(container);
-
-            // Several of the above are ALSO independently scanned/ambiguous under a shared
-            // generic base interface their own service (e.g. ISubtitleFileRepository) doesn't
-            // cover - SubtitleFileService/MetadataFileService/OtherExtraFileService inject
-            // IExtraFileRepository<T> directly, not the named interface, and ProviderFactory<T>/
-            // ProviderStatusServiceBase<T> do the same for IProviderRepository<T>/
-            // IProviderStatusRepository<T>. Pinning ISubtitleFileRepository above does nothing
-            // for IExtraFileRepository<SubtitleFile> - it's a separate DryIoc service type scanned
-            // and resolved independently, so each needs its own explicit pin here too.
-            Register<IExtraFileRepository<SubtitleFile>, SubtitleFileRepository>(container);
-            Register<IExtraFileRepository<MetadataFile>, MetadataFileRepository>(container);
-            Register<IExtraFileRepository<OtherExtraFile>, OtherExtraFileRepository>(container);
-
-            Register<IProviderRepository<IndexerDefinition>, IndexerRepository>(container);
-            Register<IProviderRepository<DownloadClientDefinition>, DownloadClientRepository>(container);
-            Register<IProviderRepository<ImportListDefinition>, ImportListRepository>(container);
-            Register<IProviderRepository<NotificationDefinition>, NotificationRepository>(container);
-            Register<IProviderRepository<MetadataDefinition>, MetadataRepository>(container);
-
-            Register<IProviderStatusRepository<IndexerStatus>, IndexerStatusRepository>(container);
-            Register<IProviderStatusRepository<DownloadClientStatus>, DownloadClientStatusRepository>(container);
-            Register<IProviderStatusRepository<ImportListStatus>, ImportListStatusRepository>(container);
-            Register<IProviderStatusRepository<NotificationStatus>, NotificationStatusRepository>(container);
-
-            return container;
-        }
-
-        public static IContainer AddSpacetimeDbRepositories(this IContainer container, string host, string database)
+        public static IContainer AddSpacetimeDbRepositories(this IContainer container, string host, string database, IOidcTokenProvider tokenProvider = null)
         {
             container.RegisterInstance<ISpacetimeDbConnection>(
-                new SpacetimeDbConnection(host, database),
+                new SpacetimeDbConnection(host, database, tokenProvider),
                 ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
-            // Tier 1
             Register<ITagRepository, SpacetimeTagRepository>(container);
             Register<IRootFolderRepository, SpacetimeRootFolderRepository>(container);
             Register<IRemotePathMappingRepository, SpacetimeRemotePathMappingRepository>(container);
@@ -213,65 +71,68 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Register<ICommandRepository, SpacetimeCommandRepository>(container);
             Register<IPendingReleaseRepository, SpacetimePendingReleaseRepository>(container);
             Register<IUpdateHistoryRepository, SpacetimeUpdateHistoryRepository>(container);
-            Register<IOtherExtraFileRepository, SpacetimeOtherExtraFileRepository>(container);
-            Register<ISubtitleFileRepository, SpacetimeSubtitleFileRepository>(container);
-            Register<IMetadataFileRepository, SpacetimeMetadataFileRepository>(container);
-            Register<IIndexerStatusRepository, SpacetimeIndexerStatusRepository>(container);
-            Register<IDownloadClientStatusRepository, SpacetimeDownloadClientStatusRepository>(container);
-            Register<IImportListStatusRepository, SpacetimeImportListStatusRepository>(container);
-            Register<INotificationStatusRepository, SpacetimeNotificationStatusRepository>(container);
             Register<IMediaFileRepository, SpacetimeMediaFileRepository>(container);
 
-            // Tier 1.5
-            Register<IIndexerRepository, SpacetimeIndexerRepository>(container);
-            Register<IImportListRepository, SpacetimeImportListRepository>(container);
-            Register<INotificationRepository, SpacetimeNotificationRepository>(container);
-            Register<IDownloadClientRepository, SpacetimeDownloadClientRepository>(container);
-            Register<IMetadataRepository, SpacetimeMetadataRepository>(container);
-
-            // SpacetimeCleanupQualityProfileFormatItems needs the concrete type directly, for
-            // GetRawFormatItemIds() (not part of IQualityProfileRepository) - see that task's own
-            // comment. Registering the concrete type as the primary singleton and mapping the
-            // interface onto it (rather than two independent Register<TService,TImpl> calls)
-            // keeps both service types resolving to the exact same instance - two separate
-            // instances would each get their own SpacetimeBasicRepository _writeLock, quietly
-            // weakening the single-instance synchronization every other repository here relies on.
             Register<SpacetimeQualityProfileRepository, SpacetimeQualityProfileRepository>(container);
             container.RegisterMapping<IQualityProfileRepository, SpacetimeQualityProfileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
             Register<ISeriesRepository, SpacetimeSeriesRepository>(container);
 
-            // Tier 2
             Register<IEpisodeRepository, SpacetimeEpisodeRepository>(container);
             Register<IHistoryRepository, SpacetimeHistoryRepository>(container);
             Register<IBlocklistRepository, SpacetimeBlocklistRepository>(container);
 
-            // Outside the entity survey (doesn't inherit SpacetimeBasicRepository<T> - see
-            // SpacetimeSeriesStatisticsRepository's own comment)
             Register<ISeriesStatisticsRepository, SpacetimeSeriesStatisticsRepository>(container);
             Register<IStatisticsRepository, SpacetimeStatisticsRepository>(container);
 
-            // See PinRealRepositoriesByDefault's matching comment - these shared generic base
-            // interfaces are independently-resolved DryIoc services, not covered by pinning the
-            // named interfaces above, on this side of the flag too.
-            Register<IExtraFileRepository<SubtitleFile>, SpacetimeSubtitleFileRepository>(container);
-            Register<IExtraFileRepository<MetadataFile>, SpacetimeMetadataFileRepository>(container);
-            Register<IExtraFileRepository<OtherExtraFile>, SpacetimeOtherExtraFileRepository>(container);
+            Register<SpacetimeOtherExtraFileRepository, SpacetimeOtherExtraFileRepository>(container);
+            container.RegisterMapping<IOtherExtraFileRepository, SpacetimeOtherExtraFileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IExtraFileRepository<OtherExtraFile>, SpacetimeOtherExtraFileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
-            Register<IProviderRepository<IndexerDefinition>, SpacetimeIndexerRepository>(container);
-            Register<IProviderRepository<DownloadClientDefinition>, SpacetimeDownloadClientRepository>(container);
-            Register<IProviderRepository<ImportListDefinition>, SpacetimeImportListRepository>(container);
-            Register<IProviderRepository<NotificationDefinition>, SpacetimeNotificationRepository>(container);
-            Register<IProviderRepository<MetadataDefinition>, SpacetimeMetadataRepository>(container);
+            Register<SpacetimeSubtitleFileRepository, SpacetimeSubtitleFileRepository>(container);
+            container.RegisterMapping<ISubtitleFileRepository, SpacetimeSubtitleFileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IExtraFileRepository<SubtitleFile>, SpacetimeSubtitleFileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
-            Register<IProviderStatusRepository<IndexerStatus>, SpacetimeIndexerStatusRepository>(container);
-            Register<IProviderStatusRepository<DownloadClientStatus>, SpacetimeDownloadClientStatusRepository>(container);
-            Register<IProviderStatusRepository<ImportListStatus>, SpacetimeImportListStatusRepository>(container);
-            Register<IProviderStatusRepository<NotificationStatus>, SpacetimeNotificationStatusRepository>(container);
+            Register<SpacetimeMetadataFileRepository, SpacetimeMetadataFileRepository>(container);
+            container.RegisterMapping<IMetadataFileRepository, SpacetimeMetadataFileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IExtraFileRepository<MetadataFile>, SpacetimeMetadataFileRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
 
-            // Orphan-cleanup housekeeping tasks (see SpacetimeCleanupOrphanedEpisodes's own
-            // comment for why these are additional IHousekeepingTask registrations, not swapped
-            // in place of the real SQL-based ones the way every repository above is).
+            Register<SpacetimeIndexerRepository, SpacetimeIndexerRepository>(container);
+            container.RegisterMapping<IIndexerRepository, SpacetimeIndexerRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderRepository<IndexerDefinition>, SpacetimeIndexerRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeDownloadClientRepository, SpacetimeDownloadClientRepository>(container);
+            container.RegisterMapping<IDownloadClientRepository, SpacetimeDownloadClientRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderRepository<DownloadClientDefinition>, SpacetimeDownloadClientRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeImportListRepository, SpacetimeImportListRepository>(container);
+            container.RegisterMapping<IImportListRepository, SpacetimeImportListRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderRepository<ImportListDefinition>, SpacetimeImportListRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeNotificationRepository, SpacetimeNotificationRepository>(container);
+            container.RegisterMapping<INotificationRepository, SpacetimeNotificationRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderRepository<NotificationDefinition>, SpacetimeNotificationRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeMetadataRepository, SpacetimeMetadataRepository>(container);
+            container.RegisterMapping<IMetadataRepository, SpacetimeMetadataRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderRepository<MetadataDefinition>, SpacetimeMetadataRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeIndexerStatusRepository, SpacetimeIndexerStatusRepository>(container);
+            container.RegisterMapping<IIndexerStatusRepository, SpacetimeIndexerStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderStatusRepository<IndexerStatus>, SpacetimeIndexerStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeDownloadClientStatusRepository, SpacetimeDownloadClientStatusRepository>(container);
+            container.RegisterMapping<IDownloadClientStatusRepository, SpacetimeDownloadClientStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderStatusRepository<DownloadClientStatus>, SpacetimeDownloadClientStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeImportListStatusRepository, SpacetimeImportListStatusRepository>(container);
+            container.RegisterMapping<IImportListStatusRepository, SpacetimeImportListStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderStatusRepository<ImportListStatus>, SpacetimeImportListStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
+            Register<SpacetimeNotificationStatusRepository, SpacetimeNotificationStatusRepository>(container);
+            container.RegisterMapping<INotificationStatusRepository, SpacetimeNotificationStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+            container.RegisterMapping<IProviderStatusRepository<NotificationStatus>, SpacetimeNotificationStatusRepository>(ifAlreadyRegistered: IfAlreadyRegistered.Replace);
+
             RegisterAdditionalHousekeepingTask<SpacetimeCleanupOrphanedEpisodes>(container);
             RegisterAdditionalHousekeepingTask<SpacetimeCleanupOrphanedEpisodeFiles>(container);
             RegisterAdditionalHousekeepingTask<SpacetimeCleanupOrphanedBlocklist>(container);
@@ -300,13 +161,6 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             container.Register<TService, TImpl>(Reuse.Singleton, ifAlreadyRegistered: IfAlreadyRegistered.Replace);
         }
 
-        // IHousekeepingTask is a many-implementations-per-service collection (HousekeepingService
-        // takes IEnumerable<IHousekeepingTask>, resolving every registered implementation), unlike
-        // every 1:1 repository interface above where Register<TService,TImpl>'s Replace policy is
-        // enough on its own - a collection service has no single "the" registration for Replace to
-        // act on. By the time this runs, RemoveAutoRegisteredHousekeepingTasks has already
-        // stripped out whatever AutoAddServices' scan added for this exact implementation type
-        // (see that method's comment), so this only ever adds the one registration back.
         private static void RegisterAdditionalHousekeepingTask<TImpl>(IContainer container)
             where TImpl : IHousekeepingTask
         {

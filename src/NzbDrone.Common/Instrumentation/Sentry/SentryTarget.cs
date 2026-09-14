@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Data.SQLite;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -17,31 +16,10 @@ namespace NzbDrone.Common.Instrumentation.Sentry
     [Target("Sentry")]
     public class SentryTarget : TargetWithLayout
     {
-        // don't report uninformative SQLite exceptions
-        // busy/locked are benign https://forums.sonarr.tv/t/owin-sqlite-error-5-database-is-locked/5423/11
-        // The others will be user configuration problems and silt up Sentry
-        private static readonly HashSet<SQLiteErrorCode> FilteredSQLiteErrors = new HashSet<SQLiteErrorCode>
-        {
-            SQLiteErrorCode.Busy,
-            SQLiteErrorCode.Locked,
-            SQLiteErrorCode.Perm,
-            SQLiteErrorCode.ReadOnly,
-            SQLiteErrorCode.IoErr,
-            SQLiteErrorCode.Corrupt,
-            SQLiteErrorCode.Full,
-            SQLiteErrorCode.CantOpen,
-            SQLiteErrorCode.Auth
-        };
-
-        // use string and not Type so we don't need a reference to the project
-        // where these are defined
         private static readonly HashSet<string> FilteredExceptionTypeNames = new HashSet<string>
         {
             // UnauthorizedAccessExceptions will just be user configuration issues
             "UnauthorizedAccessException",
-
-            // Filter out people stuck in boot loops
-            "CorruptDatabaseException",
 
             // Filter SingleInstance Termination Exceptions
             "TerminateApplicationException",
@@ -59,13 +37,7 @@ namespace NzbDrone.Common.Instrumentation.Sentry
             "openflixr"
         };
 
-        // exception types in this list will additionally have the exception message added to the
-        // sentry fingerprint.  Make sure that this message doesn't vary by exception
-        // (e.g. containing a path or a url) so that the sentry grouping is sensible
-        private static readonly HashSet<string> IncludeExceptionMessageTypes = new HashSet<string>
-        {
-            "SQLiteException"
-        };
+        private static readonly HashSet<string> IncludeExceptionMessageTypes = new HashSet<string>();
 
         private static readonly IDictionary<LogLevel, SentryLevel> LoggingLevelMap = new Dictionary<LogLevel, SentryLevel>
         {
@@ -253,12 +225,6 @@ namespace NzbDrone.Common.Instrumentation.Sentry
             {
                 if (FilterEvents)
                 {
-                    var sqlEx = logEvent.Exception as SQLiteException;
-                    if (sqlEx != null && FilteredSQLiteErrors.Contains(sqlEx.ResultCode))
-                    {
-                        return false;
-                    }
-
                     if (FilteredExceptionTypeNames.Contains(logEvent.Exception.GetType().Name))
                     {
                         return false;

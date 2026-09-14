@@ -7,6 +7,9 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Tv;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbEpisodeHistory = SpacetimeDB.Types.EpisodeHistory;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -35,8 +38,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             _qualityRankRepository = qualityRankRepository;
         }
 
-        protected override StdbEpisodeHistory[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.EpisodeHistory.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbEpisodeHistory> Table => Conn.Connection.Db.EpisodeHistory;
+
+        protected override StdbEpisodeHistory FindRowById(int id) => Conn.Connection.Db.EpisodeHistory.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, int p3, string p4, string p5, int p6, SpacetimeDB.Timestamp p7, int p8, string p9, string p10, string p11)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateEpisodeHistory += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateEpisodeHistory -= Handler);
+        }
 
         protected override EpisodeHistory ToModel(StdbEpisodeHistory row) => new EpisodeHistory
         {
@@ -56,7 +76,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static int DeriveQualityId(EpisodeHistory model) => model.Quality?.Quality?.Id ?? 0;
 
-        public override void MigrateInsert(EpisodeHistory model) => Conn.Connection.Reducers.MigrateInsertEpisodeHistory(
+        public override void MigrateInsert(EpisodeHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertEpisodeHistory(
             model.Id,
             model.EpisodeId,
             model.SeriesId,
@@ -67,7 +87,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             (int)model.EventType,
             SpacetimeJson.Serialize(model.Data),
             SpacetimeJson.Serialize(model.Languages),
-            model.DownloadId ?? string.Empty);
+            model.DownloadId ?? string.Empty));
 
         protected override void InvokeInsertReducer(EpisodeHistory model) => Conn.Connection.Reducers.InsertEpisodeHistory(
             model.EpisodeId,

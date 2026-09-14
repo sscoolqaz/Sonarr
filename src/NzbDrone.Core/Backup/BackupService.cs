@@ -12,7 +12,6 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Core.Configuration;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Commands;
 
 namespace NzbDrone.Core.Backup
@@ -28,8 +27,6 @@ namespace NzbDrone.Core.Backup
 
     public class BackupService : IBackupService, IExecute<BackupCommand>
     {
-        private readonly IMainDatabase _maindDb;
-        private readonly IMakeDatabaseBackup _makeDatabaseBackup;
         private readonly IDiskTransferService _diskTransferService;
         private readonly IDiskProvider _diskProvider;
         private readonly IAppFolderInfo _appFolderInfo;
@@ -41,17 +38,13 @@ namespace NzbDrone.Core.Backup
 
         public static readonly Regex BackupFileRegex = new Regex(@"(nzbdrone|sonarr)_backup_(v[0-9.]+_)?[._0-9]+\.zip", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public BackupService(IMainDatabase maindDb,
-                             IMakeDatabaseBackup makeDatabaseBackup,
-                             IDiskTransferService diskTransferService,
+        public BackupService(IDiskTransferService diskTransferService,
                              IDiskProvider diskProvider,
                              IAppFolderInfo appFolderInfo,
                              IArchiveService archiveService,
                              IConfigService configService,
                              Logger logger)
         {
-            _maindDb = maindDb;
-            _makeDatabaseBackup = makeDatabaseBackup;
             _diskTransferService = diskTransferService;
             _diskProvider = diskProvider;
             _appFolderInfo = appFolderInfo;
@@ -88,13 +81,9 @@ namespace NzbDrone.Core.Backup
             }
 
             BackupConfigFile();
-            BackupDatabase();
             CreateVersionInfo(dateNow);
 
             _logger.ProgressDebug("Creating backup zip");
-
-            // Delete journal file created during database backup
-            _diskProvider.DeleteFile(Path.Combine(_backupTempFolder, "sonarr.db-journal"));
 
             _archiveService.CreateZip(backupPath, _diskProvider.GetFiles(_backupTempFolder, false));
 
@@ -144,31 +133,17 @@ namespace NzbDrone.Core.Backup
                         _diskProvider.MoveFile(file, _appFolderInfo.GetConfigPath(), true);
                         restoredFile = true;
                     }
-
-                    if (fileName.Equals("nzbdrone.db", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        _diskProvider.MoveFile(file, _appFolderInfo.GetDatabaseRestore(), true);
-                        restoredFile = true;
-                    }
-
-                    if (fileName.Equals("sonarr.db", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        _diskProvider.MoveFile(file, _appFolderInfo.GetDatabaseRestore(), true);
-                        restoredFile = true;
-                    }
                 }
 
                 if (!restoredFile)
                 {
-                    throw new RestoreBackupFailedException(HttpStatusCode.NotFound, "Unable to restore database file from backup");
+                    throw new RestoreBackupFailedException(HttpStatusCode.NotFound, "Unable to restore config file from backup");
                 }
 
                 _diskProvider.DeleteFolder(temporaryPath, true);
 
                 return;
             }
-
-            _diskProvider.MoveFile(backupFileName, _appFolderInfo.GetDatabaseRestore(), true);
         }
 
         public string GetBackupFolder()
@@ -193,16 +168,6 @@ namespace NzbDrone.Core.Backup
             if (_diskProvider.FolderExists(_backupTempFolder))
             {
                 _diskProvider.EmptyFolder(_backupTempFolder);
-            }
-        }
-
-        private void BackupDatabase()
-        {
-            if (_maindDb.DatabaseType == DatabaseType.SQLite)
-            {
-                _logger.ProgressDebug("Backing up database");
-
-                _makeDatabaseBackup.BackupDatabase(_maindDb, _backupTempFolder);
             }
         }
 

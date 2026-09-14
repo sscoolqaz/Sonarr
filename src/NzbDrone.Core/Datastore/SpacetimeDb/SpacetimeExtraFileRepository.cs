@@ -13,6 +13,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// </summary>
     public abstract class SpacetimeExtraFileRepository<TExtraFile, TStdbRow> : SpacetimeBasicRepository<TExtraFile, TStdbRow>, IExtraFileRepository<TExtraFile>
         where TExtraFile : ExtraFile, new()
+        where TStdbRow : class, SpacetimeDB.BSATN.IStructuralReadWrite, new()
     {
         protected SpacetimeExtraFileRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
             : base(connection, eventAggregator)

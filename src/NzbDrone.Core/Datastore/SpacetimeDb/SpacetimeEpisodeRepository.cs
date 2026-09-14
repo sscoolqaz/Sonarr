@@ -6,6 +6,9 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Tv;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbEpisode = SpacetimeDB.Types.Episode;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -35,8 +38,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             _qualityRankRepository = qualityRankRepository;
         }
 
-        protected override StdbEpisode[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.Episode.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbEpisode> Table => Conn.Connection.Db.Episode;
+
+        protected override StdbEpisode FindRowById(int id) => Conn.Connection.Db.Episode.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, int p3, int p4, int p5, int p6, string p7, string p8, SpacetimeDB.Timestamp? p9, string p10, bool p11, int? p12, int? p13, int? p14, int? p15, int? p16, int? p17, int? p18, bool p19, string p20, string p21, SpacetimeDB.Timestamp? p22, int p23, string p24)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateEpisode += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateEpisode -= Handler);
+        }
 
         // SeriesTitle/Series/AbsoluteEpisodeNumberAdded are Ignore()'d in the real TableMapping -
         // no columns for them here either. EpisodeFile is LazyLoaded there too, but unlike
@@ -76,7 +96,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override int GetRowId(StdbEpisode row) => row.Id;
 
-        public override void MigrateInsert(Episode model) => Conn.Connection.Reducers.MigrateInsertEpisode(
+        public override void MigrateInsert(Episode model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertEpisode(
             model.Id,
             model.SeriesId,
             model.TvdbId,
@@ -100,7 +120,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.Images),
             SpacetimeDateTime.ToTimestamp(model.LastSearchTime),
             model.Runtime,
-            model.FinaleType ?? string.Empty);
+            model.FinaleType ?? string.Empty));
 
         protected override void InvokeInsertReducer(Episode model) => Conn.Connection.Reducers.InsertEpisode(
             model.SeriesId,

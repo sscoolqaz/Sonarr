@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Download.History;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser.Model;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbDownloadHistory = SpacetimeDB.Types.DownloadHistory;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -15,8 +19,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbDownloadHistory[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.DownloadHistory.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbDownloadHistory> Table => Conn.Connection.Db.DownloadHistory;
+
+        protected override StdbDownloadHistory FindRowById(int id) => Conn.Connection.Db.DownloadHistory.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, int p3, string p4, string p5, SpacetimeDB.Timestamp p6, int p7, int p8, int p9, string p10, string p11)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateDownloadHistory += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateDownloadHistory -= Handler);
+        }
 
         protected override DownloadHistory ToModel(StdbDownloadHistory row) => new DownloadHistory
         {
@@ -47,7 +68,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.Release),
             SpacetimeJson.Serialize(model.Data));
 
-        public override void MigrateInsert(DownloadHistory model) => Conn.Connection.Reducers.MigrateInsertDownloadHistory(
+        public override void MigrateInsert(DownloadHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertDownloadHistory(
             model.Id,
             (int)model.EventType,
             model.SeriesId,
@@ -58,7 +79,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.IndexerId,
             model.DownloadClientId,
             SpacetimeJson.Serialize(model.Release),
-            SpacetimeJson.Serialize(model.Data));
+            SpacetimeJson.Serialize(model.Data)));
 
         protected override void InvokeUpdateReducer(DownloadHistory model) => Conn.Connection.Reducers.UpdateDownloadHistory(
             model.Id,
@@ -76,7 +97,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteDownloadHistory(id);
 
         public List<DownloadHistory> FindByDownloadId(string downloadId) =>
-            RemoteQuery($"WHERE DownloadId = '{EscapeSqlString(downloadId)}'").Select(ToModel).OrderByDescending(h => h.Date).ToList();
+            Query(t => t.Iter().Where(r => r.DownloadId == downloadId).Select(ToModel).OrderByDescending(h => h.Date).ToList());
 
         public void DeleteBySeriesIds(List<int> seriesIds)
         {

@@ -35,8 +35,10 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!--
         CS1591: Missing XML comment for publicly visible type or member 'Type_or_Member'
+        SA1200: Suppressed because stylecop.json sets usingDirectivesPlacement=outsideNamespace;
+                StyleCop.Analyzers.Unstable 1.2.0.556 doesn't respect that setting for SA1200.
     -->
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;SA1200</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

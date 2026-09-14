@@ -20,6 +20,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// </summary>
     public abstract class SpacetimeProviderRepository<TProviderDefinition, TStdbRow> : SpacetimeBasicRepository<TProviderDefinition, TStdbRow>
         where TProviderDefinition : ProviderDefinition, new()
+        where TStdbRow : class, SpacetimeDB.BSATN.IStructuralReadWrite, new()
     {
         protected SpacetimeProviderRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
             : base(connection, eventAggregator)

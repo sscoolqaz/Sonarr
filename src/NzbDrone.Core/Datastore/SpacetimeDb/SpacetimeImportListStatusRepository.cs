@@ -1,5 +1,9 @@
+using System;
 using NzbDrone.Core.ImportLists;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbImportListStatus = SpacetimeDB.Types.ImportListStatus;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -11,8 +15,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbImportListStatus[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.ImportListStatus.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbImportListStatus> Table => Conn.Connection.Db.ImportListStatus;
+
+        protected override StdbImportListStatus FindRowById(int id) => Conn.Connection.Db.ImportListStatus.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, SpacetimeDB.Timestamp? p3, SpacetimeDB.Timestamp? p4, int p5, SpacetimeDB.Timestamp? p6)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateImportListStatus += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateImportListStatus -= Handler);
+        }
 
         protected override ImportListStatus ToModel(StdbImportListStatus row) => new ImportListStatus
         {

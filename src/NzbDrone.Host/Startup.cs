@@ -19,7 +19,6 @@ using NzbDrone.Common.Instrumentation;
 using NzbDrone.Common.Processes;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Configuration;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Instrumentation;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
@@ -279,9 +278,6 @@ namespace NzbDrone.Host
         public void Configure(IApplicationBuilder app,
                               IContainer container,
                               IStartupContext startupContext,
-                              Lazy<IMainDatabase> mainDatabaseFactory,
-                              Lazy<ILogDatabase> logDatabaseFactory,
-                              DatabaseTarget dbTarget,
                               ISingleInstancePolicy singleInstancePolicy,
                               InitializeLogger initializeLogger,
                               ReconfigureLogging reconfigureLogging,
@@ -302,15 +298,6 @@ namespace NzbDrone.Host
             reconfigureLogging.Reconfigure();
 
             EnsureSingleInstance(false, startupContext, singleInstancePolicy);
-
-            // instantiate the databases to initialize/migrate them
-            _ = mainDatabaseFactory.Value;
-
-            if (configFileProvider.LogDbEnabled)
-            {
-                _ = logDatabaseFactory.Value;
-                dbTarget.Register();
-            }
 
             SchemaBuilder.Initialize(container);
 

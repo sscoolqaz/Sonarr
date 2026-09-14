@@ -1,5 +1,9 @@
+using System;
 using NzbDrone.Core.Download;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbDownloadClientStatus = SpacetimeDB.Types.DownloadClientStatus;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -11,8 +15,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbDownloadClientStatus[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.DownloadClientStatus.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbDownloadClientStatus> Table => Conn.Connection.Db.DownloadClientStatus;
+
+        protected override StdbDownloadClientStatus FindRowById(int id) => Conn.Connection.Db.DownloadClientStatus.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, SpacetimeDB.Timestamp? p3, SpacetimeDB.Timestamp? p4, int p5, SpacetimeDB.Timestamp? p6)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateDownloadClientStatus += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateDownloadClientStatus -= Handler);
+        }
 
         protected override DownloadClientStatus ToModel(StdbDownloadClientStatus row) => new DownloadClientStatus
         {

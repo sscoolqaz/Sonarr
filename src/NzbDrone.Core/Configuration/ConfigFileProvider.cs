@@ -14,7 +14,6 @@ using NzbDrone.Common.Instrumentation;
 using NzbDrone.Common.Options;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration.Events;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
@@ -41,7 +40,6 @@ namespace NzbDrone.Core.Configuration
         string LogLevel { get; }
         string ConsoleLogLevel { get; }
         ConsoleLogFormat ConsoleLogFormat { get; }
-        bool LogSql { get; }
         int LogRotate { get; }
         int LogSizeLimit { get; }
         bool FilterSentryEvents { get; }
@@ -62,14 +60,6 @@ namespace NzbDrone.Core.Configuration
         string SyslogLevel { get; }
         bool LogDbEnabled { get; }
         string Theme { get; }
-        string PostgresHost { get; }
-        int PostgresPort { get; }
-        string PostgresUser { get; }
-        string PostgresPassword { get; }
-        string PostgresMainDb { get; }
-        string PostgresLogDb { get; }
-        string PostgresMainDbConnectionString { get; }
-        string PostgresLogDbConnectionString { get; }
         bool TrustCgnatIpAddresses { get; }
         bool ProfilerEnabled { get; }
         string ProfilerPosition { get; }
@@ -82,7 +72,6 @@ namespace NzbDrone.Core.Configuration
         private readonly IEventAggregator _eventAggregator;
         private readonly IDiskProvider _diskProvider;
         private readonly ICached<string> _cache;
-        private readonly PostgresOptions _postgresOptions;
         private readonly AuthOptions _authOptions;
         private readonly AppOptions _appOptions;
         private readonly ServerOptions _serverOptions;
@@ -98,7 +87,6 @@ namespace NzbDrone.Core.Configuration
                                   ICacheManager cacheManager,
                                   IEventAggregator eventAggregator,
                                   IDiskProvider diskProvider,
-                                  IOptions<PostgresOptions> postgresOptions,
                                   IOptions<AuthOptions> authOptions,
                                   IOptions<AppOptions> appOptions,
                                   IOptions<ServerOptions> serverOptions,
@@ -109,7 +97,6 @@ namespace NzbDrone.Core.Configuration
             _eventAggregator = eventAggregator;
             _diskProvider = diskProvider;
             _configFile = appFolderInfo.GetConfigPath();
-            _postgresOptions = postgresOptions.Value;
             _authOptions = authOptions.Value;
             _appOptions = appOptions.Value;
             _serverOptions = serverOptions.Value;
@@ -261,16 +248,7 @@ namespace NzbDrone.Core.Configuration
 
         public string Theme => _appOptions.Theme ?? GetValue("Theme", "auto", persist: false);
 
-        public string PostgresHost => _postgresOptions?.Host ?? GetValue("PostgresHost", string.Empty, persist: false);
-        public string PostgresUser => _postgresOptions?.User ?? GetValue("PostgresUser", string.Empty, persist: false);
-        public string PostgresPassword => _postgresOptions?.Password ?? GetValue("PostgresPassword", string.Empty, persist: false);
-        public string PostgresMainDb => _postgresOptions?.MainDb ?? GetValue("PostgresMainDb", "sonarr-main", persist: false);
-        public string PostgresLogDb => _postgresOptions?.LogDb ?? GetValue("PostgresLogDb", "sonarr-log", persist: false);
-        public int PostgresPort => (_postgresOptions?.Port ?? 0) != 0 ? _postgresOptions.Port : GetValueInt("PostgresPort", 5432, persist: false);
-        public string PostgresMainDbConnectionString => _postgresOptions?.MainDbConnectionString ?? GetValue("PostgresMainDbConnectionString", string.Empty, persist: false);
-        public string PostgresLogDbConnectionString => _postgresOptions?.LogDbConnectionString ?? GetValue("PostgresLogDbConnectionString", string.Empty, persist: false);
         public bool LogDbEnabled => _logOptions.DbEnabled ?? GetValueBoolean("LogDbEnabled", true, persist: false);
-        public bool LogSql => _logOptions.Sql ?? GetValueBoolean("LogSql", false, persist: false);
         public int LogRotate => _logOptions.Rotate ?? GetValueInt("LogRotate", 50, persist: false);
         public int LogSizeLimit => Math.Min(Math.Max(_logOptions.SizeLimit ?? GetValueInt("LogSizeLimit", 1, persist: false), 0), 10);
         public bool FilterSentryEvents => _logOptions.FilterSentryEvents ?? GetValueBoolean("FilterSentryEvents", true, persist: false);

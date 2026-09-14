@@ -9,6 +9,9 @@ using NzbDrone.Core.Parser.Model;
 using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Tv;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbBlocklist = SpacetimeDB.Types.Blocklist;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -34,8 +37,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             _qualityRankRepository = qualityRankRepository;
         }
 
-        protected override StdbBlocklist[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.Blocklist.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbBlocklist> Table => Conn.Connection.Db.Blocklist;
+
+        protected override StdbBlocklist FindRowById(int id) => Conn.Connection.Db.Blocklist.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, string p3, string p4, string p5, int p6, SpacetimeDB.Timestamp p7, SpacetimeDB.Timestamp? p8, long? p9, int p10, string p11, int p12, int p13, string p14, string p15, string p16, string p17)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateBlocklist += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateBlocklist -= Handler);
+        }
 
         protected override Blocklist ToModel(StdbBlocklist row) => new Blocklist
         {
@@ -61,7 +81,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static int DeriveQualityId(Blocklist model) => model.Quality?.Quality?.Id ?? 0;
 
-        public override void MigrateInsert(Blocklist model) => Conn.Connection.Reducers.MigrateInsertBlocklist(
+        public override void MigrateInsert(Blocklist model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertBlocklist(
             model.Id,
             model.SeriesId,
             SpacetimeJson.Serialize(model.EpisodeIds),
@@ -78,7 +98,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.Message ?? string.Empty,
             model.Source ?? string.Empty,
             model.TorrentInfoHash ?? string.Empty,
-            SpacetimeJson.Serialize(model.Languages));
+            SpacetimeJson.Serialize(model.Languages)));
 
         protected override void InvokeInsertReducer(Blocklist model) => Conn.Connection.Reducers.InsertBlocklist(
             model.SeriesId,

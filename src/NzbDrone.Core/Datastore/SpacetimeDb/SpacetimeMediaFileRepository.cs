@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Languages;
@@ -6,6 +7,9 @@ using NzbDrone.Core.MediaFiles.MediaInfo;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser.Model;
 using NzbDrone.Core.Qualities;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbEpisodeFile = SpacetimeDB.Types.EpisodeFile;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -27,8 +31,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbEpisodeFile[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.EpisodeFile.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbEpisodeFile> Table => Conn.Connection.Db.EpisodeFile;
+
+        protected override StdbEpisodeFile FindRowById(int id) => Conn.Connection.Db.EpisodeFile.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, int p3, string p4, long p5, SpacetimeDB.Timestamp p6, string p7, string p8, string p9, string p10, string p11, int p12, int p13, string p14, string p15, int p16)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateEpisodeFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateEpisodeFile -= Handler);
+        }
 
         // Path is Ignore()'d in the SQL mapping (computed from RelativePath + root folder at read
         // time); Series/Episodes are LazyLoaded there, not persisted directly - same here.
@@ -55,7 +76,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static int DeriveQualityId(EpisodeFile model) => model.Quality?.Quality?.Id ?? 0;
 
-        public override void MigrateInsert(EpisodeFile model) => Conn.Connection.Reducers.MigrateInsertEpisodeFile(
+        public override void MigrateInsert(EpisodeFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertEpisodeFile(
             model.Id,
             model.SeriesId,
             model.SeasonNumber,
@@ -71,7 +92,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             (int)model.IndexerFlags,
             SpacetimeJson.Serialize(model.MediaInfo),
             SpacetimeJson.Serialize(model.Languages),
-            (int)model.ReleaseType);
+            (int)model.ReleaseType));
 
         protected override void InvokeInsertReducer(EpisodeFile model) => Conn.Connection.Reducers.InsertEpisodeFile(
             model.SeriesId,
@@ -110,22 +131,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteEpisodeFile(id);
 
-        public List<EpisodeFile> GetFilesBySeries(int seriesId) => RemoteQuery($"WHERE SeriesId = {seriesId}").Select(ToModel).ToList();
+        public List<EpisodeFile> GetFilesBySeries(int seriesId) =>
+            Query(t => t.Iter().Where(r => r.SeriesId == seriesId).Select(ToModel).ToList());
 
         public List<EpisodeFile> GetFilesBySeriesIds(List<int> seriesIds) =>
             All().Where(c => seriesIds.Contains(c.SeriesId)).ToList();
 
         public List<EpisodeFile> GetFilesBySeason(int seriesId, int seasonNumber) =>
-            RemoteQuery($"WHERE SeriesId = {seriesId} AND SeasonNumber = {seasonNumber}").Select(ToModel).ToList();
+            Query(t => t.Iter().Where(r => r.SeriesId == seriesId && r.SeasonNumber == seasonNumber).Select(ToModel).ToList());
 
-        // The one query in this entity that's a real IS NULL predicate, which SpacetimeDB's WHERE
-        // grammar doesn't support at all - fetch-all and filter client-side (Tier 1 table sizes,
-        // maintenance-shaped query, not a hot path - see the Phase 3 schema design's note on this
-        // exact method).
         public List<EpisodeFile> GetFilesWithoutMediaInfo() => All().Where(c => c.MediaInfo == null).ToList();
 
         public List<EpisodeFile> GetFilesWithRelativePath(int seriesId, string relativePath) =>
-            RemoteQuery($"WHERE SeriesId = {seriesId} AND RelativePath = '{EscapeSqlString(relativePath)}'").Select(ToModel).ToList();
+            Query(t => t.Iter().Where(r => r.SeriesId == seriesId && r.RelativePath == relativePath).Select(ToModel).ToList());
 
         public void DeleteForSeries(List<int> seriesIds)
         {

@@ -1,9 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Languages;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Tv;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbSeries = SpacetimeDB.Types.Series;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -18,12 +22,28 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             _qualityProfileRepository = qualityProfileRepository;
         }
 
-        protected override StdbSeries[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.Series.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbSeries> Table => Conn.Connection.Db.Series;
+
+        protected override StdbSeries FindRowById(int id) => Conn.Connection.Db.Series.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, int p3, int p4, string p5, int p6, string p7, string p8, string p9, string p10, string p11, int p12, string p13, string p14, bool p15, int p16, int p17, bool p18, SpacetimeDB.Timestamp? p19, int p20, string p21, int p22, string p23, bool p24, string p25, string p26, int p27, string p28, string p29, string p30, string p31, SpacetimeDB.Timestamp p32, SpacetimeDB.Timestamp? p33, SpacetimeDB.Timestamp? p34, string p35, string p36, string p37, string p38, System.Collections.Generic.List<int> p39)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateSeries += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateSeries -= Handler);
+        }
 
         private List<int> TagIdsFor(int seriesId) =>
-            Conn.Connection.Db.SeriesTag.RemoteQuery($"WHERE SeriesId = {seriesId}").GetAwaiter().GetResult()
-                .Select(t => t.TagId).ToList();
+            Conn.RunOnActor(() => Conn.Connection.Db.SeriesTag.Iter().Where(t => t.SeriesId == seriesId).Select(t => t.TagId).ToList());
 
         // QualityProfile is LazyLoaded (only QualityProfileId is a real column). The real
         // TableMapping's .HasOne(s => s.QualityProfile, ...) join means every Series it returns
@@ -85,6 +105,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // seriesId/tagIds rather than needing an id-preserving variant of its own).
         public override void MigrateInsert(Series model)
         {
+            InvokeAndWaitForMigrateInsert(model.Id, () =>
+            {
             Conn.Connection.Reducers.MigrateInsertSeries(
                 model.Id,
                 model.TvdbId,
@@ -124,6 +146,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 model.OriginalCountry ?? string.Empty,
                 SpacetimeJson.Serialize(model.Seasons),
                 SpacetimeJson.Serialize(model.AddOptions));
+        });
         }
 
         protected override void InvokeInsertReducer(Series model)
@@ -165,16 +188,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 SpacetimeJson.Serialize(model.OriginalLanguage),
                 model.OriginalCountry ?? string.Empty,
                 SpacetimeJson.Serialize(model.Seasons),
-                SpacetimeJson.Serialize(model.AddOptions));
-
-            // model.Id isn't known yet at this point (SpacetimeBasicRepository.Insert resolves it
-            // from the post-insert "fetch newest row" step after this returns) - find it the same
-            // way, under the same write lock, so the new row's tags can be written atomically as
-            // part of the same insert operation rather than left unset until some later call.
-            var insertedId = Conn.Connection.Db.Series.RemoteQuery(string.Empty).GetAwaiter().GetResult()
-                .Select(r => r.Id).OrderByDescending(id => id).First();
-
-            Conn.Connection.Reducers.ReplaceSeriesTags(insertedId, (model.Tags ?? new HashSet<int>()).ToList());
+                SpacetimeJson.Serialize(model.AddOptions),
+                (model.Tags ?? new HashSet<int>()).ToList());
         }
 
         protected override void InvokeUpdateReducer(Series model)
@@ -217,9 +232,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 SpacetimeJson.Serialize(model.OriginalLanguage),
                 model.OriginalCountry ?? string.Empty,
                 SpacetimeJson.Serialize(model.Seasons),
-                SpacetimeJson.Serialize(model.AddOptions));
-
-            Conn.Connection.Reducers.ReplaceSeriesTags(model.Id, (model.Tags ?? new HashSet<int>()).ToList());
+                SpacetimeJson.Serialize(model.AddOptions),
+                (model.Tags ?? new HashSet<int>()).ToList());
         }
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteSeries(id);

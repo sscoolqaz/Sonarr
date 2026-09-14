@@ -26,29 +26,29 @@ namespace NzbDrone.Core.Datastore.Converters
 
             var results = new List<ICustomFormatSpecification>();
 
-            reader.Read(); // Advance to the first object after the StartArray token. This should be either a StartObject token, or the EndArray token. Anything else is invalid.
+            reader.Read();
 
             while (reader.TokenType == JsonTokenType.StartObject)
             {
-                reader.Read(); // Move to type property name
+                reader.Read();
                 ValidateToken(reader, JsonTokenType.PropertyName);
 
-                reader.Read(); // Move to type property value
+                reader.Read();
                 ValidateToken(reader, JsonTokenType.String);
                 var typename = reader.GetString();
 
-                reader.Read(); // Move to body property name
+                reader.Read();
                 ValidateToken(reader, JsonTokenType.PropertyName);
 
-                reader.Read(); // Move to start of object (stored in this property)
-                ValidateToken(reader, JsonTokenType.StartObject); // Start of formattag
+                reader.Read();
+                ValidateToken(reader, JsonTokenType.StartObject);
 
                 var type = Type.GetType($"NzbDrone.Core.CustomFormats.{typename}, Sonarr.Core", true);
                 var item = (ICustomFormatSpecification)JsonSerializer.Deserialize(ref reader, type, options);
                 results.Add(item);
 
-                reader.Read(); // Move past end of body object
-                reader.Read(); // Move past end of 'wrapper' object
+                reader.Read();
+                reader.Read();
             }
 
             ValidateToken(reader, JsonTokenType.EndArray);
@@ -56,7 +56,6 @@ namespace NzbDrone.Core.Datastore.Converters
             return results;
         }
 
-        // Helper function for validating where you are in the JSON
         private void ValidateToken(Utf8JsonReader reader, JsonTokenType tokenType)
         {
             if (reader.TokenType != tokenType)

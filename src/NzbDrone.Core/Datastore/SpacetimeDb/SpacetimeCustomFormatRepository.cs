@@ -1,8 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Datastore.Converters;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbCustomFormat = SpacetimeDB.Types.CustomFormat;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -24,8 +28,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbCustomFormat[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.CustomFormat.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbCustomFormat> Table => Conn.Connection.Db.CustomFormat;
+
+        protected override StdbCustomFormat FindRowById(int id) => Conn.Connection.Db.CustomFormat.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2, bool p3, string p4)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateCustomFormat += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateCustomFormat -= Handler);
+        }
 
         protected override CustomFormat ToModel(StdbCustomFormat row) => new CustomFormat
         {
@@ -42,8 +63,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(CustomFormat model) => Conn.Connection.Reducers.InsertCustomFormat(
             model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options));
 
-        public override void MigrateInsert(CustomFormat model) => Conn.Connection.Reducers.MigrateInsertCustomFormat(
-            model.Id, model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options));
+        public override void MigrateInsert(CustomFormat model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertCustomFormat(
+            model.Id, model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options)));
 
         protected override void InvokeUpdateReducer(CustomFormat model) => Conn.Connection.Reducers.UpdateCustomFormat(
             model.Id, model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options));

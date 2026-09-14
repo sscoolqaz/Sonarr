@@ -24,11 +24,8 @@ using NzbDrone.Common.Instrumentation;
 using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Common.Options;
 using NzbDrone.Core.Configuration;
-using NzbDrone.Core.Datastore.Extensions;
 using NzbDrone.Core.Datastore.SpacetimeDb;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
-
-using PostgresOptions = NzbDrone.Core.Datastore.PostgresOptions;
 
 namespace NzbDrone.Host
 {
@@ -91,23 +88,12 @@ namespace NzbDrone.Host
                 {
                     c.AutoAddServices(ASSEMBLIES)
                         .AddNzbDroneLogger()
-                        .AddDatabase()
                         .AddStartupContext(startupContext)
                         .Resolve<UtilityModeRouter>()
                         .Route(appMode);
-
-                    if (config.GetValue(nameof(ConfigFileProvider.LogDbEnabled), true))
-                    {
-                        c.AddLogDatabase();
-                    }
-                    else
-                    {
-                        c.AddDummyLogDatabase();
-                    }
                 })
                 .ConfigureServices(services =>
                 {
-                    services.Configure<PostgresOptions>(config.GetSection("Sonarr:Postgres"));
                     services.Configure<AppOptions>(config.GetSection("Sonarr:App"));
                     services.Configure<AuthOptions>(config.GetSection("Sonarr:Auth"));
                     services.Configure<ServerOptions>(config.GetSection("Sonarr:Server"));
@@ -150,7 +136,9 @@ namespace NzbDrone.Host
             var sslCertPath = config.GetValue<string>($"Sonarr:Server:{nameof(ServerOptions.SslCertPath)}") ?? config.GetValue<string>(nameof(ConfigFileProvider.SslCertPath));
             var sslKeyPath = config.GetValue<string>($"Sonarr:Server:{nameof(ServerOptions.SslKeyPath)}") ?? config.GetValue<string>(nameof(ConfigFileProvider.SslKeyPath));
             var sslCertPassword = config.GetValue<string>($"Sonarr:Server:{nameof(ServerOptions.SslCertPassword)}") ?? config.GetValue<string>(nameof(ConfigFileProvider.SslCertPassword));
-            var logDbEnabled = config.GetValue<bool?>($"Sonarr:Log:{nameof(LogOptions.DbEnabled)}") ?? config.GetValue(nameof(ConfigFileProvider.LogDbEnabled), true);
+
+            var spacetimeDbHost = config.GetValue("Sonarr:SpacetimeDb:Host", "http://127.0.0.1:3000");
+            var spacetimeDbDatabase = config.GetValue("Sonarr:SpacetimeDb:Database", "sonarr-spacetime-dev");
 
             var urls = new List<string> { BuildUrl("http", bindAddress, port) };
 
@@ -170,41 +158,28 @@ namespace NzbDrone.Host
                 {
                     c.AutoAddServices(Bootstrap.ASSEMBLIES)
                         .AddNzbDroneLogger()
-                        .AddDatabase()
                         .AddStartupContext(context);
 
-                    // Both calls unconditional regardless of the SpacetimeDb flag below -
-                    // AutoAddServices' reflection scan just registered every Spacetime-backed
-                    // repository/housekeeping-task class unconditionally too (they're public
-                    // classes like any other), and without this, resolution for every entity with
-                    // both a real and a Spacetime-backed implementation is ambiguous and
-                    // order-dependent rather than deterministically the real one when SpacetimeDb
-                    // mode is off. Only AddSpacetimeDbRepositories flips things back to the
-                    // Spacetime side, and only when that flag is actually on.
-                    c.PinRealRepositoriesByDefault();
-                    c.RemoveAutoRegisteredHousekeepingTasks();
+                    IOidcTokenProvider tokenProvider = null;
+                    var oidcTokenEndpoint = config.GetValue<string>("Sonarr:SpacetimeDb:Oidc:TokenEndpoint", null);
+                    var oidcClientId = config.GetValue<string>("Sonarr:SpacetimeDb:Oidc:ClientId", null);
+                    var oidcClientSecret = config.GetValue<string>("Sonarr:SpacetimeDb:Oidc:ClientSecret", null);
 
-                    if (logDbEnabled)
+                    if (!string.IsNullOrEmpty(oidcTokenEndpoint) && !string.IsNullOrEmpty(oidcClientId))
                     {
-                        c.AddLogDatabase();
+                        Logger.Info("SpacetimeDB OIDC auth enabled: endpoint={0}, clientId={1}", oidcTokenEndpoint, oidcClientId);
+                        tokenProvider = new OidcTokenProvider(oidcTokenEndpoint, oidcClientId, oidcClientSecret ?? string.Empty);
                     }
                     else
                     {
-                        c.AddDummyLogDatabase();
+                        Logger.Warn("SpacetimeDB OIDC not configured — connecting without authentication");
                     }
 
-                    if (config.GetValue("Sonarr:SpacetimeDb:Enabled", false))
-                    {
-                        var spacetimeDbHost = config.GetValue("Sonarr:SpacetimeDb:Host", "http://127.0.0.1:3000");
-                        var spacetimeDbDatabase = config.GetValue("Sonarr:SpacetimeDb:Database", "sonarr-spacetime-dev");
-
-                        Logger.Info("SpacetimeDB repositories enabled: {0} / {1}", spacetimeDbHost, spacetimeDbDatabase);
-                        c.AddSpacetimeDbRepositories(spacetimeDbHost, spacetimeDbDatabase);
-                    }
+                    Logger.Info("SpacetimeDB repositories: {0} / {1}", spacetimeDbHost, spacetimeDbDatabase);
+                    c.AddSpacetimeDbRepositories(spacetimeDbHost, spacetimeDbDatabase, tokenProvider);
                 })
                 .ConfigureServices(services =>
                 {
-                    services.Configure<PostgresOptions>(config.GetSection("Sonarr:Postgres"));
                     services.Configure<AppOptions>(config.GetSection("Sonarr:App"));
                     services.Configure<AuthOptions>(config.GetSection("Sonarr:Auth"));
                     services.Configure<ServerOptions>(config.GetSection("Sonarr:Server"));

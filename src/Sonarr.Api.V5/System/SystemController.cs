@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Routing.Internal;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Configuration;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Lifecycle;
 using Sonarr.Http;
 using Sonarr.Http.Validation;
@@ -21,7 +20,6 @@ public class SystemController : Controller
     private readonly IPlatformInfo _platformInfo;
     private readonly IOsInfo _osInfo;
     private readonly IConfigFileProvider _configFileProvider;
-    private readonly IMainDatabase _database;
     private readonly ILifecycleService _lifecycleService;
     private readonly IDeploymentInfoProvider _deploymentInfoProvider;
     private readonly EndpointDataSource _endpointData;
@@ -33,7 +31,6 @@ public class SystemController : Controller
                             IPlatformInfo platformInfo,
                             IOsInfo osInfo,
                             IConfigFileProvider configFileProvider,
-                            IMainDatabase database,
                             ILifecycleService lifecycleService,
                             IDeploymentInfoProvider deploymentInfoProvider,
                             EndpointDataSource endpoints,
@@ -45,7 +42,6 @@ public class SystemController : Controller
         _platformInfo = platformInfo;
         _osInfo = osInfo;
         _configFileProvider = configFileProvider;
-        _database = database;
         _lifecycleService = lifecycleService;
         _deploymentInfoProvider = deploymentInfoProvider;
         _endpointData = endpoints;
@@ -79,9 +75,8 @@ public class SystemController : Controller
             Mode = _runtimeInfo.Mode,
             Branch = _configFileProvider.Branch,
             Authentication = _configFileProvider.AuthenticationMethod,
-            DatabaseType = _database.DatabaseType,
-            DatabaseVersion = _database.Version,
-            MigrationVersion = _database.Migration,
+            DatabaseType = "SpacetimeDB",
+            MigrationVersion = 0,
             UrlBase = _configFileProvider.UrlBase,
             RuntimeVersion = _platformInfo.Version,
             RuntimeName = PlatformInfo.PlatformName,

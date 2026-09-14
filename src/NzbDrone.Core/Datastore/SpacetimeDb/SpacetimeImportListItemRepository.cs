@@ -1,8 +1,12 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.ImportLists.ImportListItems;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser.Model;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbImportListItem = SpacetimeDB.Types.ImportListItem;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -14,8 +18,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbImportListItem[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.ImportListItem.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbImportListItem> Table => Conn.Connection.Db.ImportListItem;
+
+        protected override StdbImportListItem FindRowById(int id) => Conn.Connection.Db.ImportListItem.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, string p3, int p4, int p5, int p6, string p7, int p8, int p9, SpacetimeDB.Timestamp p10)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateImportListItem += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateImportListItem -= Handler);
+        }
 
         // ImportList/Seasons are Ignore()'d in the SQL mapping too - not persisted here either.
         protected override ImportListItemInfo ToModel(StdbImportListItem row) => new ImportListItemInfo

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Tags;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbTag = SpacetimeDB.Types.Tag;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -21,8 +24,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbTag[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.Tag.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbTag> Table => Conn.Connection.Db.Tag;
+
+        protected override StdbTag FindRowById(int id) => Conn.Connection.Db.Tag.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateTag += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateTag -= Handler);
+        }
 
         protected override Tag ToModel(StdbTag row) => new Tag { Id = row.Id, Label = row.Label };
 
@@ -30,7 +50,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(Tag model) => Conn.Connection.Reducers.InsertTag(model.Label ?? string.Empty);
 
-        public override void MigrateInsert(Tag model) => Conn.Connection.Reducers.MigrateInsertTag(model.Id, model.Label ?? string.Empty);
+        public override void MigrateInsert(Tag model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertTag(model.Id, model.Label ?? string.Empty));
 
         protected override void InvokeUpdateReducer(Tag model) => Conn.Connection.Reducers.UpdateTag(model.Id, model.Label ?? string.Empty);
 
@@ -50,11 +70,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return model;
         }
 
-        public Tag FindByLabel(string label)
-        {
-            var rows = RemoteQuery($"WHERE Label = '{EscapeSqlString(label)}'");
-            return rows.Select(ToModel).SingleOrDefault();
-        }
+        public Tag FindByLabel(string label) =>
+            Query(t => t.Iter().Where(r => r.Label == label).Select(ToModel).SingleOrDefault());
 
         public List<Tag> GetTags(HashSet<int> tagIds) =>
             All().Where(t => tagIds.Contains(t.Id)).ToList();

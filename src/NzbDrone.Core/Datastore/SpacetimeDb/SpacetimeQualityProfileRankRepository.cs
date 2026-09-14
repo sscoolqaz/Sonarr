@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Qualities;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbQualityProfileQualityRank = SpacetimeDB.Types.QualityProfileQualityRank;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -13,8 +17,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbQualityProfileQualityRank[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.QualityProfileQualityRank.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbQualityProfileQualityRank> Table => Conn.Connection.Db.QualityProfileQualityRank;
+
+        protected override StdbQualityProfileQualityRank FindRowById(int id) => Conn.Connection.Db.QualityProfileQualityRank.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, int p2, int p3, double p4)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateQualityProfileQualityRank += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateQualityProfileQualityRank -= Handler);
+        }
 
         protected override QualityProfileQualityRank ToModel(StdbQualityProfileQualityRank row) => new QualityProfileQualityRank
         {
@@ -43,7 +64,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         public void DeleteForProfile(int profileId)
         {
-            foreach (var row in RemoteQuery($"WHERE ProfileId = {profileId}").Select(ToModel).ToList())
+            var rows = Query(t => t.Iter().Where(r => r.ProfileId == profileId).Select(ToModel).ToList());
+
+            foreach (var row in rows)
             {
                 Delete(row.Id);
             }

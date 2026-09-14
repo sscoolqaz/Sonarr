@@ -3,13 +3,12 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using NzbDrone.Common.Extensions;
-using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Parser.Model;
 using NzbDrone.Core.Qualities;
 
 namespace NzbDrone.Core.SeriesStats
 {
-    public class SeasonStatistics : ResultSet
+    public class SeasonStatistics
     {
         public int SeriesId { get; set; }
         public int SeasonNumber { get; set; }

@@ -12,12 +12,12 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteReducers : RemoteBase
     {
-        public delegate void InsertSeriesHandler(ReducerEventContext ctx, int tvdbId, int tvRageId, int tvMazeId, string imdbId, int tmdbId, string malIdsJson, string aniListIdsJson, string title, string cleanTitle, string sortTitle, int status, string overview, string airTime, bool monitored, int monitorNewItems, int qualityProfileId, bool seasonFolder, SpacetimeDB.Timestamp? lastInfoSync, int runtime, string imagesJson, int seriesType, string network, bool useSceneNumbering, string titleSlug, string path, int year, string ratingsJson, string genresJson, string actorsJson, string certification, SpacetimeDB.Timestamp added, SpacetimeDB.Timestamp? firstAired, SpacetimeDB.Timestamp? lastAired, string originalLanguageJson, string originalCountry, string seasonsJson, string addOptionsJson);
+        public delegate void InsertSeriesHandler(ReducerEventContext ctx, int tvdbId, int tvRageId, int tvMazeId, string imdbId, int tmdbId, string malIdsJson, string aniListIdsJson, string title, string cleanTitle, string sortTitle, int status, string overview, string airTime, bool monitored, int monitorNewItems, int qualityProfileId, bool seasonFolder, SpacetimeDB.Timestamp? lastInfoSync, int runtime, string imagesJson, int seriesType, string network, bool useSceneNumbering, string titleSlug, string path, int year, string ratingsJson, string genresJson, string actorsJson, string certification, SpacetimeDB.Timestamp added, SpacetimeDB.Timestamp? firstAired, SpacetimeDB.Timestamp? lastAired, string originalLanguageJson, string originalCountry, string seasonsJson, string addOptionsJson, System.Collections.Generic.List<int> tagIds);
         public event InsertSeriesHandler? OnInsertSeries;
 
-        public void InsertSeries(int tvdbId, int tvRageId, int tvMazeId, string imdbId, int tmdbId, string malIdsJson, string aniListIdsJson, string title, string cleanTitle, string sortTitle, int status, string overview, string airTime, bool monitored, int monitorNewItems, int qualityProfileId, bool seasonFolder, SpacetimeDB.Timestamp? lastInfoSync, int runtime, string imagesJson, int seriesType, string network, bool useSceneNumbering, string titleSlug, string path, int year, string ratingsJson, string genresJson, string actorsJson, string certification, SpacetimeDB.Timestamp added, SpacetimeDB.Timestamp? firstAired, SpacetimeDB.Timestamp? lastAired, string originalLanguageJson, string originalCountry, string seasonsJson, string addOptionsJson)
+        public void InsertSeries(int tvdbId, int tvRageId, int tvMazeId, string imdbId, int tmdbId, string malIdsJson, string aniListIdsJson, string title, string cleanTitle, string sortTitle, int status, string overview, string airTime, bool monitored, int monitorNewItems, int qualityProfileId, bool seasonFolder, SpacetimeDB.Timestamp? lastInfoSync, int runtime, string imagesJson, int seriesType, string network, bool useSceneNumbering, string titleSlug, string path, int year, string ratingsJson, string genresJson, string actorsJson, string certification, SpacetimeDB.Timestamp added, SpacetimeDB.Timestamp? firstAired, SpacetimeDB.Timestamp? lastAired, string originalLanguageJson, string originalCountry, string seasonsJson, string addOptionsJson, System.Collections.Generic.List<int> tagIds)
         {
-            conn.InternalCallReducer(new Reducer.InsertSeries(tvdbId, tvRageId, tvMazeId, imdbId, tmdbId, malIdsJson, aniListIdsJson, title, cleanTitle, sortTitle, status, overview, airTime, monitored, monitorNewItems, qualityProfileId, seasonFolder, lastInfoSync, runtime, imagesJson, seriesType, network, useSceneNumbering, titleSlug, path, year, ratingsJson, genresJson, actorsJson, certification, added, firstAired, lastAired, originalLanguageJson, originalCountry, seasonsJson, addOptionsJson));
+            conn.InternalCallReducer(new Reducer.InsertSeries(tvdbId, tvRageId, tvMazeId, imdbId, tmdbId, malIdsJson, aniListIdsJson, title, cleanTitle, sortTitle, status, overview, airTime, monitored, monitorNewItems, qualityProfileId, seasonFolder, lastInfoSync, runtime, imagesJson, seriesType, network, useSceneNumbering, titleSlug, path, year, ratingsJson, genresJson, actorsJson, certification, added, firstAired, lastAired, originalLanguageJson, originalCountry, seasonsJson, addOptionsJson, tagIds));
         }
 
         public bool InvokeInsertSeries(ReducerEventContext ctx, Reducer.InsertSeries args)
@@ -72,7 +72,8 @@ namespace SpacetimeDB.Types
                 args.OriginalLanguageJson,
                 args.OriginalCountry,
                 args.SeasonsJson,
-                args.AddOptionsJson
+                args.AddOptionsJson,
+                args.TagIds
             );
             return true;
         }
@@ -158,6 +159,8 @@ namespace SpacetimeDB.Types
             public string SeasonsJson;
             [DataMember(Name = "add_options_json")]
             public string AddOptionsJson;
+            [DataMember(Name = "tag_ids")]
+            public System.Collections.Generic.List<int> TagIds;
 
             public InsertSeries(
                 int TvdbId,
@@ -196,7 +199,8 @@ namespace SpacetimeDB.Types
                 string OriginalLanguageJson,
                 string OriginalCountry,
                 string SeasonsJson,
-                string AddOptionsJson
+                string AddOptionsJson,
+                System.Collections.Generic.List<int> TagIds
             )
             {
                 this.TvdbId = TvdbId;
@@ -236,6 +240,7 @@ namespace SpacetimeDB.Types
                 this.OriginalCountry = OriginalCountry;
                 this.SeasonsJson = SeasonsJson;
                 this.AddOptionsJson = AddOptionsJson;
+                this.TagIds = TagIds;
             }
 
             public InsertSeries()
@@ -260,6 +265,7 @@ namespace SpacetimeDB.Types
                 this.OriginalCountry = "";
                 this.SeasonsJson = "";
                 this.AddOptionsJson = "";
+                this.TagIds = new();
             }
 
             string IReducerArgs.ReducerName => "insert_series";

@@ -7,6 +7,9 @@ using NzbDrone.Common.Reflection;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbCommand = SpacetimeDB.Types.CommandRow;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -32,8 +35,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbCommand[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.Command.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbCommand> Table => Conn.Connection.Db.Command;
+
+        protected override StdbCommand FindRowById(int id) => Conn.Connection.Db.Command.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2, string p3, int p4, int p5, int p6, SpacetimeDB.Timestamp p7, SpacetimeDB.Timestamp? p8, SpacetimeDB.Timestamp? p9, long? p10, string p11, int p12)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateCommand += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateCommand -= Handler);
+        }
 
         // Body is polymorphic (one concrete Command subclass per command type). Mirrors
         // NzbDrone.Core.Datastore.Converters.CommandConverter's approach exactly: a "name"
@@ -118,7 +138,24 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             }
         }
 
-        public void OrphanStarted() => Conn.Connection.Reducers.OrphanStartedCommands((int)CommandStatus.Orphaned, (int)CommandStatus.Started, SpacetimeDateTime.ToTimestamp(DateTime.UtcNow));
+        public void OrphanStarted() =>
+            InvokeAndWaitForReducerCommitted(
+                () => Conn.Connection.Reducers.OrphanStartedCommands((int)CommandStatus.Orphaned, (int)CommandStatus.Started, SpacetimeDateTime.ToTimestamp(DateTime.UtcNow)),
+                onCommitted =>
+                {
+                    void Handler(ReducerEventContext ctx, int orphanedStatus, int startedStatus, SpacetimeDB.Timestamp endedAt)
+                    {
+                        if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                            ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                            ctx.Event.Status is Status.Committed)
+                        {
+                            onCommitted();
+                        }
+                    }
+
+                    Conn.Connection.Reducers.OnOrphanStartedCommands += Handler;
+                    return new Unsubscriber(() => Conn.Connection.Reducers.OnOrphanStartedCommands -= Handler);
+                });
 
         public List<CommandModel> Queued() => All().Where(x => x.Status == CommandStatus.Queued).ToList();
 

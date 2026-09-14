@@ -90,6 +90,13 @@ public static partial class Module
         public string AddOptionsJson;
     }
 
+    // Both reducers below take tagIds and replace the series' SeriesTag rows as part of the SAME
+    // transaction as the Series row write (via ReplaceSeriesTagsInternal) - per the Phase 4
+    // adversarial review, writing them as two separate reducer calls (the port's original design)
+    // meant a reader could observe a series with no tags yet, and a failure between the two calls
+    // could leave them permanently out of sync. ReplaceSeriesTags itself is kept as a standalone
+    // reducer too (still used by Sonarr.SpacetimeMigration, which inserts a series and replaces
+    // its tags as two separate migration-tool calls with its own row-count-based confirmation).
     [Reducer]
     public static void InsertSeries(
         ReducerContext ctx,
@@ -99,9 +106,9 @@ public static partial class Module
         int runtime, string imagesJson, int seriesType, string network, bool useSceneNumbering, string titleSlug,
         string path, int year, string ratingsJson, string genresJson, string actorsJson, string certification,
         Timestamp added, Timestamp? firstAired, Timestamp? lastAired, string originalLanguageJson,
-        string originalCountry, string seasonsJson, string addOptionsJson)
+        string originalCountry, string seasonsJson, string addOptionsJson, List<int> tagIds)
     {
-        ctx.Db.Series.Insert(new Series
+        var inserted = ctx.Db.Series.Insert(new Series
         {
             Id = 0, TvdbId = tvdbId, TvRageId = tvRageId, TvMazeId = tvMazeId, ImdbId = imdbId, TmdbId = tmdbId,
             MalIdsJson = malIdsJson, AniListIdsJson = aniListIdsJson, Title = title, CleanTitle = cleanTitle,
@@ -113,6 +120,8 @@ public static partial class Module
             Added = added, FirstAired = firstAired, LastAired = lastAired, OriginalLanguageJson = originalLanguageJson,
             OriginalCountry = originalCountry, SeasonsJson = seasonsJson, AddOptionsJson = addOptionsJson
         });
+
+        ReplaceSeriesTagsInternal(ctx, inserted.Id, tagIds);
     }
 
     [Reducer]
@@ -124,7 +133,7 @@ public static partial class Module
         int runtime, string imagesJson, int seriesType, string network, bool useSceneNumbering, string titleSlug,
         string path, int year, string ratingsJson, string genresJson, string actorsJson, string certification,
         Timestamp added, Timestamp? firstAired, Timestamp? lastAired, string originalLanguageJson,
-        string originalCountry, string seasonsJson, string addOptionsJson)
+        string originalCountry, string seasonsJson, string addOptionsJson, List<int> tagIds)
     {
         RequireFound(ctx.Db.Series.Id.Find(id).HasValue, "Series", id);
         ctx.Db.Series.Id.Update(new Series
@@ -139,6 +148,8 @@ public static partial class Module
             Added = added, FirstAired = firstAired, LastAired = lastAired, OriginalLanguageJson = originalLanguageJson,
             OriginalCountry = originalCountry, SeasonsJson = seasonsJson, AddOptionsJson = addOptionsJson
         });
+
+        ReplaceSeriesTagsInternal(ctx, id, tagIds);
     }
 
     [Reducer]
@@ -164,7 +175,10 @@ public static partial class Module
     }
 
     [Reducer]
-    public static void ReplaceSeriesTags(ReducerContext ctx, int seriesId, List<int> tagIds)
+    public static void ReplaceSeriesTags(ReducerContext ctx, int seriesId, List<int> tagIds) =>
+        ReplaceSeriesTagsInternal(ctx, seriesId, tagIds);
+
+    private static void ReplaceSeriesTagsInternal(ReducerContext ctx, int seriesId, List<int> tagIds)
     {
         foreach (var existing in ctx.Db.SeriesTag.Iter())
         {

@@ -1,5 +1,9 @@
+using System;
 using NzbDrone.Core.ImportLists;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbImportListDefinition = SpacetimeDB.Types.ImportListDefinition;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -11,8 +15,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbImportListDefinition[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.ImportListDefinition.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbImportListDefinition> Table => Conn.Connection.Db.ImportListDefinition;
+
+        protected override StdbImportListDefinition FindRowById(int id) => Conn.Connection.Db.ImportListDefinition.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2, string p3, string p4, string p5, bool p6, string p7, string p8)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateImportListDefinition += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateImportListDefinition -= Handler);
+        }
 
         protected override ImportListDefinition ToModel(StdbImportListDefinition row) => new ImportListDefinition
         {
@@ -31,8 +52,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(ImportListDefinition model) => Conn.Connection.Reducers.InsertImportListDefinition(
             model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
 
-        public override void MigrateInsert(ImportListDefinition model) => Conn.Connection.Reducers.MigrateInsertImportListDefinition(
-            model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
+        public override void MigrateInsert(ImportListDefinition model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertImportListDefinition(
+            model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message)));
 
         protected override void InvokeUpdateReducer(ImportListDefinition model) => Conn.Connection.Reducers.UpdateImportListDefinition(
             model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));

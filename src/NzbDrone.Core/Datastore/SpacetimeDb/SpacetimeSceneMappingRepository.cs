@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.DataAugmentation.Scene;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbSceneMapping = SpacetimeDB.Types.SceneMapping;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -13,8 +17,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbSceneMapping[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.SceneMapping.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbSceneMapping> Table => Conn.Connection.Db.SceneMapping;
+
+        protected override StdbSceneMapping FindRowById(int id) => Conn.Connection.Db.SceneMapping.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2, string p3, string p4, string p5, int p6, int? p7, int? p8, string p9, int? p10, string p11, string p12, string p13)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateSceneMapping += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateSceneMapping -= Handler);
+        }
 
         protected override SceneMapping ToModel(StdbSceneMapping row) => new SceneMapping
         {
@@ -66,8 +87,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteSceneMapping(id);
 
-        public List<SceneMapping> FindByTvdbid(int tvdbId) => RemoteQuery($"WHERE TvdbId = {tvdbId}").Select(ToModel).ToList();
+        public List<SceneMapping> FindByTvdbid(int tvdbId) =>
+            Query(t => t.Iter().Where(r => r.TvdbId == tvdbId).Select(ToModel).ToList());
 
-        public List<SceneMapping> GetAllByType(string type) => RemoteQuery($"WHERE Type = '{EscapeSqlString(type)}'").Select(ToModel).ToList();
+        public List<SceneMapping> GetAllByType(string type) =>
+            Query(t => t.Iter().Where(r => r.Type == type).Select(ToModel).ToList());
     }
 }

@@ -10,6 +10,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// </summary>
     public abstract class SpacetimeProviderStatusRepository<TModel, TStdbRow> : SpacetimeBasicRepository<TModel, TStdbRow>, IProviderStatusRepository<TModel>
         where TModel : ProviderStatusBase, new()
+        where TStdbRow : class, SpacetimeDB.BSATN.IStructuralReadWrite, new()
     {
         protected SpacetimeProviderStatusRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
             : base(connection, eventAggregator)
@@ -17,7 +18,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         }
 
         public TModel FindByProviderId(int providerId) =>
-            RemoteQuery($"WHERE ProviderId = {providerId}").Select(ToModel).SingleOrDefault();
+            Query(t => t.Iter().Select(ToModel).ToList()).SingleOrDefault(m => m.ProviderId == providerId);
 
         public void DeleteByProviderId(int providerId)
         {

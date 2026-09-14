@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Update.History;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbUpdateHistory = SpacetimeDB.Types.UpdateHistory;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -14,8 +17,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbUpdateHistory[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.UpdateHistory.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbUpdateHistory> Table => Conn.Connection.Db.UpdateHistory;
+
+        protected override StdbUpdateHistory FindRowById(int id) => Conn.Connection.Db.UpdateHistory.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, SpacetimeDB.Timestamp p2, string p3, int p4)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateUpdateHistory += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateUpdateHistory -= Handler);
+        }
 
         protected override UpdateHistory ToModel(StdbUpdateHistory row) => new UpdateHistory
         {
@@ -30,8 +50,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(UpdateHistory model) => Conn.Connection.Reducers.InsertUpdateHistory(
             SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType);
 
-        public override void MigrateInsert(UpdateHistory model) => Conn.Connection.Reducers.MigrateInsertUpdateHistory(
-            model.Id, SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType);
+        public override void MigrateInsert(UpdateHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertUpdateHistory(
+            model.Id, SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType));
 
         protected override void InvokeUpdateReducer(UpdateHistory model) => Conn.Connection.Reducers.UpdateUpdateHistory(
             model.Id, SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType);

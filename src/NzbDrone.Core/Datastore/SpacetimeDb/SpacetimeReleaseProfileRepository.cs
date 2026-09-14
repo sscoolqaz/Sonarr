@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Releases;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbReleaseProfile = SpacetimeDB.Types.ReleaseProfile;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -12,8 +16,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbReleaseProfile[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.ReleaseProfile.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbReleaseProfile> Table => Conn.Connection.Db.ReleaseProfile;
+
+        protected override StdbReleaseProfile FindRowById(int id) => Conn.Connection.Db.ReleaseProfile.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2, bool p3, string p4, string p5, bool p6, int p7, bool p8, string p9, string p10, string p11)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateReleaseProfile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateReleaseProfile -= Handler);
+        }
 
         protected override ReleaseProfile ToModel(StdbReleaseProfile row) => new ReleaseProfile
         {
@@ -44,7 +65,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.Tags),
             SpacetimeJson.Serialize(model.ExcludedTags));
 
-        public override void MigrateInsert(ReleaseProfile model) => Conn.Connection.Reducers.MigrateInsertReleaseProfile(
+        public override void MigrateInsert(ReleaseProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertReleaseProfile(
             model.Id,
             model.Name ?? string.Empty,
             model.Enabled,
@@ -55,7 +76,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.AllowSeasonPackWithoutAllEpisodesAired,
             SpacetimeJson.Serialize(model.IndexerIds),
             SpacetimeJson.Serialize(model.Tags),
-            SpacetimeJson.Serialize(model.ExcludedTags));
+            SpacetimeJson.Serialize(model.ExcludedTags)));
 
         protected override void InvokeUpdateReducer(ReleaseProfile model) => Conn.Connection.Reducers.UpdateReleaseProfile(
             model.Id,

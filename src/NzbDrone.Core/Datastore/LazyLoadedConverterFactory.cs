@@ -36,11 +36,9 @@ namespace NzbDrone.Core.Datastore
 
             public LazyLoadedConverter(JsonSerializerOptions options)
             {
-                // For performance, use the existing converter if available.
                 _childConverter = (JsonConverter<TChild>)options
                     .GetConverter(typeof(TChild));
 
-                // Cache the type.
                 _childType = typeof(TChild);
             }
 

@@ -1,5 +1,4 @@
 using System;
-using System.Data.SQLite;
 using System.Net;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -64,18 +63,6 @@ namespace Sonarr.Http.ErrorManagement
             else if (exception is ModelConflictException)
             {
                 statusCode = HttpStatusCode.Conflict;
-            }
-            else if (exception is SQLiteException sqLiteException)
-            {
-                if (context.Request.Method == "PUT" || context.Request.Method == "POST")
-                {
-                    if (sqLiteException.Message.Contains("constraint failed"))
-                    {
-                        statusCode = HttpStatusCode.Conflict;
-                    }
-                }
-
-                _logger.Error(sqLiteException, "[{0} {1}]", context.Request.Method, context.Request.Path);
             }
             else if (exception is InvalidOperationException invalidOperationException)
             {

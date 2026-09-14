@@ -1,6 +1,10 @@
+using System;
 using System.Linq;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using SpacetimeDB;
+using EventContext = SpacetimeDB.Types.EventContext;
+using ReducerEventContext = SpacetimeDB.Types.ReducerEventContext;
 using StdbConfig = SpacetimeDB.Types.Config;
 
 namespace NzbDrone.Core.Datastore.SpacetimeDb
@@ -12,8 +16,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override StdbConfig[] RemoteQuery(string whereClauseWithoutPrefix) =>
-            Conn.Connection.Db.Config.RemoteQuery(whereClauseWithoutPrefix).GetAwaiter().GetResult();
+        protected override RemoteTableHandle<EventContext, StdbConfig> Table => Conn.Connection.Db.Config;
+
+        protected override StdbConfig FindRowById(int id) => Conn.Connection.Db.Config.Id.Find(id);
+
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        {
+            void Handler(ReducerEventContext ctx, int id, string p2, string p3)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+            }
+
+            Conn.Connection.Reducers.OnUpdateConfig += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateConfig -= Handler);
+        }
 
         protected override Config ToModel(StdbConfig row) => new Config { Id = row.Id, Key = row.Key, Value = row.Value };
 
@@ -21,14 +42,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(Config model) => Conn.Connection.Reducers.InsertConfig(model.Key ?? string.Empty, model.Value ?? string.Empty);
 
-        public override void MigrateInsert(Config model) => Conn.Connection.Reducers.MigrateInsertConfig(model.Id, model.Key ?? string.Empty, model.Value ?? string.Empty);
+        public override void MigrateInsert(Config model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertConfig(model.Id, model.Key ?? string.Empty, model.Value ?? string.Empty));
 
         protected override void InvokeUpdateReducer(Config model) => Conn.Connection.Reducers.UpdateConfig(model.Id, model.Key ?? string.Empty, model.Value ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteConfig(id);
 
         public Config Get(string key) =>
-            RemoteQuery($"WHERE Key = '{EscapeSqlString(key)}'").Select(ToModel).SingleOrDefault();
+            Query(t => t.Iter().Where(r => r.Key == key).Select(ToModel).SingleOrDefault());
 
         public Config Upsert(string key, string value)
         {
