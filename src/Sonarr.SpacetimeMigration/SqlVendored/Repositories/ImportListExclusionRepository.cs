@@ -1,0 +1,19 @@
+using System.Linq;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Messaging.Events;
+
+namespace NzbDrone.Core.ImportLists.Exclusions
+{
+    public class ImportListExclusionRepository : BasicRepository<ImportListExclusion>, IImportListExclusionRepository
+    {
+        public ImportListExclusionRepository(IMainDatabase database, IEventAggregator eventAggregator)
+            : base(database, eventAggregator)
+        {
+        }
+
+        public ImportListExclusion FindByTvdbId(int tvdbId)
+        {
+            return Query(m => m.TvdbId == tvdbId).SingleOrDefault();
+        }
+    }
+}

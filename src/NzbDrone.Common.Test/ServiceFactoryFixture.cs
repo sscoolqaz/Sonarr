@@ -11,8 +11,6 @@ using NzbDrone.Common.Composition.Extensions;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Instrumentation.Extensions;
 using NzbDrone.Common.Options;
-using NzbDrone.Core.Datastore;
-using NzbDrone.Core.Datastore.Extensions;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Host;
@@ -29,12 +27,9 @@ namespace NzbDrone.Common.Test
             var container = new Container(rules => rules.WithNzbDroneRules())
                 .AddNzbDroneLogger()
                 .AutoAddServices(Bootstrap.ASSEMBLIES)
-                .AddDummyDatabase()
-                .AddDummyLogDatabase()
                 .AddStartupContext(new StartupContext("first", "second"));
 
             container.RegisterInstance(new Mock<IHostLifetime>().Object);
-            container.RegisterInstance(new Mock<IOptions<PostgresOptions>>().Object);
             container.RegisterInstance(new Mock<IOptions<AppOptions>>().Object);
             container.RegisterInstance(new Mock<IOptions<AuthOptions>>().Object);
             container.RegisterInstance(new Mock<IOptions<ServerOptions>>().Object);
