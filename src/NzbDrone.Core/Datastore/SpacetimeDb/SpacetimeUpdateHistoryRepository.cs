@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Update.History;
 using SpacetimeDB;
@@ -56,7 +57,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(UpdateHistory model) => Conn.Connection.Reducers.InsertUpdateHistory(
             SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType);
 
-        public override void MigrateInsert(UpdateHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertUpdateHistory(
+        public override Task MigrateInsert(UpdateHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertUpdateHistory(
             model.Id, SpacetimeDateTime.ToTimestamp(model.Date), model.Version.ToString(), (int)model.EventType));
 
         protected override void InvokeUpdateReducer(UpdateHistory model) => Conn.Connection.Reducers.UpdateUpdateHistory(
@@ -64,13 +65,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteUpdateHistory(id);
 
-        public UpdateHistory LastInstalled() =>
-            All().Where(v => v.EventType == UpdateHistoryEventType.Installed).OrderByDescending(v => v.Date).Take(1).FirstOrDefault();
+        public async Task<UpdateHistory> LastInstalled() =>
+            (await All()).Where(v => v.EventType == UpdateHistoryEventType.Installed).OrderByDescending(v => v.Date).Take(1).FirstOrDefault();
 
-        public UpdateHistory PreviouslyInstalled() =>
-            All().Where(v => v.EventType == UpdateHistoryEventType.Installed).OrderByDescending(v => v.Date).Skip(1).Take(1).FirstOrDefault();
+        public async Task<UpdateHistory> PreviouslyInstalled() =>
+            (await All()).Where(v => v.EventType == UpdateHistoryEventType.Installed).OrderByDescending(v => v.Date).Skip(1).Take(1).FirstOrDefault();
 
-        public List<UpdateHistory> InstalledSince(DateTime dateTime) =>
-            All().Where(v => v.EventType == UpdateHistoryEventType.Installed && v.Date >= dateTime).OrderBy(v => v.Date).ToList();
+        public async Task<List<UpdateHistory>> InstalledSince(DateTime dateTime) =>
+            (await All()).Where(v => v.EventType == UpdateHistoryEventType.Installed && v.Date >= dateTime).OrderBy(v => v.Date).ToList();
     }
 }

@@ -1,13 +1,14 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Blocklisting
 {
     public interface IBlocklistRepository : IBasicRepository<Blocklist>
     {
-        List<Blocklist> BlocklistedByTitle(int seriesId, string sourceTitle);
-        List<Blocklist> BlocklistedByTorrentInfoHash(int seriesId, string torrentInfoHash);
-        List<Blocklist> BlocklistedBySeries(int seriesId);
-        void DeleteForSeriesIds(List<int> seriesIds);
+        Task<List<Blocklist>> BlocklistedByTitle(int seriesId, string sourceTitle);
+        Task<List<Blocklist>> BlocklistedByTorrentInfoHash(int seriesId, string torrentInfoHash);
+        Task<List<Blocklist>> BlocklistedBySeries(int seriesId);
+        Task DeleteForSeriesIds(List<int> seriesIds);
     }
 }

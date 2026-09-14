@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 using NzbDrone.Common.Reflection;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Messaging.Commands;
@@ -134,17 +135,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteCommand(id);
 
-        public void Trim()
+        public async Task Trim()
         {
             var date = DateTime.UtcNow.AddDays(-1);
 
-            foreach (var row in All().Where(c => c.EndedAt < date).ToList())
+            foreach (var row in (await All()).Where(c => c.EndedAt < date).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
 
-        public void OrphanStarted() =>
+        public Task OrphanStarted() =>
             InvokeAndWaitForReducerCommitted(
                 () => Conn.Connection.Reducers.OrphanStartedCommands((int)CommandStatus.Orphaned, (int)CommandStatus.Started, SpacetimeDateTime.ToTimestamp(DateTime.UtcNow)),
                 (onCommitted, onFailed) =>
@@ -169,10 +170,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     return new Unsubscriber(() => Conn.Connection.Reducers.OnOrphanStartedCommands -= Handler);
                 });
 
-        public List<CommandModel> Queued() => All().Where(x => x.Status == CommandStatus.Queued).ToList();
+        public async Task<List<CommandModel>> Queued() => (await All()).Where(x => x.Status == CommandStatus.Queued).ToList();
 
-        public void Start(CommandModel command) => SetFields(command, c => c.StartedAt, c => c.Status);
+        public Task Start(CommandModel command) => SetFields(command, c => c.StartedAt, c => c.Status);
 
-        public void End(CommandModel command) => SetFields(command, c => c.EndedAt, c => c.Status, c => c.Duration, c => c.Exception);
+        public Task End(CommandModel command) => SetFields(command, c => c.EndedAt, c => c.Status, c => c.Duration, c => c.Exception);
     }
 }

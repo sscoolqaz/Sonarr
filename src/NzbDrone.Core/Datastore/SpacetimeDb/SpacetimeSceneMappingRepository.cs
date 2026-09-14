@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.DataAugmentation.Scene;
 using NzbDrone.Core.Messaging.Events;
 using SpacetimeDB;
@@ -93,10 +94,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteSceneMapping(id);
 
-        public List<SceneMapping> FindByTvdbid(int tvdbId) =>
+        public Task<List<SceneMapping>> FindByTvdbid(int tvdbId) =>
             Query(t => t.Iter().Where(r => r.TvdbId == tvdbId).Select(ToModel).ToList());
 
-        public List<SceneMapping> GetAllByType(string type) =>
+        public Task<List<SceneMapping>> GetAllByType(string type) =>
             Query(t => t.Iter().Where(r => r.Type == type).Select(ToModel).ToList());
     }
 }

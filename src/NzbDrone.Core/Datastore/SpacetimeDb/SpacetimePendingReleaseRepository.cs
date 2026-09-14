@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Download.Pending;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser.Model;
@@ -67,7 +68,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             (int)model.Reason,
             SpacetimeJson.Serialize(model.AdditionalInfo));
 
-        public override void MigrateInsert(PendingRelease model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertPendingRelease(
+        public override Task MigrateInsert(PendingRelease model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertPendingRelease(
             model.Id,
             model.SeriesId,
             model.Title ?? string.Empty,
@@ -89,20 +90,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeletePendingRelease(id);
 
-        public void DeleteBySeriesIds(List<int> seriesIds)
+        public async Task DeleteBySeriesIds(List<int> seriesIds)
         {
-            foreach (var row in All().Where(r => seriesIds.Contains(r.SeriesId)).ToList())
+            foreach (var row in (await All()).Where(r => seriesIds.Contains(r.SeriesId)).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
 
-        public List<PendingRelease> AllBySeriesId(int seriesId) =>
+        public Task<List<PendingRelease>> AllBySeriesId(int seriesId) =>
             Query(t => t.Iter().Where(r => r.SeriesId == seriesId).Select(ToModel).ToList());
 
         // No production caller (confirmed by the Phase 3 adversarial review) and the join it did
         // in SQL projected no columns from Series anyway - a plain filter is equivalent.
-        public List<PendingRelease> WithoutFallback() =>
-            All().Where(r => r.Reason != PendingReleaseReason.Fallback).ToList();
+        public async Task<List<PendingRelease>> WithoutFallback() =>
+            (await All()).Where(r => r.Reason != PendingReleaseReason.Fallback).ToList();
     }
 }

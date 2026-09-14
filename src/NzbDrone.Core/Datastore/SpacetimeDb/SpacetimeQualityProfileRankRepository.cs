@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Qualities;
 using SpacetimeDB;
@@ -61,20 +62,22 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteQualityProfileQualityRank(id);
 
-        public void ReplaceForProfile(int profileId, IEnumerable<QualityProfileQualityRank> ranks)
+        public Task ReplaceForProfile(int profileId, IEnumerable<QualityProfileQualityRank> ranks)
         {
             var input = ranks.Select(r => new SpacetimeDB.Types.QualityRankInput { QualityId = r.QualityId, Score = r.Score }).ToList();
 
             Conn.Connection.Reducers.ReplaceQualityProfileQualityRanks(profileId, input);
+
+            return Task.CompletedTask;
         }
 
-        public void DeleteForProfile(int profileId)
+        public async Task DeleteForProfile(int profileId)
         {
-            var rows = Query(t => t.Iter().Where(r => r.ProfileId == profileId).Select(ToModel).ToList());
+            var rows = await Query(t => t.Iter().Where(r => r.ProfileId == profileId).Select(ToModel).ToList());
 
             foreach (var row in rows)
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
     }

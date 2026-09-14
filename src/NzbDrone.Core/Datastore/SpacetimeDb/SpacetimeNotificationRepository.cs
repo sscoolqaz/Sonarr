@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
 using SpacetimeDB;
@@ -58,7 +59,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(NotificationDefinition model) => Conn.Connection.Reducers.InsertNotificationDefinition(
             model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
 
-        public override void MigrateInsert(NotificationDefinition model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertNotificationDefinition(
+        public override Task MigrateInsert(NotificationDefinition model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertNotificationDefinition(
             model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message)));
 
         protected override void InvokeUpdateReducer(NotificationDefinition model) => Conn.Connection.Reducers.UpdateNotificationDefinition(
@@ -66,6 +67,6 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteNotificationDefinition(id);
 
-        public void UpdateSettings(NotificationDefinition model) => SetFields(model, m => m.Settings);
+        public Task UpdateSettings(NotificationDefinition model) => SetFields(model, m => m.Settings);
     }
 }

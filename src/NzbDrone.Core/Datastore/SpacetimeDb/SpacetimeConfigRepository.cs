@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using SpacetimeDB;
@@ -48,27 +49,27 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(Config model) => Conn.Connection.Reducers.InsertConfig(model.Key ?? string.Empty, model.Value ?? string.Empty);
 
-        public override void MigrateInsert(Config model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertConfig(model.Id, model.Key ?? string.Empty, model.Value ?? string.Empty));
+        public override Task MigrateInsert(Config model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertConfig(model.Id, model.Key ?? string.Empty, model.Value ?? string.Empty));
 
         protected override void InvokeUpdateReducer(Config model) => Conn.Connection.Reducers.UpdateConfig(model.Id, model.Key ?? string.Empty, model.Value ?? string.Empty);
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteConfig(id);
 
-        public Config Get(string key) =>
+        public Task<Config> Get(string key) =>
             Query(t => t.Iter().Where(r => r.Key == key).Select(ToModel).SingleOrDefault());
 
-        public Config Upsert(string key, string value)
+        public async Task<Config> Upsert(string key, string value)
         {
-            var dbValue = Get(key);
+            var dbValue = await Get(key);
 
             if (dbValue == null)
             {
-                return Insert(new Config { Key = key, Value = value });
+                return await Insert(new Config { Key = key, Value = value });
             }
 
             dbValue.Value = value;
 
-            return Update(dbValue);
+            return await Update(dbValue);
         }
     }
 }

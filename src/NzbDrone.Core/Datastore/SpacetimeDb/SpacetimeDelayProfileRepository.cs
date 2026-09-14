@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Delay;
@@ -72,7 +73,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.MinimumCustomFormatScore,
             SpacetimeJson.Serialize(model.Tags));
 
-        public override void MigrateInsert(DelayProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertDelayProfile(
+        public override Task MigrateInsert(DelayProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertDelayProfile(
             model.Id,
             model.EnableUsenet,
             model.EnableTorrent,

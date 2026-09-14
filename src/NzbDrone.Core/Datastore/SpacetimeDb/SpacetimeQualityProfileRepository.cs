@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles;
@@ -63,7 +64,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override QualityProfile ToModel(StdbQualityProfile row)
         {
-            var cfs = _customFormatService.All().ToDictionary(c => c.Id);
+            // ToModel is an unchanged sync hook, always invoked from inside an already-actor-thread
+            // context (see SpacetimeBasicRepository.Query/All) - same reasoning as
+            // SpacetimeEpisodeRepository.ToModel's EpisodeFile lookup. ICustomFormatService.All()
+            // resolves through ICustomFormatRepository -> Conn.RunOnActorAsync, which - detecting
+            // it's already running on the actor thread - completes synchronously, so
+            // GetAwaiter().GetResult() here unwraps an already-completed Task, not a real block.
+            var cfs = _customFormatService.All().GetAwaiter().GetResult().ToDictionary(c => c.Id);
             var dtos = JsonSerializer.Deserialize<List<FormatItemDto>>(row.FormatItemsJson, SerializerSettings) ?? new List<FormatItemDto>();
             var formatItems = new List<ProfileFormatItem>();
 
@@ -96,7 +103,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // All()/Find() can never reveal a stale id for SpacetimeCleanupQualityProfileFormatItems
         // to detect and persist a removal for. This gives that task the raw, unfiltered ids
         // exactly as stored, bypassing the CustomFormat existence check.
-        public Dictionary<int, List<int>> GetRawFormatItemIds()
+        public Task<Dictionary<int, List<int>>> GetRawFormatItemIds()
         {
             return Query(t => t.Iter().ToDictionary(
                 row => row.Id,
@@ -121,7 +128,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SerializeFormatItems(model),
             SerializeItems(model));
 
-        public override void MigrateInsert(QualityProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertQualityProfile(
+        public override Task MigrateInsert(QualityProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertQualityProfile(
             model.Id,
             model.Name ?? string.Empty,
             model.UpgradeAllowed,
@@ -145,6 +152,6 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteQualityProfile(id);
 
-        public bool Exists(int id) => Find(id) != null;
+        public async Task<bool> Exists(int id) => await Find(id) != null;
     }
 }

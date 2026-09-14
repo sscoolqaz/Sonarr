@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.ImportLists.ImportListItems;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Parser.Model;
@@ -69,7 +70,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteImportListItem(id);
 
-        public List<ImportListItemInfo> GetAllForLists(List<int> listIds) =>
-            All().Where(x => listIds.Contains(x.ImportListId)).ToList();
+        public async Task<List<ImportListItemInfo>> GetAllForLists(List<int> listIds) =>
+            (await All()).Where(x => listIds.Contains(x.ImportListId)).ToList();
     }
 }

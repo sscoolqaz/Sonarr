@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Languages;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Qualities;
@@ -79,7 +80,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Monitored = row.Monitored,
             MonitorNewItems = (NewItemMonitorTypes)row.MonitorNewItems,
             QualityProfileId = row.QualityProfileId,
-            QualityProfile = new LazyLoaded<QualityProfile>(_qualityProfileRepository.Find(row.QualityProfileId)),
+
+            // ToModel is an unchanged sync hook, always invoked from inside an already-actor-thread
+            // context (see SpacetimeBasicRepository.Query/All) - same reasoning as
+            // SpacetimeEpisodeRepository.ToModel's EpisodeFile lookup. GetAwaiter().GetResult()
+            // here unwraps a Task that RunOnActorAsync already completed synchronously (it detects
+            // it's already on the actor thread), not a real blocking wait.
+            QualityProfile = new LazyLoaded<QualityProfile>(_qualityProfileRepository.Find(row.QualityProfileId).GetAwaiter().GetResult()),
             SeasonFolder = row.SeasonFolder,
             LastInfoSync = SpacetimeDateTime.ToDateTime(row.LastInfoSync),
             Runtime = row.Runtime,
@@ -109,9 +116,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // Tags aren't part of this - migration calls replace_series_tags separately afterward,
         // same as the running app does (see ReplaceSeriesTags's own reducer, already keyed by
         // seriesId/tagIds rather than needing an id-preserving variant of its own).
-        public override void MigrateInsert(Series model)
+        public override Task MigrateInsert(Series model)
         {
-            InvokeAndWaitForMigrateInsert(model.Id, () =>
+            return InvokeAndWaitForMigrateInsert(model.Id, () =>
             {
             Conn.Connection.Reducers.MigrateInsertSeries(
                 model.Id,
@@ -244,45 +251,45 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteSeries(id);
 
-        public bool SeriesPathExists(string path) => All().Any(s => s.Path == path);
+        public async Task<bool> SeriesPathExists(string path) => (await All()).Any(s => s.Path == path);
 
-        public Series FindByTitle(string cleanTitle)
+        public async Task<Series> FindByTitle(string cleanTitle)
         {
             cleanTitle = cleanTitle.ToLowerInvariant();
 
-            return ReturnSingleSeriesOrThrow(All().Where(s => s.CleanTitle == cleanTitle).ToList());
+            return ReturnSingleSeriesOrThrow((await All()).Where(s => s.CleanTitle == cleanTitle).ToList());
         }
 
-        public Series FindByTitle(string cleanTitle, int year)
+        public async Task<Series> FindByTitle(string cleanTitle, int year)
         {
             cleanTitle = cleanTitle.ToLowerInvariant();
 
-            return ReturnSingleSeriesOrThrow(All().Where(s => s.CleanTitle == cleanTitle && s.Year == year).ToList());
+            return ReturnSingleSeriesOrThrow((await All()).Where(s => s.CleanTitle == cleanTitle && s.Year == year).ToList());
         }
 
         // The real repository uses SQLite instr()/PostgreSQL strpos() to test whether each
         // series' CleanTitle is a substring of the caller's cleanTitle - neither exists in
         // SpacetimeDB's WHERE grammar (Phase 3 schema design). Fetch-all and test client-side;
         // acceptable at Sonarr's realistic series-count scale per that same decision.
-        public List<Series> FindByTitleInexact(string cleanTitle) =>
-            All().Where(s => cleanTitle.Contains(s.CleanTitle)).ToList();
+        public async Task<List<Series>> FindByTitleInexact(string cleanTitle) =>
+            (await All()).Where(s => cleanTitle.Contains(s.CleanTitle)).ToList();
 
-        public Series FindByTvdbId(int tvdbId) => All().SingleOrDefault(s => s.TvdbId == tvdbId);
+        public async Task<Series> FindByTvdbId(int tvdbId) => (await All()).SingleOrDefault(s => s.TvdbId == tvdbId);
 
-        public Series FindByTvRageId(int tvRageId) => All().SingleOrDefault(s => s.TvRageId == tvRageId);
+        public async Task<Series> FindByTvRageId(int tvRageId) => (await All()).SingleOrDefault(s => s.TvRageId == tvRageId);
 
-        public Series FindByImdbId(string imdbId) => All().SingleOrDefault(s => s.ImdbId == imdbId);
+        public async Task<Series> FindByImdbId(string imdbId) => (await All()).SingleOrDefault(s => s.ImdbId == imdbId);
 
-        public Series FindByPath(string path) => All().FirstOrDefault(s => s.Path == path);
+        public async Task<Series> FindByPath(string path) => (await All()).FirstOrDefault(s => s.Path == path);
 
-        public Dictionary<int, int> AllSeriesTvdbIds() => All().ToDictionary(s => s.Id, s => s.TvdbId);
+        public async Task<Dictionary<int, int>> AllSeriesTvdbIds() => (await All()).ToDictionary(s => s.Id, s => s.TvdbId);
 
-        public Dictionary<int, string> AllSeriesPaths() => All().ToDictionary(s => s.Id, s => s.Path);
+        public async Task<Dictionary<int, string>> AllSeriesPaths() => (await All()).ToDictionary(s => s.Id, s => s.Path);
 
-        public Dictionary<int, List<int>> AllSeriesTags() =>
-            All().Where(s => s.Tags != null && s.Tags.Count > 0).ToDictionary(s => s.Id, s => s.Tags.ToList());
+        public async Task<Dictionary<int, List<int>>> AllSeriesTags() =>
+            (await All()).Where(s => s.Tags != null && s.Tags.Count > 0).ToDictionary(s => s.Id, s => s.Tags.ToList());
 
-        public Dictionary<int, int> AllSeriesQualityProfiles() => All().ToDictionary(s => s.Id, s => s.QualityProfileId);
+        public async Task<Dictionary<int, int>> AllSeriesQualityProfiles() => (await All()).ToDictionary(s => s.Id, s => s.QualityProfileId);
 
         private static Series ReturnSingleSeriesOrThrow(List<Series> series)
         {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles.Releases;
 using SpacetimeDB;
@@ -71,7 +72,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.Tags),
             SpacetimeJson.Serialize(model.ExcludedTags));
 
-        public override void MigrateInsert(ReleaseProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertReleaseProfile(
+        public override Task MigrateInsert(ReleaseProfile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertReleaseProfile(
             model.Id,
             model.Name ?? string.Empty,
             model.Enabled,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Tags;
 using SpacetimeDB;
@@ -56,7 +57,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(Tag model) => Conn.Connection.Reducers.InsertTag(model.Label ?? string.Empty);
 
-        public override void MigrateInsert(Tag model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertTag(model.Id, model.Label ?? string.Empty));
+        public override Task MigrateInsert(Tag model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertTag(model.Id, model.Label ?? string.Empty));
 
         protected override void InvokeUpdateReducer(Tag model) => Conn.Connection.Reducers.UpdateTag(model.Id, model.Label ?? string.Empty);
 
@@ -64,9 +65,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override object GetSortKey(Tag model) => model.Label;
 
-        public Tag GetByLabel(string label)
+        public async Task<Tag> GetByLabel(string label)
         {
-            var model = FindByLabel(label);
+            var model = await FindByLabel(label);
 
             if (model == null)
             {
@@ -76,10 +77,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return model;
         }
 
-        public Tag FindByLabel(string label) =>
+        public Task<Tag> FindByLabel(string label) =>
             Query(t => t.Iter().Where(r => r.Label == label).Select(ToModel).SingleOrDefault());
 
-        public List<Tag> GetTags(HashSet<int> tagIds) =>
-            All().Where(t => tagIds.Contains(t.Id)).ToList();
+        public async Task<List<Tag>> GetTags(HashSet<int> tagIds) =>
+            (await All()).Where(t => tagIds.Contains(t.Id)).ToList();
     }
 }

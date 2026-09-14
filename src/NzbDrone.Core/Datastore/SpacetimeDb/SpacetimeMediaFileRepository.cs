@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Languages;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.MediaFiles.MediaInfo;
@@ -82,7 +83,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static int DeriveQualityId(EpisodeFile model) => model.Quality?.Quality?.Id ?? 0;
 
-        public override void MigrateInsert(EpisodeFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertEpisodeFile(
+        public override Task MigrateInsert(EpisodeFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertEpisodeFile(
             model.Id,
             model.SeriesId,
             model.SeasonNumber,
@@ -137,25 +138,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteEpisodeFile(id);
 
-        public List<EpisodeFile> GetFilesBySeries(int seriesId) =>
+        public Task<List<EpisodeFile>> GetFilesBySeries(int seriesId) =>
             Query(t => t.Iter().Where(r => r.SeriesId == seriesId).Select(ToModel).ToList());
 
-        public List<EpisodeFile> GetFilesBySeriesIds(List<int> seriesIds) =>
-            All().Where(c => seriesIds.Contains(c.SeriesId)).ToList();
+        public async Task<List<EpisodeFile>> GetFilesBySeriesIds(List<int> seriesIds) =>
+            (await All()).Where(c => seriesIds.Contains(c.SeriesId)).ToList();
 
-        public List<EpisodeFile> GetFilesBySeason(int seriesId, int seasonNumber) =>
+        public Task<List<EpisodeFile>> GetFilesBySeason(int seriesId, int seasonNumber) =>
             Query(t => t.Iter().Where(r => r.SeriesId == seriesId && r.SeasonNumber == seasonNumber).Select(ToModel).ToList());
 
-        public List<EpisodeFile> GetFilesWithoutMediaInfo() => All().Where(c => c.MediaInfo == null).ToList();
+        public async Task<List<EpisodeFile>> GetFilesWithoutMediaInfo() => (await All()).Where(c => c.MediaInfo == null).ToList();
 
-        public List<EpisodeFile> GetFilesWithRelativePath(int seriesId, string relativePath) =>
+        public Task<List<EpisodeFile>> GetFilesWithRelativePath(int seriesId, string relativePath) =>
             Query(t => t.Iter().Where(r => r.SeriesId == seriesId && r.RelativePath == relativePath).Select(ToModel).ToList());
 
-        public void DeleteForSeries(List<int> seriesIds)
+        public async Task DeleteForSeries(List<int> seriesIds)
         {
-            foreach (var row in All().Where(x => seriesIds.Contains(x.SeriesId)).ToList())
+            foreach (var row in (await All()).Where(x => seriesIds.Contains(x.SeriesId)).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
     }

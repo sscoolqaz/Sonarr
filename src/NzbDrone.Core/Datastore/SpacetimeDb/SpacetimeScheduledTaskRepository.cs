@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Events;
 using SpacetimeDB;
@@ -61,7 +62,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             (int)model.Priority,
             SpacetimeDateTime.ToTimestamp(model.LastStartTime));
 
-        public override void MigrateInsert(ScheduledTask model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertScheduledTask(
+        public override Task MigrateInsert(ScheduledTask model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertScheduledTask(
             model.Id,
             model.TypeName ?? string.Empty,
             model.Interval,
@@ -79,17 +80,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteScheduledTask(id);
 
-        public ScheduledTask GetDefinition(Type type)
+        public Task<ScheduledTask> GetDefinition(Type type)
         {
             var typeName = type.FullName;
             return Query(t => t.Iter().Where(r => r.TypeName == typeName).Select(ToModel).Single());
         }
 
-        public void SetLastExecutionTime(int id, DateTime executionTime, DateTime startTime)
+        public Task SetLastExecutionTime(int id, DateTime executionTime, DateTime startTime)
         {
             var task = new ScheduledTask { Id = id, LastExecution = executionTime, LastStartTime = startTime };
 
-            SetFields(task, scheduledTask => scheduledTask.LastExecution, scheduledTask => scheduledTask.LastStartTime);
+            return SetFields(task, scheduledTask => scheduledTask.LastExecution, scheduledTask => scheduledTask.LastStartTime);
         }
     }
 }

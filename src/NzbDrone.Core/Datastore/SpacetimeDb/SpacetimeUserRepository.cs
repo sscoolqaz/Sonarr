@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Messaging.Events;
 using SpacetimeDB;
@@ -57,7 +58,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(User model) =>
             Conn.Connection.Reducers.InsertUser(model.Identifier.ToString(), model.Username ?? string.Empty, model.Password ?? string.Empty, model.Salt ?? string.Empty, model.Iterations);
 
-        public override void MigrateInsert(User model) =>
+        public override Task MigrateInsert(User model) =>
             InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertUser(model.Id, model.Identifier.ToString(), model.Username ?? string.Empty, model.Password ?? string.Empty, model.Salt ?? string.Empty, model.Iterations));
 
         protected override void InvokeUpdateReducer(User model) =>
@@ -65,10 +66,10 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteUser(id);
 
-        public User FindUser(string username) =>
+        public Task<User> FindUser(string username) =>
             Query(t => t.Iter().Where(r => r.Username == username).Select(ToModel).SingleOrDefault());
 
-        public User FindUser(Guid identifier)
+        public Task<User> FindUser(Guid identifier)
         {
             var identifierString = identifier.ToString();
             return Query(t => t.Iter().Where(r => r.Identifier == identifierString).Select(ToModel).SingleOrDefault());

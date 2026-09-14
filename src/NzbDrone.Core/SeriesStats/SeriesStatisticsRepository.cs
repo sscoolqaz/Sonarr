@@ -1,10 +1,11 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace NzbDrone.Core.SeriesStats
 {
     public interface ISeriesStatisticsRepository
     {
-        List<SeasonStatistics> SeriesStatistics();
-        List<SeasonStatistics> SeriesStatistics(int seriesId);
+        Task<List<SeasonStatistics>> SeriesStatistics();
+        Task<List<SeasonStatistics>> SeriesStatistics(int seriesId);
     }
 }

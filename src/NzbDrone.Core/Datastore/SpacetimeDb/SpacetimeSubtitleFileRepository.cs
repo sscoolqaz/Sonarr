@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Subtitles;
 using NzbDrone.Core.Languages;
 using NzbDrone.Core.Messaging.Events;
@@ -74,7 +75,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.LanguageTags),
             model.Title ?? string.Empty);
 
-        public override void MigrateInsert(SubtitleFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertSubtitleFile(
+        public override Task MigrateInsert(SubtitleFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertSubtitleFile(
             model.Id,
             model.SeriesId,
             model.EpisodeFileId,

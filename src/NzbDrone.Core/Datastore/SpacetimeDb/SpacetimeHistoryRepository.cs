@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.History;
 using NzbDrone.Core.Languages;
 using NzbDrone.Core.Messaging.Events;
@@ -82,7 +83,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static int DeriveQualityId(EpisodeHistory model) => model.Quality?.Quality?.Id ?? 0;
 
-        public override void MigrateInsert(EpisodeHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertEpisodeHistory(
+        public override Task MigrateInsert(EpisodeHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertEpisodeHistory(
             model.Id,
             model.EpisodeId,
             model.SeriesId,
@@ -122,27 +123,27 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteEpisodeHistory(id);
 
-        public EpisodeHistory MostRecentForEpisode(int episodeId) =>
-            All().Where(h => h.EpisodeId == episodeId).OrderByDescending(h => h.Date).FirstOrDefault();
+        public async Task<EpisodeHistory> MostRecentForEpisode(int episodeId) =>
+            (await All()).Where(h => h.EpisodeId == episodeId).OrderByDescending(h => h.Date).FirstOrDefault();
 
-        public List<EpisodeHistory> FindByEpisodeId(int episodeId) =>
-            All().Where(h => h.EpisodeId == episodeId).OrderByDescending(h => h.Date).ToList();
+        public async Task<List<EpisodeHistory>> FindByEpisodeId(int episodeId) =>
+            (await All()).Where(h => h.EpisodeId == episodeId).OrderByDescending(h => h.Date).ToList();
 
-        public EpisodeHistory MostRecentForDownloadId(string downloadId) =>
-            All().Where(h => h.DownloadId == downloadId).OrderByDescending(h => h.Date).FirstOrDefault();
+        public async Task<EpisodeHistory> MostRecentForDownloadId(string downloadId) =>
+            (await All()).Where(h => h.DownloadId == downloadId).OrderByDescending(h => h.Date).FirstOrDefault();
 
-        public List<EpisodeHistory> FindByDownloadId(string downloadId) =>
-            All().Where(h => h.DownloadId == downloadId).ToList();
+        public async Task<List<EpisodeHistory>> FindByDownloadId(string downloadId) =>
+            (await All()).Where(h => h.DownloadId == downloadId).ToList();
 
-        public List<EpisodeHistory> GetBySeries(int seriesId, EpisodeHistoryEventType? eventType) =>
-            All().Where(h => h.SeriesId == seriesId && (!eventType.HasValue || h.EventType == eventType.Value))
+        public async Task<List<EpisodeHistory>> GetBySeries(int seriesId, EpisodeHistoryEventType? eventType) =>
+            (await All()).Where(h => h.SeriesId == seriesId && (!eventType.HasValue || h.EventType == eventType.Value))
                  .OrderByDescending(h => h.Date).ToList();
 
-        public List<EpisodeHistory> GetBySeason(int seriesId, int seasonNumber, EpisodeHistoryEventType? eventType)
+        public async Task<List<EpisodeHistory>> GetBySeason(int seriesId, int seasonNumber, EpisodeHistoryEventType? eventType)
         {
-            var episodesById = _episodeRepository.GetEpisodes(seriesId).Where(e => e.SeasonNumber == seasonNumber).ToDictionary(e => e.Id);
+            var episodesById = (await _episodeRepository.GetEpisodes(seriesId)).Where(e => e.SeasonNumber == seasonNumber).ToDictionary(e => e.Id);
 
-            return All()
+            return (await All())
                 .Where(h => h.SeriesId == seriesId && episodesById.ContainsKey(h.EpisodeId) && (!eventType.HasValue || h.EventType == eventType.Value))
                 .Select(h =>
                 {
@@ -152,37 +153,37 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 .OrderByDescending(h => h.Date).ToList();
         }
 
-        public List<EpisodeHistory> GetByEpisode(int episodeId, EpisodeHistoryEventType? eventType) =>
-            All().Where(h => h.EpisodeId == episodeId && (!eventType.HasValue || h.EventType == eventType.Value))
+        public async Task<List<EpisodeHistory>> GetByEpisode(int episodeId, EpisodeHistoryEventType? eventType) =>
+            (await All()).Where(h => h.EpisodeId == episodeId && (!eventType.HasValue || h.EventType == eventType.Value))
                  .OrderByDescending(h => h.Date).ToList();
 
-        public List<EpisodeHistory> FindDownloadHistory(int idSeriesId, QualityModel quality) =>
-            All().Where(h => h.SeriesId == idSeriesId &&
+        public async Task<List<EpisodeHistory>> FindDownloadHistory(int idSeriesId, QualityModel quality) =>
+            (await All()).Where(h => h.SeriesId == idSeriesId &&
                               h.Quality != null && quality != null && h.Quality.Equals(quality) &&
                               (h.EventType == EpisodeHistoryEventType.Grabbed ||
                                h.EventType == EpisodeHistoryEventType.DownloadFailed ||
                                h.EventType == EpisodeHistoryEventType.DownloadFolderImported))
                  .ToList();
 
-        public void DeleteForSeries(List<int> seriesIds)
+        public async Task DeleteForSeries(List<int> seriesIds)
         {
-            foreach (var row in All().Where(h => seriesIds.Contains(h.SeriesId)).ToList())
+            foreach (var row in (await All()).Where(h => seriesIds.Contains(h.SeriesId)).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
 
-        public List<EpisodeHistory> Since(DateTime date, EpisodeHistoryEventType? eventType)
+        public async Task<List<EpisodeHistory>> Since(DateTime date, EpisodeHistoryEventType? eventType)
         {
-            var seriesById = _seriesRepository.All().ToDictionary(s => s.Id);
-            var episodesById = _episodeRepository.All().ToDictionary(e => e.Id);
+            var seriesById = (await _seriesRepository.All()).ToDictionary(s => s.Id);
+            var episodesById = (await _episodeRepository.All()).ToDictionary(e => e.Id);
 
             // Series is required, not optional - HistoryResourceMapper.ToResource reads
             // model.Series.QualityProfile.Value unconditionally (not gated by includeSeries).
             // The real repository's Series join is an inner join (Join<EpisodeHistory, Series>,
             // not LeftJoin), so a row whose series has since been deleted is excluded from
             // results entirely rather than mapped with a null Series - match that here too.
-            return All()
+            return (await All())
                 .Where(h => h.Date >= date && (!eventType.HasValue || h.EventType == eventType.Value))
                 .Where(h => seriesById.ContainsKey(h.SeriesId))
                 .Select(h =>
@@ -197,14 +198,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // Same fetch-all/refine-in-C#/paginate-the-refined-set approach as Episode's paginated
         // queries - LIKE-on-serialized-JSON language filtering and the quality-rank sort both
         // become client-side operations, since neither has a SpacetimeDB WHERE equivalent.
-        public PagingSpec<EpisodeHistory> GetPaged(PagingSpec<EpisodeHistory> pagingSpec, int[] languages, int[] qualities)
+        public async Task<PagingSpec<EpisodeHistory>> GetPaged(PagingSpec<EpisodeHistory> pagingSpec, int[] languages, int[] qualities)
         {
-            var seriesById = _seriesRepository.All().ToDictionary(s => s.Id);
-            var episodesById = _episodeRepository.All().ToDictionary(e => e.Id);
+            var seriesById = (await _seriesRepository.All()).ToDictionary(s => s.Id);
+            var episodesById = (await _episodeRepository.All()).ToDictionary(e => e.Id);
 
             // Series is required (see Since's comment above) - excluded here the same way,
             // matching the real repository's inner join instead of leaving a null Series behind.
-            var filtered = All()
+            var filtered = (await All())
                 .Where(h => languages == null || languages.Length == 0 || (h.Languages != null && h.Languages.Any(l => languages.Contains(l.Id))))
                 .Where(h => qualities == null || qualities.Length == 0 || qualities.Contains(h.Quality?.Quality?.Id ?? -1))
                 .Where(h => seriesById.ContainsKey(h.SeriesId))
@@ -229,7 +230,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
             if (string.Equals(pagingSpec.SortKey, "quality", StringComparison.OrdinalIgnoreCase))
             {
-                var ranks = _qualityRankRepository.All().ToDictionary(r => (r.ProfileId, r.QualityId), r => r.Score);
+                var ranks = (await _qualityRankRepository.All()).ToDictionary(r => (r.ProfileId, r.QualityId), r => r.Score);
 
                 double RankFor(EpisodeHistory h) => seriesById.TryGetValue(h.SeriesId, out var series) &&
                     ranks.TryGetValue((series.QualityProfileId, h.Quality?.Quality?.Id ?? 0), out var score) ? score : -1.0;

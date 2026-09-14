@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.ThingiProvider.Status
@@ -5,7 +6,7 @@ namespace NzbDrone.Core.ThingiProvider.Status
     public interface IProviderStatusRepository<TModel> : IBasicRepository<TModel>
         where TModel : ProviderStatusBase, new()
     {
-        TModel FindByProviderId(int providerId);
-        void DeleteByProviderId(int providerId);
+        Task<TModel> FindByProviderId(int providerId);
+        Task DeleteByProviderId(int providerId);
     }
 }

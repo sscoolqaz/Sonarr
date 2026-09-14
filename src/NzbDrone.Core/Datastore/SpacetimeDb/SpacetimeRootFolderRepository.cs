@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.RootFolders;
 using SpacetimeDB;
@@ -49,7 +50,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeInsertReducer(RootFolder model) => Conn.Connection.Reducers.InsertRootFolder(model.Path ?? string.Empty);
 
-        public override void MigrateInsert(RootFolder model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertRootFolder(model.Id, model.Path ?? string.Empty));
+        public override Task MigrateInsert(RootFolder model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertRootFolder(model.Id, model.Path ?? string.Empty));
 
         protected override void InvokeUpdateReducer(RootFolder model) => Conn.Connection.Reducers.UpdateRootFolder(model.Id, model.Path ?? string.Empty);
 

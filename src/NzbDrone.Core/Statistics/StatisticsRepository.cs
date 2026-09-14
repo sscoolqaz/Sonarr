@@ -1,6 +1,8 @@
+using System.Threading.Tasks;
+
 namespace NzbDrone.Core.Statistics;
 
 public interface IStatisticsRepository
 {
-    LibraryStatistics GetLibraryStatistics(StatisticsFilter filter = null);
+    Task<LibraryStatistics> GetLibraryStatistics(StatisticsFilter filter = null);
 }

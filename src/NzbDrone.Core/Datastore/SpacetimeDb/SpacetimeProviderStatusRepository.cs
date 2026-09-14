@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.ThingiProvider.Status;
 
@@ -17,14 +18,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        public TModel FindByProviderId(int providerId) =>
-            Query(t => t.Iter().Select(ToModel).ToList()).SingleOrDefault(m => m.ProviderId == providerId);
+        public async Task<TModel> FindByProviderId(int providerId) =>
+            (await Query(t => t.Iter().Select(ToModel).ToList())).SingleOrDefault(m => m.ProviderId == providerId);
 
-        public void DeleteByProviderId(int providerId)
+        public async Task DeleteByProviderId(int providerId)
         {
-            foreach (var row in All().Where(m => m.ProviderId == providerId).ToList())
+            foreach (var row in (await All()).Where(m => m.ProviderId == providerId).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
     }

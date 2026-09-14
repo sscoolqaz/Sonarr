@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Files;
 using NzbDrone.Core.Messaging.Events;
 
@@ -20,38 +21,38 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        public void DeleteForSeriesIds(List<int> seriesIds)
+        public async Task DeleteForSeriesIds(List<int> seriesIds)
         {
-            foreach (var row in All().Where(c => seriesIds.Contains(c.SeriesId)).ToList())
+            foreach (var row in (await All()).Where(c => seriesIds.Contains(c.SeriesId)).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
 
-        public void DeleteForSeason(int seriesId, int seasonNumber)
+        public async Task DeleteForSeason(int seriesId, int seasonNumber)
         {
-            foreach (var row in All().Where(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber).ToList())
+            foreach (var row in (await All()).Where(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
 
-        public void DeleteForEpisodeFile(int episodeFileId)
+        public async Task DeleteForEpisodeFile(int episodeFileId)
         {
-            foreach (var row in All().Where(c => c.EpisodeFileId == episodeFileId).ToList())
+            foreach (var row in (await All()).Where(c => c.EpisodeFileId == episodeFileId).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
 
-        public List<TExtraFile> GetFilesBySeries(int seriesId) => All().Where(c => c.SeriesId == seriesId).ToList();
+        public async Task<List<TExtraFile>> GetFilesBySeries(int seriesId) => (await All()).Where(c => c.SeriesId == seriesId).ToList();
 
-        public List<TExtraFile> GetFilesBySeason(int seriesId, int seasonNumber) =>
-            All().Where(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber).ToList();
+        public async Task<List<TExtraFile>> GetFilesBySeason(int seriesId, int seasonNumber) =>
+            (await All()).Where(c => c.SeriesId == seriesId && c.SeasonNumber == seasonNumber).ToList();
 
-        public List<TExtraFile> GetFilesByEpisodeFile(int episodeFileId) => All().Where(c => c.EpisodeFileId == episodeFileId).ToList();
+        public async Task<List<TExtraFile>> GetFilesByEpisodeFile(int episodeFileId) => (await All()).Where(c => c.EpisodeFileId == episodeFileId).ToList();
 
-        public TExtraFile FindByPath(int seriesId, string path) =>
-            All().SingleOrDefault(c => c.SeriesId == seriesId && c.RelativePath == path);
+        public async Task<TExtraFile> FindByPath(int seriesId, string path) =>
+            (await All()).SingleOrDefault(c => c.SeriesId == seriesId && c.RelativePath == path);
     }
 }

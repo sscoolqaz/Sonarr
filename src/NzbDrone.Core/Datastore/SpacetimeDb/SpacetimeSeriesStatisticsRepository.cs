@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.SeriesStats;
 using NzbDrone.Core.Tv;
@@ -29,16 +30,16 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             _mediaFileRepository = mediaFileRepository;
         }
 
-        public List<SeasonStatistics> SeriesStatistics()
+        public async Task<List<SeasonStatistics>> SeriesStatistics()
         {
             var now = DateTime.UtcNow;
-            return Compute(_episodeRepository.All(), _mediaFileRepository.All(), now);
+            return Compute(await _episodeRepository.All(), await _mediaFileRepository.All(), now);
         }
 
-        public List<SeasonStatistics> SeriesStatistics(int seriesId)
+        public async Task<List<SeasonStatistics>> SeriesStatistics(int seriesId)
         {
             var now = DateTime.UtcNow;
-            return Compute(_episodeRepository.GetEpisodes(seriesId), _mediaFileRepository.GetFilesBySeries(seriesId), now);
+            return Compute(await _episodeRepository.GetEpisodes(seriesId), await _mediaFileRepository.GetFilesBySeries(seriesId), now);
         }
 
         // now must be captured before the fetches below, not after (matching the real

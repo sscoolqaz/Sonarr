@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Metadata;
 using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.Messaging.Events;
@@ -71,7 +72,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.Consumer ?? string.Empty,
             (int)model.Type);
 
-        public override void MigrateInsert(MetadataFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertMetadataFile(
+        public override Task MigrateInsert(MetadataFile model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertMetadataFile(
             model.Id,
             model.SeriesId,
             model.EpisodeFileId,

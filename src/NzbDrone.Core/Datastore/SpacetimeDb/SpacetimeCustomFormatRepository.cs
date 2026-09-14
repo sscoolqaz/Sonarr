@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading.Tasks;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Datastore.Converters;
 using NzbDrone.Core.Messaging.Events;
@@ -69,7 +70,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(CustomFormat model) => Conn.Connection.Reducers.InsertCustomFormat(
             model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options));
 
-        public override void MigrateInsert(CustomFormat model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertCustomFormat(
+        public override Task MigrateInsert(CustomFormat model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertCustomFormat(
             model.Id, model.Name ?? string.Empty, model.IncludeCustomFormatWhenRenaming, JsonSerializer.Serialize(model.Specifications, Options)));
 
         protected override void InvokeUpdateReducer(CustomFormat model) => Conn.Connection.Reducers.UpdateCustomFormat(

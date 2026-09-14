@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Organizer;
 using SpacetimeDB;
@@ -72,7 +73,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             model.SeasonFolderFormat ?? string.Empty,
             model.SpecialsFolderFormat ?? string.Empty);
 
-        public override void MigrateInsert(NamingConfig model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertNamingConfig(
+        public override Task MigrateInsert(NamingConfig model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertNamingConfig(
             model.Id,
             model.RenameEpisodes,
             model.ReplaceIllegalCharacters,

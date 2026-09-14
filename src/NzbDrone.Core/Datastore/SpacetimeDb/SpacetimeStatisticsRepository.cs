@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Qualities;
@@ -48,22 +49,22 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             _tagRepository = tagRepository;
         }
 
-        public LibraryStatistics GetLibraryStatistics(StatisticsFilter filter = null)
+        public async Task<LibraryStatistics> GetLibraryStatistics(StatisticsFilter filter = null)
         {
             var now = DateTime.UtcNow;
             var hasFilter = HasAnyCondition(filter);
             var seriesPredicate = BuildSeriesPredicate(filter);
 
-            var allSeries = _seriesRepository.All().ToList();
+            var allSeries = (await _seriesRepository.All()).ToList();
             var matchingSeries = allSeries.Where(seriesPredicate).ToList();
             var matchingSeriesIds = matchingSeries.Select(s => s.Id).ToHashSet();
             var seriesById = matchingSeries.ToDictionary(s => s.Id);
 
-            var allEpisodes = _episodeRepository.All().ToList();
+            var allEpisodes = (await _episodeRepository.All()).ToList();
             var matchingEpisodes = allEpisodes.Where(e => matchingSeriesIds.Contains(e.SeriesId)).ToList();
             var episodesForProgress = hasFilter ? matchingEpisodes : allEpisodes;
 
-            var allFiles = _mediaFileRepository.All().ToList();
+            var allFiles = (await _mediaFileRepository.All()).ToList();
             var matchingFiles = allFiles.Where(f => matchingSeriesIds.Contains(f.SeriesId)).ToList();
             var filesForOverallCount = hasFilter ? matchingFiles : allFiles;
 
@@ -81,8 +82,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             var seasonCount = seasonGroups.Count;
             var completedSeasonCount = seasonGroups.Count(g => IsCompletedGroup(g, IsCounted, HasFile));
 
-            var qualityProfileStatistics = BuildQualityProfileStatistics(matchingSeries, matchingFiles, seriesById);
-            var tagStatistics = BuildTagStatistics(matchingSeries, matchingFiles, seriesById);
+            var qualityProfileStatistics = await BuildQualityProfileStatistics(matchingSeries, matchingFiles, seriesById);
+            var tagStatistics = await BuildTagStatistics(matchingSeries, matchingFiles, seriesById);
             var qualityStatistics = BuildQualityStatistics(filesForOverallCount);
 
             return new LibraryStatistics
@@ -115,14 +116,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             };
         }
 
-        private List<QualityProfileStatistics> BuildQualityProfileStatistics(List<Series> matchingSeries, List<EpisodeFile> matchingFiles, Dictionary<int, Series> seriesById)
+        private async Task<List<QualityProfileStatistics>> BuildQualityProfileStatistics(List<Series> matchingSeries, List<EpisodeFile> matchingFiles, Dictionary<int, Series> seriesById)
         {
             var seriesCountByProfile = matchingSeries.GroupBy(s => s.QualityProfileId).ToDictionary(g => g.Key, g => g.Count());
             var fileCountsByProfile = matchingFiles
                 .GroupBy(f => seriesById[f.SeriesId].QualityProfileId)
                 .ToDictionary(g => g.Key, g => (Count: g.Count(), Size: g.Sum(f => f.Size)));
 
-            return _qualityProfileRepository.All()
+            return (await _qualityProfileRepository.All())
                 .OrderBy(p => p.Name, StringComparer.Ordinal)
                 .Select(p =>
                 {
@@ -139,11 +140,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 .ToList();
         }
 
-        private List<TagStatistics> BuildTagStatistics(List<Series> matchingSeries, List<EpisodeFile> matchingFiles, Dictionary<int, Series> seriesById)
+        private async Task<List<TagStatistics>> BuildTagStatistics(List<Series> matchingSeries, List<EpisodeFile> matchingFiles, Dictionary<int, Series> seriesById)
         {
             bool SeriesHasTag(Series series, int tagId) => series.Tags != null && series.Tags.Contains(tagId);
 
-            return _tagRepository.All()
+            return (await _tagRepository.All())
                 .OrderBy(t => t.Label, StringComparer.Ordinal)
                 .Select(t =>
                 {

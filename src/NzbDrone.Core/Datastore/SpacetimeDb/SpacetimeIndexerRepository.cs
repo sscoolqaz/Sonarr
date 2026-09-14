@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using SpacetimeDB;
@@ -59,7 +60,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected override void InvokeInsertReducer(IndexerDefinition model) => Conn.Connection.Reducers.InsertIndexerDefinition(
             model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message));
 
-        public override void MigrateInsert(IndexerDefinition model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertIndexerDefinition(
+        public override Task MigrateInsert(IndexerDefinition model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertIndexerDefinition(
             model.Id, model.Name ?? string.Empty, model.Implementation ?? string.Empty, model.ConfigContract ?? string.Empty, SerializeSettings(model.Settings), model.Enable, SerializeTags(model.Tags), SerializeMessage(model.Message)));
 
         protected override void InvokeUpdateReducer(IndexerDefinition model) => Conn.Connection.Reducers.UpdateIndexerDefinition(
@@ -67,7 +68,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteIndexerDefinition(id);
 
-        public IndexerDefinition FindByName(string name) =>
+        public Task<IndexerDefinition> FindByName(string name) =>
             Query(t => t.Iter().Where(r => r.Name == name).Select(ToModel).SingleOrDefault());
     }
 }

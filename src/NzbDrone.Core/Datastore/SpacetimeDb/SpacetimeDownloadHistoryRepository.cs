@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Download.History;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
@@ -74,7 +75,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             SpacetimeJson.Serialize(model.Release),
             SpacetimeJson.Serialize(model.Data));
 
-        public override void MigrateInsert(DownloadHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertDownloadHistory(
+        public override Task MigrateInsert(DownloadHistory model) => InvokeAndWaitForMigrateInsert(model.Id, () => Conn.Connection.Reducers.MigrateInsertDownloadHistory(
             model.Id,
             (int)model.EventType,
             model.SeriesId,
@@ -102,14 +103,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override void InvokeDeleteReducer(int id) => Conn.Connection.Reducers.DeleteDownloadHistory(id);
 
-        public List<DownloadHistory> FindByDownloadId(string downloadId) =>
+        public Task<List<DownloadHistory>> FindByDownloadId(string downloadId) =>
             Query(t => t.Iter().Where(r => r.DownloadId == downloadId).Select(ToModel).OrderByDescending(h => h.Date).ToList());
 
-        public void DeleteBySeriesIds(List<int> seriesIds)
+        public async Task DeleteBySeriesIds(List<int> seriesIds)
         {
-            foreach (var row in All().Where(h => seriesIds.Contains(h.SeriesId)).ToList())
+            foreach (var row in (await All()).Where(h => seriesIds.Contains(h.SeriesId)).ToList())
             {
-                Delete(row.Id);
+                await Delete(row.Id);
             }
         }
     }
