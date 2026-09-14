@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -17,9 +18,9 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IRenameEpisodeFileService
     {
-        List<RenameEpisodeFilePreview> GetRenamePreviews(int seriesId);
-        List<RenameEpisodeFilePreview> GetRenamePreviews(int seriesId, int seasonNumber);
-        List<RenameEpisodeFilePreview> GetRenamePreviews(List<int> seriesIds);
+        Task<List<RenameEpisodeFilePreview>> GetRenamePreviews(int seriesId);
+        Task<List<RenameEpisodeFilePreview>> GetRenamePreviews(int seriesId, int seasonNumber);
+        Task<List<RenameEpisodeFilePreview>> GetRenamePreviews(List<int> seriesIds);
     }
 
     public class RenameEpisodeFileService : IRenameEpisodeFileService,
@@ -54,49 +55,55 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public List<RenameEpisodeFilePreview> GetRenamePreviews(int seriesId)
+        public async Task<List<RenameEpisodeFilePreview>> GetRenamePreviews(int seriesId)
         {
-            var series = _seriesService.GetSeries(seriesId);
-            var episodes = _episodeService.GetEpisodeBySeries(seriesId);
-            var files = _mediaFileService.GetFilesBySeries(seriesId);
+            var series = await _seriesService.GetSeries(seriesId);
+            var episodes = await _episodeService.GetEpisodeBySeries(seriesId);
+            var files = await _mediaFileService.GetFilesBySeries(seriesId);
 
-            return GetPreviews(series, episodes, files)
+            return (await GetPreviews(series, episodes, files))
                 .OrderByDescending(e => e.SeasonNumber)
                 .ThenByDescending(e => e.EpisodeNumbers.First())
                 .ToList();
         }
 
-        public List<RenameEpisodeFilePreview> GetRenamePreviews(int seriesId, int seasonNumber)
+        public async Task<List<RenameEpisodeFilePreview>> GetRenamePreviews(int seriesId, int seasonNumber)
         {
-            var series = _seriesService.GetSeries(seriesId);
-            var episodes = _episodeService.GetEpisodesBySeason(seriesId, seasonNumber);
-            var files = _mediaFileService.GetFilesBySeason(seriesId, seasonNumber);
+            var series = await _seriesService.GetSeries(seriesId);
+            var episodes = await _episodeService.GetEpisodesBySeason(seriesId, seasonNumber);
+            var files = await _mediaFileService.GetFilesBySeason(seriesId, seasonNumber);
 
-            return GetPreviews(series, episodes, files)
+            return (await GetPreviews(series, episodes, files))
                 .OrderByDescending(e => e.EpisodeNumbers.First()).ToList();
         }
 
-        public List<RenameEpisodeFilePreview> GetRenamePreviews(List<int> seriesIds)
+        public async Task<List<RenameEpisodeFilePreview>> GetRenamePreviews(List<int> seriesIds)
         {
-            var seriesList = _seriesService.GetSeries(seriesIds);
-            var episodesList = _episodeService.GetEpisodesBySeries(seriesIds).ToLookup(e => e.SeriesId);
-            var filesList = _mediaFileService.GetFilesBySeriesIds(seriesIds).ToLookup(f => f.SeriesId);
+            var seriesList = await _seriesService.GetSeries(seriesIds);
+            var episodesList = (await _episodeService.GetEpisodesBySeries(seriesIds)).ToLookup(e => e.SeriesId);
+            var filesList = (await _mediaFileService.GetFilesBySeriesIds(seriesIds)).ToLookup(f => f.SeriesId);
 
-            return seriesList.SelectMany(series =>
-                {
-                    var episodes = episodesList[series.Id].ToList();
-                    var files = filesList[series.Id].ToList();
+            var result = new List<RenameEpisodeFilePreview>();
 
-                    return GetPreviews(series, episodes, files);
-                })
+            foreach (var series in seriesList)
+            {
+                var episodes = episodesList[series.Id].ToList();
+                var files = filesList[series.Id].ToList();
+
+                result.AddRange(await GetPreviews(series, episodes, files));
+            }
+
+            return result
                 .OrderByDescending(e => e.SeriesId)
                 .ThenByDescending(e => e.SeasonNumber)
                 .ThenByDescending(e => e.EpisodeNumbers.First())
                 .ToList();
         }
 
-        private IEnumerable<RenameEpisodeFilePreview> GetPreviews(Series series, List<Episode> episodes, List<EpisodeFile> files)
+        private async Task<List<RenameEpisodeFilePreview>> GetPreviews(Series series, List<Episode> episodes, List<EpisodeFile> files)
         {
+            var result = new List<RenameEpisodeFilePreview>();
+
             foreach (var f in files)
             {
                 var file = f;
@@ -110,11 +117,11 @@ namespace NzbDrone.Core.MediaFiles
                 }
 
                 var seasonNumber = episodesInFile.First().SeasonNumber;
-                var newPath = _filenameBuilder.BuildFilePath(episodesInFile, series, file, Path.GetExtension(episodeFilePath));
+                var newPath = await _filenameBuilder.BuildFilePath(episodesInFile, series, file, Path.GetExtension(episodeFilePath));
 
                 if (!episodeFilePath.PathEquals(newPath, StringComparison.Ordinal))
                 {
-                    yield return new RenameEpisodeFilePreview
+                    result.Add(new RenameEpisodeFilePreview
                     {
                         SeriesId = series.Id,
                         SeasonNumber = seasonNumber,
@@ -122,12 +129,14 @@ namespace NzbDrone.Core.MediaFiles
                         EpisodeFileId = file.Id,
                         ExistingPath = file.RelativePath,
                         NewPath = series.Path.GetRelativePath(newPath)
-                    };
+                    });
                 }
             }
+
+            return result;
         }
 
-        private List<RenamedEpisodeFile> RenameFiles(List<EpisodeFile> episodeFiles, Series series)
+        private async Task<List<RenamedEpisodeFile>> RenameFiles(List<EpisodeFile> episodeFiles, Series series)
         {
             var renamed = new List<RenamedEpisodeFile>();
 
@@ -139,9 +148,9 @@ namespace NzbDrone.Core.MediaFiles
                 try
                 {
                     _logger.Debug("Renaming episode file: {0}", episodeFile);
-                    _episodeFileMover.MoveEpisodeFile(episodeFile, series);
+                    await _episodeFileMover.MoveEpisodeFile(episodeFile, series);
 
-                    _mediaFileService.Update(episodeFile);
+                    await _mediaFileService.Update(episodeFile);
 
                     renamed.Add(new RenamedEpisodeFile
                                 {
@@ -178,13 +187,16 @@ namespace NzbDrone.Core.MediaFiles
             return renamed;
         }
 
+        // IExecute<TCommand> is a shared, synchronous, app-wide command interface - its signature can't change
+        // here. Bridging with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges
+        // elsewhere this session (no SynchronizationContext on the threads command execution runs on).
         public void Execute(RenameFilesCommand message)
         {
-            var series = _seriesService.GetSeries(message.SeriesId);
-            var episodeFiles = _mediaFileService.Get(message.Files);
+            var series = _seriesService.GetSeries(message.SeriesId).GetAwaiter().GetResult();
+            var episodeFiles = _mediaFileService.Get(message.Files).GetAwaiter().GetResult();
 
             _logger.ProgressInfo("Renaming {0} files for {1}", episodeFiles.Count, series.Title);
-            var renamedFiles = RenameFiles(episodeFiles, series);
+            var renamedFiles = RenameFiles(episodeFiles, series).GetAwaiter().GetResult();
             _logger.ProgressInfo("{0} selected episode files renamed for {1}", renamedFiles.Count, series.Title);
 
             _eventAggregator.PublishEvent(new RenameCompletedEvent());
@@ -193,13 +205,13 @@ namespace NzbDrone.Core.MediaFiles
         public void Execute(RenameSeriesCommand message)
         {
             _logger.Debug("Renaming all files for selected series");
-            var seriesToRename = _seriesService.GetSeries(message.SeriesIds);
+            var seriesToRename = _seriesService.GetSeries(message.SeriesIds).GetAwaiter().GetResult();
 
             foreach (var series in seriesToRename)
             {
-                var episodeFiles = _mediaFileService.GetFilesBySeries(series.Id);
+                var episodeFiles = _mediaFileService.GetFilesBySeries(series.Id).GetAwaiter().GetResult();
                 _logger.ProgressInfo("Renaming all files in series: {0}", series.Title);
-                var renamedFiles = RenameFiles(episodeFiles, series);
+                var renamedFiles = RenameFiles(episodeFiles, series).GetAwaiter().GetResult();
                 _logger.ProgressInfo("{0} episode files renamed for {1}", renamedFiles.Count, series.Title);
             }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 
@@ -8,7 +9,7 @@ namespace NzbDrone.Core.Tv
 {
     public interface IEpisodeMonitoredService
     {
-        void SetEpisodeMonitoredStatus(Series series, MonitoringOptions monitoringOptions);
+        Task SetEpisodeMonitoredStatus(Series series, MonitoringOptions monitoringOptions);
     }
 
     public class EpisodeMonitoredService : IEpisodeMonitoredService
@@ -24,19 +25,19 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        public void SetEpisodeMonitoredStatus(Series series, MonitoringOptions monitoringOptions)
+        public async Task SetEpisodeMonitoredStatus(Series series, MonitoringOptions monitoringOptions)
         {
             // Update the series without changing the episodes
             if (monitoringOptions == null)
             {
-                _seriesService.UpdateSeries(series, false);
+                await _seriesService.UpdateSeries(series, false);
                 return;
             }
 
             // Fallback for v2 endpoints
             if (monitoringOptions.Monitor == MonitorTypes.Unknown)
             {
-                LegacySetEpisodeMonitoredStatus(series, monitoringOptions);
+                await LegacySetEpisodeMonitoredStatus(series, monitoringOptions);
                 return;
             }
 
@@ -51,7 +52,7 @@ namespace NzbDrone.Core.Tv
 
             _logger.Debug("[{0}] Setting episode monitored status to {1}", series.Title, monitoringOptions.Monitor);
 
-            var monitoredSeasons = _episodeService.SetEpisodeMonitoredBySeries(series.Id, monitoringOptions.Monitor, firstSeason, lastSeason);
+            var monitoredSeasons = await _episodeService.SetEpisodeMonitoredBySeries(series.Id, monitoringOptions.Monitor, firstSeason, lastSeason);
 
             foreach (var season in series.Seasons)
             {
@@ -87,14 +88,14 @@ namespace NzbDrone.Core.Tv
                 }
             }
 
-            _seriesService.UpdateSeries(series, false);
+            await _seriesService.UpdateSeries(series, false);
         }
 
-        private void LegacySetEpisodeMonitoredStatus(Series series, MonitoringOptions monitoringOptions)
+        private async Task LegacySetEpisodeMonitoredStatus(Series series, MonitoringOptions monitoringOptions)
         {
             _logger.Debug("[{0}] Setting episode monitored status.", series.Title);
 
-            var episodes = _episodeService.GetEpisodeBySeries(series.Id);
+            var episodes = await _episodeService.GetEpisodeBySeries(series.Id);
 
             if (monitoringOptions.IgnoreEpisodesWithFiles)
             {
@@ -144,9 +145,9 @@ namespace NzbDrone.Core.Tv
                 }
             }
 
-            _episodeService.UpdateEpisodes(episodes);
+            await _episodeService.UpdateEpisodes(episodes);
 
-            _seriesService.UpdateSeries(series, false);
+            await _seriesService.UpdateSeries(series, false);
         }
 
         private void ToggleEpisodesMonitoredState(IEnumerable<Episode> episodes, bool monitored)

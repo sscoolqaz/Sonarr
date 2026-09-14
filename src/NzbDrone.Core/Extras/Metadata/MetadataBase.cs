@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using FluentValidation.Results;
 using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.MediaFiles;
@@ -38,7 +39,7 @@ namespace NzbDrone.Core.Extras.Metadata
 
         public abstract MetadataFile FindMetadataFile(Series series, string path);
 
-        public abstract MetadataFileResult SeriesMetadata(Series series, SeriesMetadataReason reason);
+        public abstract Task<MetadataFileResult> SeriesMetadata(Series series, SeriesMetadataReason reason);
         public abstract MetadataFileResult EpisodeMetadata(Series series, EpisodeFile episodeFile);
         public abstract List<ImageFileResult> SeriesImages(Series series);
         public abstract List<ImageFileResult> SeasonImages(Series series, Season season);

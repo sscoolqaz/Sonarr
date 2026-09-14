@@ -28,12 +28,24 @@ namespace NzbDrone.Core.HealthCheck.Checks
             _rootFolderService = rootFolderService;
         }
 
+        // IProvideHealthCheck.Check() is a shared, synchronous interface with 27 implementers app-wide - its
+        // signature can't change here. Bridging with GetAwaiter().GetResult() is safe for the same reason as
+        // the IHandle bridges elsewhere this session (no SynchronizationContext on the threads this runs on).
         public override HealthCheck Check()
         {
-            var rootFolders = _seriesService.GetAllSeriesPaths()
-                .Select(s => _rootFolderService.GetBestRootFolderPath(s.Value))
-                .Distinct()
-                .ToList();
+            var seriesPaths = _seriesService.GetAllSeriesPaths().GetAwaiter().GetResult();
+
+            var rootFolders = new List<string>();
+
+            foreach (var seriesPath in seriesPaths)
+            {
+                var rootFolderPath = _rootFolderService.GetBestRootFolderPath(seriesPath.Value).GetAwaiter().GetResult();
+
+                if (!rootFolders.Contains(rootFolderPath))
+                {
+                    rootFolders.Add(rootFolderPath);
+                }
+            }
 
             var missingRootFolders = rootFolders.Where(s => !s.IsPathValid(PathValidationType.CurrentOs) || !_diskProvider.FolderExists(s))
                 .ToList();

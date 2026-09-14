@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -10,7 +11,7 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IUpgradeMediaFiles
     {
-        EpisodeFileMoveResult UpgradeEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode, bool copyOnly = false);
+        Task<EpisodeFileMoveResult> UpgradeEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode, bool copyOnly = false);
     }
 
     public class UpgradeMediaFileService : IUpgradeMediaFiles
@@ -34,7 +35,7 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public EpisodeFileMoveResult UpgradeEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode, bool copyOnly = false)
+        public async Task<EpisodeFileMoveResult> UpgradeEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode, bool copyOnly = false)
         {
             var moveFileResult = new EpisodeFileMoveResult();
             var existingFiles = localEpisode.Episodes
@@ -70,18 +71,18 @@ namespace NzbDrone.Core.MediaFiles
                 }
 
                 moveFileResult.OldFiles.Add(new DeletedEpisodeFile(file, recycleBinPath));
-                _mediaFileService.Delete(file, DeleteMediaFileReason.Upgrade);
+                await _mediaFileService.Delete(file, DeleteMediaFileReason.Upgrade);
             }
 
             localEpisode.OldFiles = moveFileResult.OldFiles;
 
             if (copyOnly)
             {
-                moveFileResult.EpisodeFile = _episodeFileMover.CopyEpisodeFile(episodeFile, localEpisode);
+                moveFileResult.EpisodeFile = await _episodeFileMover.CopyEpisodeFile(episodeFile, localEpisode);
             }
             else
             {
-                moveFileResult.EpisodeFile = _episodeFileMover.MoveEpisodeFile(episodeFile, localEpisode);
+                moveFileResult.EpisodeFile = await _episodeFileMover.MoveEpisodeFile(episodeFile, localEpisode);
             }
 
             return moveFileResult;

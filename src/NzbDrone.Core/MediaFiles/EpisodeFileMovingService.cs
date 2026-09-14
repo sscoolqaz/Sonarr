@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnsureThat;
@@ -19,9 +20,9 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IMoveEpisodeFiles
     {
-        EpisodeFile MoveEpisodeFile(EpisodeFile episodeFile, Series series);
-        EpisodeFile MoveEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode);
-        EpisodeFile CopyEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode);
+        Task<EpisodeFile> MoveEpisodeFile(EpisodeFile episodeFile, Series series);
+        Task<EpisodeFile> MoveEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode);
+        Task<EpisodeFile> CopyEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode);
     }
 
     public class EpisodeFileMovingService : IMoveEpisodeFiles
@@ -63,51 +64,51 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public EpisodeFile MoveEpisodeFile(EpisodeFile episodeFile, Series series)
+        public async Task<EpisodeFile> MoveEpisodeFile(EpisodeFile episodeFile, Series series)
         {
-            var episodes = _episodeService.GetEpisodesByFileId(episodeFile.Id);
-            return MoveEpisodeFile(episodeFile, series, episodes);
+            var episodes = await _episodeService.GetEpisodesByFileId(episodeFile.Id);
+            return await MoveEpisodeFile(episodeFile, series, episodes);
         }
 
-        private EpisodeFile MoveEpisodeFile(EpisodeFile episodeFile, Series series, List<Episode> episodes)
+        private async Task<EpisodeFile> MoveEpisodeFile(EpisodeFile episodeFile, Series series, List<Episode> episodes)
         {
-            var filePath = _buildFileNames.BuildFilePath(episodes, series, episodeFile, Path.GetExtension(episodeFile.RelativePath));
+            var filePath = await _buildFileNames.BuildFilePath(episodes, series, episodeFile, Path.GetExtension(episodeFile.RelativePath));
 
-            EnsureEpisodeFolder(episodeFile, series, episodes.Select(v => v.SeasonNumber).First(), filePath);
+            await EnsureEpisodeFolder(episodeFile, series, episodes.Select(v => v.SeasonNumber).First(), filePath);
 
             _logger.Debug("Renaming episode file: {0} to {1}", episodeFile, filePath);
 
-            return TransferFile(episodeFile, series, episodes, filePath, TransferMode.Move);
+            return await TransferFile(episodeFile, series, episodes, filePath, TransferMode.Move);
         }
 
-        public EpisodeFile MoveEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode)
+        public async Task<EpisodeFile> MoveEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode)
         {
-            var filePath = _buildFileNames.BuildFilePath(localEpisode.Episodes, localEpisode.Series, episodeFile, Path.GetExtension(localEpisode.Path), null, localEpisode.CustomFormats);
+            var filePath = await _buildFileNames.BuildFilePath(localEpisode.Episodes, localEpisode.Series, episodeFile, Path.GetExtension(localEpisode.Path), null, localEpisode.CustomFormats);
 
-            EnsureEpisodeFolder(episodeFile, localEpisode, filePath);
+            await EnsureEpisodeFolder(episodeFile, localEpisode, filePath);
 
             _logger.Debug("Moving episode file: {0} to {1}", episodeFile.Path, filePath);
 
-            return TransferFile(episodeFile, localEpisode.Series, localEpisode.Episodes, filePath, TransferMode.Move, localEpisode);
+            return await TransferFile(episodeFile, localEpisode.Series, localEpisode.Episodes, filePath, TransferMode.Move, localEpisode);
         }
 
-        public EpisodeFile CopyEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode)
+        public async Task<EpisodeFile> CopyEpisodeFile(EpisodeFile episodeFile, LocalEpisode localEpisode)
         {
-            var filePath = _buildFileNames.BuildFilePath(localEpisode.Episodes, localEpisode.Series, episodeFile, Path.GetExtension(localEpisode.Path), null, localEpisode.CustomFormats);
+            var filePath = await _buildFileNames.BuildFilePath(localEpisode.Episodes, localEpisode.Series, episodeFile, Path.GetExtension(localEpisode.Path), null, localEpisode.CustomFormats);
 
-            EnsureEpisodeFolder(episodeFile, localEpisode, filePath);
+            await EnsureEpisodeFolder(episodeFile, localEpisode, filePath);
 
             if (_configService.CopyUsingHardlinks)
             {
                 _logger.Debug("Attempting to hardlink episode file: {0} to {1}", episodeFile.Path, filePath);
-                return TransferFile(episodeFile, localEpisode.Series, localEpisode.Episodes, filePath, TransferMode.HardLinkOrCopy, localEpisode);
+                return await TransferFile(episodeFile, localEpisode.Series, localEpisode.Episodes, filePath, TransferMode.HardLinkOrCopy, localEpisode);
             }
 
             _logger.Debug("Copying episode file: {0} to {1}", episodeFile.Path, filePath);
-            return TransferFile(episodeFile, localEpisode.Series, localEpisode.Episodes, filePath, TransferMode.Copy, localEpisode);
+            return await TransferFile(episodeFile, localEpisode.Series, localEpisode.Episodes, filePath, TransferMode.Copy, localEpisode);
         }
 
-        private EpisodeFile TransferFile(EpisodeFile episodeFile, Series series, List<Episode> episodes, string destinationFilePath, TransferMode mode, LocalEpisode localEpisode = null)
+        private async Task<EpisodeFile> TransferFile(EpisodeFile episodeFile, Series series, List<Episode> episodes, string destinationFilePath, TransferMode mode, LocalEpisode localEpisode = null)
         {
             Ensure.That(episodeFile, () => episodeFile).IsNotNull();
             Ensure.That(series, () => series).IsNotNull();
@@ -132,13 +133,17 @@ namespace NzbDrone.Core.MediaFiles
                 localEpisode.FileNameBeforeRename = episodeFile.RelativePath;
             }
 
-            if (localEpisode is not null && _scriptImportDecider.TryImport(episodeFilePath, destinationFilePath, localEpisode, episodeFile, mode) is var scriptImportDecision && scriptImportDecision != ScriptImportDecision.DeferMove)
+            var scriptImportDecision = localEpisode is not null
+                ? await _scriptImportDecider.TryImport(episodeFilePath, destinationFilePath, localEpisode, episodeFile, mode)
+                : ScriptImportDecision.DeferMove;
+
+            if (localEpisode is not null && scriptImportDecision != ScriptImportDecision.DeferMove)
             {
                 if (scriptImportDecision == ScriptImportDecision.RenameRequested)
                 {
                     try
                     {
-                        MoveEpisodeFile(episodeFile, series, episodeFile.Episodes);
+                        await MoveEpisodeFile(episodeFile, series, episodeFile.Episodes);
                     }
                     catch (SameFilenameException)
                     {
@@ -151,7 +156,7 @@ namespace NzbDrone.Core.MediaFiles
                 _diskTransferService.TransferFile(episodeFilePath, destinationFilePath, mode);
             }
 
-            _updateEpisodeFileService.ChangeFileDateForFile(episodeFile, series, episodes);
+            await _updateEpisodeFileService.ChangeFileDateForFile(episodeFile, series, episodes);
 
             try
             {
@@ -174,17 +179,17 @@ namespace NzbDrone.Core.MediaFiles
             return episodeFile;
         }
 
-        private void EnsureEpisodeFolder(EpisodeFile episodeFile, LocalEpisode localEpisode, string filePath)
+        private async Task EnsureEpisodeFolder(EpisodeFile episodeFile, LocalEpisode localEpisode, string filePath)
         {
-            EnsureEpisodeFolder(episodeFile, localEpisode.Series, localEpisode.SeasonNumber, filePath);
+            await EnsureEpisodeFolder(episodeFile, localEpisode.Series, localEpisode.SeasonNumber, filePath);
         }
 
-        private void EnsureEpisodeFolder(EpisodeFile episodeFile, Series series, int seasonNumber, string filePath)
+        private async Task EnsureEpisodeFolder(EpisodeFile episodeFile, Series series, int seasonNumber, string filePath)
         {
             var episodeFolder = Path.GetDirectoryName(filePath);
-            var seasonFolder = _buildFileNames.BuildSeasonPath(series, seasonNumber);
+            var seasonFolder = await _buildFileNames.BuildSeasonPath(series, seasonNumber);
             var seriesFolder = series.Path;
-            var rootFolder = _rootFolderService.GetBestRootFolderPath(seriesFolder);
+            var rootFolder = await _rootFolderService.GetBestRootFolderPath(seriesFolder);
 
             if (rootFolder.IsNullOrWhiteSpace())
             {

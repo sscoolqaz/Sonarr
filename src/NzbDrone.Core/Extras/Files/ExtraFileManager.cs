@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -15,14 +16,14 @@ namespace NzbDrone.Core.Extras.Files
     public interface IManageExtraFiles
     {
         int Order { get; }
-        IEnumerable<ExtraFile> CreateAfterMediaCoverUpdate(Series series);
-        IEnumerable<ExtraFile> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles);
-        IEnumerable<ExtraFile> CreateAfterEpisodesImported(Series series);
-        IEnumerable<ExtraFile> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile);
-        IEnumerable<ExtraFile> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder);
-        IEnumerable<ExtraFile> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles);
+        Task<IEnumerable<ExtraFile>> CreateAfterMediaCoverUpdate(Series series);
+        Task<IEnumerable<ExtraFile>> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles);
+        Task<IEnumerable<ExtraFile>> CreateAfterEpisodesImported(Series series);
+        Task<IEnumerable<ExtraFile>> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile);
+        Task<IEnumerable<ExtraFile>> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder);
+        Task<IEnumerable<ExtraFile>> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles);
         bool CanImportFile(LocalEpisode localEpisode, EpisodeFile episodeFile, string path, string extension, bool readOnly);
-        IEnumerable<ExtraFile> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly);
+        Task<IEnumerable<ExtraFile>> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly);
     }
 
     public abstract class ExtraFileManager<TExtraFile> : IManageExtraFiles
@@ -45,14 +46,14 @@ namespace NzbDrone.Core.Extras.Files
         }
 
         public abstract int Order { get; }
-        public abstract IEnumerable<ExtraFile> CreateAfterMediaCoverUpdate(Series series);
-        public abstract IEnumerable<ExtraFile> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles);
-        public abstract IEnumerable<ExtraFile> CreateAfterEpisodesImported(Series series);
-        public abstract IEnumerable<ExtraFile> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile);
-        public abstract IEnumerable<ExtraFile> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder);
-        public abstract IEnumerable<ExtraFile> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles);
+        public abstract Task<IEnumerable<ExtraFile>> CreateAfterMediaCoverUpdate(Series series);
+        public abstract Task<IEnumerable<ExtraFile>> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles);
+        public abstract Task<IEnumerable<ExtraFile>> CreateAfterEpisodesImported(Series series);
+        public abstract Task<IEnumerable<ExtraFile>> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile);
+        public abstract Task<IEnumerable<ExtraFile>> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder);
+        public abstract Task<IEnumerable<ExtraFile>> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles);
         public abstract bool CanImportFile(LocalEpisode localEpisode, EpisodeFile episodeFile, string path, string extension, bool readOnly);
-        public abstract IEnumerable<ExtraFile> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly);
+        public abstract Task<IEnumerable<ExtraFile>> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly);
 
         protected TExtraFile ImportFile(Series series, EpisodeFile episodeFile, string path, bool readOnly, string extension, string fileNameSuffix = null)
         {

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 
@@ -7,7 +8,7 @@ namespace NzbDrone.Core.Tv
 {
     public interface ICheckIfSeriesShouldBeRefreshed
     {
-        bool ShouldRefresh(Series series);
+        Task<bool> ShouldRefresh(Series series);
     }
 
     public class ShouldRefreshSeries : ICheckIfSeriesShouldBeRefreshed
@@ -21,7 +22,7 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        public bool ShouldRefresh(Series series)
+        public async Task<bool> ShouldRefresh(Series series)
         {
             try
             {
@@ -31,7 +32,7 @@ namespace NzbDrone.Core.Tv
                     return true;
                 }
 
-                var episodes = _episodeService.GetEpisodeBySeries(series.Id);
+                var episodes = await _episodeService.GetEpisodeBySeries(series.Id);
 
                 var atLeastOneAiredEpisodeWithoutTitle = episodes.Any(e =>
                     e.SeasonNumber > 0 &&

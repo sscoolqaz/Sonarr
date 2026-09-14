@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common;
 using NzbDrone.Core.MediaFiles.Events;
@@ -12,19 +13,19 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IMediaFileService
     {
-        EpisodeFile Add(EpisodeFile episodeFile);
-        void Update(EpisodeFile episodeFile);
-        void Update(List<EpisodeFile> episodeFiles);
-        void Delete(EpisodeFile episodeFile, DeleteMediaFileReason reason);
-        List<EpisodeFile> GetFilesBySeries(int seriesId);
-        List<EpisodeFile> GetFilesBySeriesIds(List<int> seriesIds);
-        List<EpisodeFile> GetFilesBySeason(int seriesId, int seasonNumber);
-        List<EpisodeFile> GetFiles(IEnumerable<int> ids);
-        List<EpisodeFile> GetFilesWithoutMediaInfo();
-        List<string> FilterExistingFiles(List<string> files, Series series);
-        EpisodeFile Get(int id);
-        List<EpisodeFile> Get(IEnumerable<int> ids);
-        List<EpisodeFile> GetFilesWithRelativePath(int seriesId, string relativePath);
+        Task<EpisodeFile> Add(EpisodeFile episodeFile);
+        Task Update(EpisodeFile episodeFile);
+        Task Update(List<EpisodeFile> episodeFiles);
+        Task Delete(EpisodeFile episodeFile, DeleteMediaFileReason reason);
+        Task<List<EpisodeFile>> GetFilesBySeries(int seriesId);
+        Task<List<EpisodeFile>> GetFilesBySeriesIds(List<int> seriesIds);
+        Task<List<EpisodeFile>> GetFilesBySeason(int seriesId, int seasonNumber);
+        Task<List<EpisodeFile>> GetFiles(IEnumerable<int> ids);
+        Task<List<EpisodeFile>> GetFilesWithoutMediaInfo();
+        Task<List<string>> FilterExistingFiles(List<string> files, Series series);
+        Task<EpisodeFile> Get(int id);
+        Task<List<EpisodeFile>> Get(IEnumerable<int> ids);
+        Task<List<EpisodeFile>> GetFilesWithRelativePath(int seriesId, string relativePath);
     }
 
     public class MediaFileService : IMediaFileService, IHandleAsync<SeriesDeletedEvent>
@@ -40,83 +41,86 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public EpisodeFile Add(EpisodeFile episodeFile)
+        public async Task<EpisodeFile> Add(EpisodeFile episodeFile)
         {
-            var addedFile = _mediaFileRepository.Insert(episodeFile);
+            var addedFile = await _mediaFileRepository.Insert(episodeFile);
             _eventAggregator.PublishEvent(new EpisodeFileAddedEvent(addedFile));
             return addedFile;
         }
 
-        public void Update(EpisodeFile episodeFile)
+        public async Task Update(EpisodeFile episodeFile)
         {
-            _mediaFileRepository.Update(episodeFile);
+            await _mediaFileRepository.Update(episodeFile);
         }
 
-        public void Update(List<EpisodeFile> episodeFiles)
+        public async Task Update(List<EpisodeFile> episodeFiles)
         {
-            _mediaFileRepository.UpdateMany(episodeFiles);
+            await _mediaFileRepository.UpdateMany(episodeFiles);
         }
 
-        public void Delete(EpisodeFile episodeFile, DeleteMediaFileReason reason)
+        public async Task Delete(EpisodeFile episodeFile, DeleteMediaFileReason reason)
         {
             // Little hack so we have the episodes and series attached for the event consumers
             episodeFile.Episodes.LazyLoad();
             episodeFile.Path = Path.Combine(episodeFile.Series.Value.Path, episodeFile.RelativePath);
 
-            _mediaFileRepository.Delete(episodeFile);
+            await _mediaFileRepository.Delete(episodeFile);
             _eventAggregator.PublishEvent(new EpisodeFileDeletedEvent(episodeFile, reason));
         }
 
-        public List<EpisodeFile> GetFilesBySeries(int seriesId)
+        public async Task<List<EpisodeFile>> GetFilesBySeries(int seriesId)
         {
-            return _mediaFileRepository.GetFilesBySeries(seriesId);
+            return await _mediaFileRepository.GetFilesBySeries(seriesId);
         }
 
-        public List<EpisodeFile> GetFilesBySeriesIds(List<int> seriesIds)
+        public async Task<List<EpisodeFile>> GetFilesBySeriesIds(List<int> seriesIds)
         {
-            return _mediaFileRepository.GetFilesBySeriesIds(seriesIds);
+            return await _mediaFileRepository.GetFilesBySeriesIds(seriesIds);
         }
 
-        public List<EpisodeFile> GetFilesBySeason(int seriesId, int seasonNumber)
+        public async Task<List<EpisodeFile>> GetFilesBySeason(int seriesId, int seasonNumber)
         {
-            return _mediaFileRepository.GetFilesBySeason(seriesId, seasonNumber);
+            return await _mediaFileRepository.GetFilesBySeason(seriesId, seasonNumber);
         }
 
-        public List<EpisodeFile> GetFiles(IEnumerable<int> ids)
+        public async Task<List<EpisodeFile>> GetFiles(IEnumerable<int> ids)
         {
-            return _mediaFileRepository.Get(ids).ToList();
+            return (await _mediaFileRepository.Get(ids)).ToList();
         }
 
-        public List<EpisodeFile> GetFilesWithoutMediaInfo()
+        public async Task<List<EpisodeFile>> GetFilesWithoutMediaInfo()
         {
-            return _mediaFileRepository.GetFilesWithoutMediaInfo();
+            return await _mediaFileRepository.GetFilesWithoutMediaInfo();
         }
 
-        public List<string> FilterExistingFiles(List<string> files, Series series)
+        public async Task<List<string>> FilterExistingFiles(List<string> files, Series series)
         {
-            var seriesFiles = GetFilesBySeries(series.Id);
+            var seriesFiles = await GetFilesBySeries(series.Id);
 
             return FilterExistingFiles(files, seriesFiles, series);
         }
 
-        public EpisodeFile Get(int id)
+        public async Task<EpisodeFile> Get(int id)
         {
-            return _mediaFileRepository.Get(id);
+            return await _mediaFileRepository.Get(id);
         }
 
-        public List<EpisodeFile> Get(IEnumerable<int> ids)
+        public async Task<List<EpisodeFile>> Get(IEnumerable<int> ids)
         {
-            return _mediaFileRepository.Get(ids).ToList();
+            return (await _mediaFileRepository.Get(ids)).ToList();
         }
 
-        public List<EpisodeFile> GetFilesWithRelativePath(int seriesId, string relativePath)
+        public async Task<List<EpisodeFile>> GetFilesWithRelativePath(int seriesId, string relativePath)
         {
-            return _mediaFileRepository.GetFilesWithRelativePath(seriesId, relativePath);
+            return await _mediaFileRepository.GetFilesWithRelativePath(seriesId, relativePath);
         }
 
+        // IHandleAsync<TEvent> is a shared eventing interface app-wide; its signature (void HandleAsync) can't
+        // change here. Bridging with GetAwaiter().GetResult() is safe - EventAggregator runs handlers off the
+        // request thread via Task.Factory.StartNew, and ASP.NET Core carries no SynchronizationContext.
         public void HandleAsync(SeriesDeletedEvent message)
         {
-            _mediaFileRepository.DeleteForSeries(message.Series.Select(s => s.Id).ToList());
+            _mediaFileRepository.DeleteForSeries(message.Series.Select(s => s.Id).ToList()).GetAwaiter().GetResult();
         }
 
         public static List<string> FilterExistingFiles(List<string> files, List<EpisodeFile> seriesFiles, Series series)

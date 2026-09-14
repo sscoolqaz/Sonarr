@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -57,10 +58,10 @@ namespace NzbDrone.Core.Extras.Metadata
 
         public override int Order => 0;
 
-        public override IEnumerable<ExtraFile> CreateAfterMediaCoverUpdate(Series series)
+        public override async Task<IEnumerable<ExtraFile>> CreateAfterMediaCoverUpdate(Series series)
         {
-            var metadataFiles = _metadataFileService.GetFilesBySeries(series.Id);
-            _cleanMetadataService.Clean(series);
+            var metadataFiles = await _metadataFileService.GetFilesBySeries(series.Id);
+            await _cleanMetadataService.Clean(series);
 
             if (!_diskProvider.FolderExists(series.Path))
             {
@@ -70,22 +71,22 @@ namespace NzbDrone.Core.Extras.Metadata
 
             var files = new List<MetadataFile>();
 
-            foreach (var consumer in _metadataFactory.Enabled())
+            foreach (var consumer in await _metadataFactory.Enabled())
             {
                 var consumerFiles = GetMetadataFilesForConsumer(consumer, metadataFiles);
 
-                files.AddRange(ProcessSeriesImages(consumer, series, consumerFiles));
+                files.AddRange(await ProcessSeriesImages(consumer, series, consumerFiles));
             }
 
-            _metadataFileService.Upsert(files);
+            await _metadataFileService.Upsert(files);
 
             return files;
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles)
+        public override async Task<IEnumerable<ExtraFile>> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles)
         {
-            var metadataFiles = _metadataFileService.GetFilesBySeries(series.Id);
-            _cleanMetadataService.Clean(series);
+            var metadataFiles = await _metadataFileService.GetFilesBySeries(series.Id);
+            await _cleanMetadataService.Clean(series);
 
             if (!_diskProvider.FolderExists(series.Path))
             {
@@ -95,30 +96,30 @@ namespace NzbDrone.Core.Extras.Metadata
 
             var files = new List<MetadataFile>();
 
-            foreach (var consumer in _metadataFactory.Enabled())
+            foreach (var consumer in await _metadataFactory.Enabled())
             {
                 var consumerFiles = GetMetadataFilesForConsumer(consumer, metadataFiles);
 
-                files.AddIfNotNull(ProcessSeriesMetadata(consumer, series, consumerFiles, SeriesMetadataReason.Scan));
-                files.AddRange(ProcessSeriesImages(consumer, series, consumerFiles));
-                files.AddRange(ProcessSeasonImages(consumer, series, consumerFiles));
+                files.AddIfNotNull(await ProcessSeriesMetadata(consumer, series, consumerFiles, SeriesMetadataReason.Scan));
+                files.AddRange(await ProcessSeriesImages(consumer, series, consumerFiles));
+                files.AddRange(await ProcessSeasonImages(consumer, series, consumerFiles));
 
                 foreach (var episodeFile in episodeFiles)
                 {
-                    files.AddIfNotNull(ProcessEpisodeMetadata(consumer, series, episodeFile, consumerFiles));
-                    files.AddRange(ProcessEpisodeImages(consumer, series, episodeFile, consumerFiles));
+                    files.AddIfNotNull(await ProcessEpisodeMetadata(consumer, series, episodeFile, consumerFiles));
+                    files.AddRange(await ProcessEpisodeImages(consumer, series, episodeFile, consumerFiles));
                 }
             }
 
-            _metadataFileService.Upsert(files);
+            await _metadataFileService.Upsert(files);
 
             return files;
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodesImported(Series series)
+        public override async Task<IEnumerable<ExtraFile>> CreateAfterEpisodesImported(Series series)
         {
-            var metadataFiles = _metadataFileService.GetFilesBySeries(series.Id);
-            _cleanMetadataService.Clean(series);
+            var metadataFiles = await _metadataFileService.GetFilesBySeries(series.Id);
+            await _cleanMetadataService.Clean(series);
 
             if (!_diskProvider.FolderExists(series.Path))
             {
@@ -128,36 +129,36 @@ namespace NzbDrone.Core.Extras.Metadata
 
             var files = new List<MetadataFile>();
 
-            foreach (var consumer in _metadataFactory.Enabled())
+            foreach (var consumer in await _metadataFactory.Enabled())
             {
                 var consumerFiles = GetMetadataFilesForConsumer(consumer, metadataFiles);
 
-                files.AddIfNotNull(ProcessSeriesMetadata(consumer, series, consumerFiles, SeriesMetadataReason.EpisodesImported));
+                files.AddIfNotNull(await ProcessSeriesMetadata(consumer, series, consumerFiles, SeriesMetadataReason.EpisodesImported));
             }
 
-            _metadataFileService.Upsert(files);
+            await _metadataFileService.Upsert(files);
 
             return files;
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
+        public override async Task<IEnumerable<ExtraFile>> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
         {
             var files = new List<MetadataFile>();
 
-            foreach (var consumer in _metadataFactory.Enabled())
+            foreach (var consumer in await _metadataFactory.Enabled())
             {
-                files.AddIfNotNull(ProcessEpisodeMetadata(consumer, series, episodeFile, new List<MetadataFile>()));
-                files.AddRange(ProcessEpisodeImages(consumer, series, episodeFile, new List<MetadataFile>()));
+                files.AddIfNotNull(await ProcessEpisodeMetadata(consumer, series, episodeFile, new List<MetadataFile>()));
+                files.AddRange(await ProcessEpisodeImages(consumer, series, episodeFile, new List<MetadataFile>()));
             }
 
-            _metadataFileService.Upsert(files);
+            await _metadataFileService.Upsert(files);
 
             return files;
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder)
+        public override async Task<IEnumerable<ExtraFile>> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder)
         {
-            var metadataFiles = _metadataFileService.GetFilesBySeries(series.Id);
+            var metadataFiles = await _metadataFileService.GetFilesBySeries(series.Id);
 
             if (seriesFolder.IsNullOrWhiteSpace() && seasonFolder.IsNullOrWhiteSpace())
             {
@@ -166,36 +167,36 @@ namespace NzbDrone.Core.Extras.Metadata
 
             var files = new List<MetadataFile>();
 
-            foreach (var consumer in _metadataFactory.Enabled())
+            foreach (var consumer in await _metadataFactory.Enabled())
             {
                 var consumerFiles = GetMetadataFilesForConsumer(consumer, metadataFiles);
 
                 if (seriesFolder.IsNotNullOrWhiteSpace())
                 {
-                    files.AddIfNotNull(ProcessSeriesMetadata(consumer, series, consumerFiles, SeriesMetadataReason.EpisodeFolderCreated));
-                    files.AddRange(ProcessSeriesImages(consumer, series, consumerFiles));
+                    files.AddIfNotNull(await ProcessSeriesMetadata(consumer, series, consumerFiles, SeriesMetadataReason.EpisodeFolderCreated));
+                    files.AddRange(await ProcessSeriesImages(consumer, series, consumerFiles));
                 }
 
                 if (seasonFolder.IsNotNullOrWhiteSpace())
                 {
-                    files.AddRange(ProcessSeasonImages(consumer, series, consumerFiles));
+                    files.AddRange(await ProcessSeasonImages(consumer, series, consumerFiles));
                 }
             }
 
-            _metadataFileService.Upsert(files);
+            await _metadataFileService.Upsert(files);
 
             return files;
         }
 
-        public override IEnumerable<ExtraFile> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles)
+        public override async Task<IEnumerable<ExtraFile>> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles)
         {
-            var metadataFiles = _metadataFileService.GetFilesBySeries(series.Id);
+            var metadataFiles = await _metadataFileService.GetFilesBySeries(series.Id);
             var movedFiles = new List<MetadataFile>();
 
             // TODO: Move EpisodeImage and EpisodeMetadata metadata files, instead of relying on consumers to do it
             // (Xbmc's EpisodeImage is more than just the extension)
 
-            foreach (var consumer in _metadataFactory.GetAvailableProviders())
+            foreach (var consumer in await _metadataFactory.GetAvailableProviders())
             {
                 foreach (var episodeFile in episodeFiles)
                 {
@@ -223,7 +224,7 @@ namespace NzbDrone.Core.Extras.Metadata
                 }
             }
 
-            _metadataFileService.Upsert(movedFiles);
+            await _metadataFileService.Upsert(movedFiles);
 
             return movedFiles;
         }
@@ -233,9 +234,9 @@ namespace NzbDrone.Core.Extras.Metadata
             return false;
         }
 
-        public override IEnumerable<ExtraFile> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly)
+        public override Task<IEnumerable<ExtraFile>> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly)
         {
-            return Enumerable.Empty<ExtraFile>();
+            return Task.FromResult(Enumerable.Empty<ExtraFile>());
         }
 
         private List<MetadataFile> GetMetadataFilesForConsumer(IMetadata consumer, List<MetadataFile> seriesMetadata)
@@ -243,9 +244,9 @@ namespace NzbDrone.Core.Extras.Metadata
             return seriesMetadata.Where(c => c.Consumer == consumer.GetType().Name).ToList();
         }
 
-        private MetadataFile ProcessSeriesMetadata(IMetadata consumer, Series series, List<MetadataFile> existingMetadataFiles, SeriesMetadataReason reason)
+        private async Task<MetadataFile> ProcessSeriesMetadata(IMetadata consumer, Series series, List<MetadataFile> existingMetadataFiles, SeriesMetadataReason reason)
         {
-            var seriesMetadata = consumer.SeriesMetadata(series, reason);
+            var seriesMetadata = await consumer.SeriesMetadata(series, reason);
 
             if (seriesMetadata == null)
             {
@@ -254,7 +255,7 @@ namespace NzbDrone.Core.Extras.Metadata
 
             var hash = seriesMetadata.Contents.SHA256Hash();
 
-            var metadata = GetMetadataFile(series, existingMetadataFiles, e => e.Type == MetadataType.SeriesMetadata) ??
+            var metadata = await GetMetadataFile(series, existingMetadataFiles, e => e.Type == MetadataType.SeriesMetadata) ??
                                new MetadataFile
                                {
                                    SeriesId = series.Id,
@@ -286,7 +287,7 @@ namespace NzbDrone.Core.Extras.Metadata
             return metadata;
         }
 
-        private MetadataFile ProcessEpisodeMetadata(IMetadata consumer, Series series, EpisodeFile episodeFile, List<MetadataFile> existingMetadataFiles)
+        private async Task<MetadataFile> ProcessEpisodeMetadata(IMetadata consumer, Series series, EpisodeFile episodeFile, List<MetadataFile> existingMetadataFiles)
         {
             var episodeMetadata = consumer.EpisodeMetadata(series, episodeFile);
 
@@ -297,9 +298,9 @@ namespace NzbDrone.Core.Extras.Metadata
 
             var fullPath = Path.Combine(series.Path, episodeMetadata.RelativePath);
 
-            _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
+            await _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
 
-            var existingMetadata = GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.EpisodeMetadata &&
+            var existingMetadata = await GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.EpisodeMetadata &&
                                                                                   c.EpisodeFileId == episodeFile.Id);
 
             if (existingMetadata != null)
@@ -339,7 +340,7 @@ namespace NzbDrone.Core.Extras.Metadata
             return metadata;
         }
 
-        private List<MetadataFile> ProcessSeriesImages(IMetadata consumer, Series series, List<MetadataFile> existingMetadataFiles)
+        private async Task<List<MetadataFile>> ProcessSeriesImages(IMetadata consumer, Series series, List<MetadataFile> existingMetadataFiles)
         {
             var result = new List<MetadataFile>();
 
@@ -353,9 +354,9 @@ namespace NzbDrone.Core.Extras.Metadata
                     continue;
                 }
 
-                _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
+                await _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
 
-                var metadata = GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.SeriesImage &&
+                var metadata = await GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.SeriesImage &&
                                                                               c.RelativePath == image.RelativePath) ??
                                new MetadataFile
                                {
@@ -374,7 +375,7 @@ namespace NzbDrone.Core.Extras.Metadata
             return result;
         }
 
-        private List<MetadataFile> ProcessSeasonImages(IMetadata consumer, Series series, List<MetadataFile> existingMetadataFiles)
+        private async Task<List<MetadataFile>> ProcessSeasonImages(IMetadata consumer, Series series, List<MetadataFile> existingMetadataFiles)
         {
             var result = new List<MetadataFile>();
 
@@ -390,9 +391,9 @@ namespace NzbDrone.Core.Extras.Metadata
                         continue;
                     }
 
-                    _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
+                    await _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
 
-                    var metadata = GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.SeasonImage &&
+                    var metadata = await GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.SeasonImage &&
                                                                                   c.SeasonNumber == season.SeasonNumber &&
                                                                                   c.RelativePath == image.RelativePath) ??
                                 new MetadataFile
@@ -414,7 +415,7 @@ namespace NzbDrone.Core.Extras.Metadata
             return result;
         }
 
-        private List<MetadataFile> ProcessEpisodeImages(IMetadata consumer, Series series, EpisodeFile episodeFile, List<MetadataFile> existingMetadataFiles)
+        private async Task<List<MetadataFile>> ProcessEpisodeImages(IMetadata consumer, Series series, EpisodeFile episodeFile, List<MetadataFile> existingMetadataFiles)
         {
             var result = new List<MetadataFile>();
 
@@ -428,9 +429,9 @@ namespace NzbDrone.Core.Extras.Metadata
                     continue;
                 }
 
-                _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
+                await _otherExtraFileRenamer.RenameOtherExtraFile(series, fullPath);
 
-                var existingMetadata = GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.EpisodeImage &&
+                var existingMetadata = await GetMetadataFile(series, existingMetadataFiles, c => c.Type == MetadataType.EpisodeImage &&
                                                                                       c.EpisodeFileId == episodeFile.Id);
 
                 if (existingMetadata != null)
@@ -510,7 +511,7 @@ namespace NzbDrone.Core.Extras.Metadata
             _mediaFileAttributeService.SetFilePermissions(path);
         }
 
-        private MetadataFile GetMetadataFile(Series series, List<MetadataFile> existingMetadataFiles, Func<MetadataFile, bool> predicate)
+        private async Task<MetadataFile> GetMetadataFile(Series series, List<MetadataFile> existingMetadataFiles, Func<MetadataFile, bool> predicate)
         {
             var matchingMetadataFiles = existingMetadataFiles.Where(predicate).ToList();
 
@@ -528,7 +529,7 @@ namespace NzbDrone.Core.Extras.Metadata
 
                 var subfolder = _diskProvider.GetParentFolder(series.Path).GetRelativePath(_diskProvider.GetParentFolder(path));
                 _recycleBinProvider.DeleteFile(path, subfolder);
-                _metadataFileService.Delete(file.Id);
+                await _metadataFileService.Delete(file.Id);
             }
 
             return matchingMetadataFiles.First();

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -12,8 +13,8 @@ namespace NzbDrone.Core.MediaFiles.MediaInfo
 {
     public interface IUpdateMediaInfo
     {
-        bool Update(EpisodeFile episodeFile, Series series);
-        bool UpdateMediaInfo(EpisodeFile episodeFile, Series series);
+        Task<bool> Update(EpisodeFile episodeFile, Series series);
+        Task<bool> UpdateMediaInfo(EpisodeFile episodeFile, Series series);
     }
 
     public class UpdateMediaInfoService : IUpdateMediaInfo, IHandle<SeriesScannedEvent>
@@ -37,6 +38,9 @@ namespace NzbDrone.Core.MediaFiles.MediaInfo
             _logger = logger;
         }
 
+        // IHandle<T> is a shared, synchronous, app-wide eventing interface - its signature can't change here.
+        // Bridging with GetAwaiter().GetResult() is safe: EventAggregator runs handlers off the request thread
+        // via Task.Factory.StartNew, and ASP.NET Core carries no SynchronizationContext.
         public void Handle(SeriesScannedEvent message)
         {
             if (!_configService.EnableMediaInfo)
@@ -45,18 +49,18 @@ namespace NzbDrone.Core.MediaFiles.MediaInfo
                 return;
             }
 
-            var allMediaFiles = _mediaFileService.GetFilesBySeries(message.Series.Id);
+            var allMediaFiles = _mediaFileService.GetFilesBySeries(message.Series.Id).GetAwaiter().GetResult();
             var filteredMediaFiles = allMediaFiles.Where(c =>
                 c.MediaInfo == null ||
                 c.MediaInfo.SchemaRevision < VideoFileInfoReader.MINIMUM_MEDIA_INFO_SCHEMA_REVISION).ToList();
 
             foreach (var mediaFile in filteredMediaFiles)
             {
-                UpdateMediaInfo(mediaFile, message.Series);
+                UpdateMediaInfo(mediaFile, message.Series).GetAwaiter().GetResult();
             }
         }
 
-        public bool Update(EpisodeFile episodeFile, Series series)
+        public async Task<bool> Update(EpisodeFile episodeFile, Series series)
         {
             if (!_configService.EnableMediaInfo)
             {
@@ -64,10 +68,10 @@ namespace NzbDrone.Core.MediaFiles.MediaInfo
                 return false;
             }
 
-            return UpdateMediaInfo(episodeFile, series);
+            return await UpdateMediaInfo(episodeFile, series);
         }
 
-        public bool UpdateMediaInfo(EpisodeFile episodeFile, Series series)
+        public async Task<bool> UpdateMediaInfo(EpisodeFile episodeFile, Series series)
         {
             var path = episodeFile.Path.IsNotNullOrWhiteSpace() ? episodeFile.Path : Path.Combine(series.Path, episodeFile.RelativePath);
 
@@ -88,7 +92,7 @@ namespace NzbDrone.Core.MediaFiles.MediaInfo
 
             if (episodeFile.Id != 0)
             {
-                _mediaFileService.Update(episodeFile);
+                await _mediaFileService.Update(episodeFile);
             }
 
             _logger.Debug("Updated MediaInfo for '{0}'", path);

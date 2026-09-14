@@ -22,6 +22,9 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
 
         public SpecificationPriority Priority => SpecificationPriority.Database;
 
+        // IImportDecisionEngineSpecification is a shared interface with 17 implementers app-wide (most out of
+        // scope this round) - its signature can't change here. Bridging with GetAwaiter().GetResult() is safe
+        // for the same reason as the IHandle bridges elsewhere this session.
         public ImportSpecDecision IsSatisfiedBy(LocalEpisode localEpisode, DownloadClientItem downloadClientItem)
         {
             if (downloadClientItem == null)
@@ -38,7 +41,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
                     continue;
                 }
 
-                var episodeHistory = _historyService.FindByEpisodeId(episode.Id);
+                var episodeHistory = _historyService.FindByEpisodeId(episode.Id).GetAwaiter().GetResult();
                 var lastImported = episodeHistory.FirstOrDefault(h =>
                     h.DownloadId == downloadClientItem.DownloadId &&
                     h.EventType == EpisodeHistoryEventType.DownloadFolderImported);

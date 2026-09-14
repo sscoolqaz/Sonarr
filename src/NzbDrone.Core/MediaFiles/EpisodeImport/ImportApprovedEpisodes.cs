@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -18,7 +19,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
 {
     public interface IImportApprovedEpisodes
     {
-        List<ImportResult> Import(List<ImportDecision> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto);
+        Task<List<ImportResult>> Import(List<ImportDecision> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto);
     }
 
     public class ImportApprovedEpisodes : IImportApprovedEpisodes
@@ -54,7 +55,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
             _logger = logger;
         }
 
-        public List<ImportResult> Import(List<ImportDecision> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto)
+        public async Task<List<ImportResult>> Import(List<ImportDecision> decisions, bool newDownload, DownloadClientItem downloadClientItem = null, ImportMode importMode = ImportMode.Auto)
         {
             var qualifiedImports = decisions
                 .Where(decision => decision.Approved)
@@ -89,7 +90,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
 
                     if (downloadClientItem?.DownloadId.IsNotNullOrWhiteSpace() == true)
                     {
-                        var grabHistory = _historyService.FindByDownloadId(downloadClientItem.DownloadId)
+                        var grabHistory = (await _historyService.FindByDownloadId(downloadClientItem.DownloadId))
                             .OrderByDescending(h => h.Date)
                             .FirstOrDefault(h => h.EventType == EpisodeHistoryEventType.Grabbed);
 
@@ -133,37 +134,37 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
                             }
                         }
 
-                        oldFiles = _episodeFileUpgrader.UpgradeEpisodeFile(episodeFile, localEpisode, copyOnly).OldFiles;
+                        oldFiles = (await _episodeFileUpgrader.UpgradeEpisodeFile(episodeFile, localEpisode, copyOnly)).OldFiles;
                     }
                     else
                     {
                         // Delete existing files from the DB mapped to this path
-                        var previousFiles = _mediaFileService.GetFilesWithRelativePath(localEpisode.Series.Id, episodeFile.RelativePath);
+                        var previousFiles = await _mediaFileService.GetFilesWithRelativePath(localEpisode.Series.Id, episodeFile.RelativePath);
 
                         foreach (var previousFile in previousFiles)
                         {
-                            _mediaFileService.Delete(previousFile, DeleteMediaFileReason.ManualOverride);
+                            await _mediaFileService.Delete(previousFile, DeleteMediaFileReason.ManualOverride);
                         }
                     }
 
-                    episodeFile = _mediaFileService.Add(episodeFile);
+                    episodeFile = await _mediaFileService.Add(episodeFile);
                     importResults.Add(new ImportResult(importDecision, episodeFile));
 
                     if (newDownload)
                     {
                         if (localEpisode.ScriptImported)
                         {
-                            _existingExtraFiles.ImportExtraFiles(localEpisode.Series, localEpisode.PossibleExtraFiles, localEpisode.FileNameBeforeRename);
+                            await _existingExtraFiles.ImportExtraFiles(localEpisode.Series, localEpisode.PossibleExtraFiles, localEpisode.FileNameBeforeRename);
 
                             if (localEpisode.FileNameBeforeRename != episodeFile.RelativePath)
                             {
-                                _extraService.MoveFilesAfterRename(localEpisode.Series, episodeFile);
+                                await _extraService.MoveFilesAfterRename(localEpisode.Series, episodeFile);
                             }
                         }
 
                         if (!localEpisode.ScriptImported || localEpisode.ShouldImportExtras)
                         {
-                            _extraService.ImportEpisode(localEpisode, episodeFile, copyOnly);
+                            await _extraService.ImportEpisode(localEpisode, episodeFile, copyOnly);
                         }
                     }
 
@@ -181,7 +182,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
                     _logger.Warn(e, "Couldn't import episode " + localEpisode);
                     importResults.Add(new ImportResult(importDecision, "Failed to import episode, Destination already exists."));
 
-                    _commandQueueManager.Push(new RescanSeriesCommand(localEpisode.Series.Id));
+                    await _commandQueueManager.Push(new RescanSeriesCommand(localEpisode.Series.Id));
                 }
                 catch (RecycleBinException e)
                 {

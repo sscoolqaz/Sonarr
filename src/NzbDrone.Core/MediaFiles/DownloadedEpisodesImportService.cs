@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
@@ -17,8 +18,8 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IDownloadedEpisodesImportService
     {
-        List<ImportResult> ProcessRootFolder(DirectoryInfo directoryInfo);
-        List<ImportResult> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Series series = null, DownloadClientItem downloadClientItem = null);
+        Task<List<ImportResult>> ProcessRootFolder(DirectoryInfo directoryInfo);
+        Task<List<ImportResult>> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Series series = null, DownloadClientItem downloadClientItem = null);
         bool ShouldDeleteFolder(DirectoryInfo directoryInfo, Series series);
     }
 
@@ -58,26 +59,26 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public List<ImportResult> ProcessRootFolder(DirectoryInfo directoryInfo)
+        public async Task<List<ImportResult>> ProcessRootFolder(DirectoryInfo directoryInfo)
         {
             var results = new List<ImportResult>();
 
             foreach (var subFolder in _diskProvider.GetDirectories(directoryInfo.FullName))
             {
-                var folderResults = ProcessFolder(new DirectoryInfo(subFolder), ImportMode.Auto, null);
+                var folderResults = await ProcessFolder(new DirectoryInfo(subFolder), ImportMode.Auto, null);
                 results.AddRange(folderResults);
             }
 
             foreach (var videoFile in _diskScanService.GetVideoFiles(directoryInfo.FullName, false))
             {
-                var fileResults = ProcessFile(new FileInfo(videoFile), ImportMode.Auto, null);
+                var fileResults = await ProcessFile(new FileInfo(videoFile), ImportMode.Auto, null);
                 results.AddRange(fileResults);
             }
 
             return results;
         }
 
-        public List<ImportResult> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Series series = null, DownloadClientItem downloadClientItem = null)
+        public async Task<List<ImportResult>> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Series series = null, DownloadClientItem downloadClientItem = null)
         {
             _logger.Debug("Processing path: {0}", path);
 
@@ -87,10 +88,10 @@ namespace NzbDrone.Core.MediaFiles
 
                 if (series == null)
                 {
-                    return ProcessFolder(directoryInfo, importMode, downloadClientItem);
+                    return await ProcessFolder(directoryInfo, importMode, downloadClientItem);
                 }
 
-                return ProcessFolder(directoryInfo, importMode, series, downloadClientItem);
+                return await ProcessFolder(directoryInfo, importMode, series, downloadClientItem);
             }
 
             if (_diskProvider.FileExists(path))
@@ -99,10 +100,10 @@ namespace NzbDrone.Core.MediaFiles
 
                 if (series == null)
                 {
-                    return ProcessFile(fileInfo, importMode, downloadClientItem);
+                    return await ProcessFile(fileInfo, importMode, downloadClientItem);
                 }
 
-                return ProcessFile(fileInfo, importMode, series, downloadClientItem);
+                return await ProcessFile(fileInfo, importMode, series, downloadClientItem);
             }
 
             LogInaccessiblePathError(path);
@@ -156,10 +157,10 @@ namespace NzbDrone.Core.MediaFiles
             }
         }
 
-        private List<ImportResult> ProcessFolder(DirectoryInfo directoryInfo, ImportMode importMode, DownloadClientItem downloadClientItem)
+        private async Task<List<ImportResult>> ProcessFolder(DirectoryInfo directoryInfo, ImportMode importMode, DownloadClientItem downloadClientItem)
         {
             var cleanedUpName = GetCleanedUpFolderName(directoryInfo.Name);
-            var series = _parsingService.GetSeries(cleanedUpName);
+            var series = await _parsingService.GetSeries(cleanedUpName);
 
             if (series == null)
             {
@@ -171,12 +172,12 @@ namespace NzbDrone.Core.MediaFiles
                        };
             }
 
-            return ProcessFolder(directoryInfo, importMode, series, downloadClientItem);
+            return await ProcessFolder(directoryInfo, importMode, series, downloadClientItem);
         }
 
-        private List<ImportResult> ProcessFolder(DirectoryInfo directoryInfo, ImportMode importMode, Series series, DownloadClientItem downloadClientItem)
+        private async Task<List<ImportResult>> ProcessFolder(DirectoryInfo directoryInfo, ImportMode importMode, Series series, DownloadClientItem downloadClientItem)
         {
-            if (_seriesService.SeriesPathExists(directoryInfo.FullName))
+            if (await _seriesService.SeriesPathExists(directoryInfo.FullName))
             {
                 _logger.Warn("Unable to process folder that is mapped to an existing series");
                 return new List<ImportResult>
@@ -213,8 +214,8 @@ namespace NzbDrone.Core.MediaFiles
                 };
             }
 
-            var decisions = _importDecisionMaker.GetImportDecisions(videoFiles.ToList(), series, downloadClientItem, downloadClientItemInfo, folderInfo, true);
-            var importResults = _importApprovedEpisodes.Import(decisions, true, downloadClientItem, importMode);
+            var decisions = await _importDecisionMaker.GetImportDecisions(videoFiles.ToList(), series, downloadClientItem, downloadClientItemInfo, folderInfo, true);
+            var importResults = await _importApprovedEpisodes.Import(decisions, true, downloadClientItem, importMode);
 
             if (importMode == ImportMode.Auto)
             {
@@ -244,9 +245,9 @@ namespace NzbDrone.Core.MediaFiles
             return importResults;
         }
 
-        private List<ImportResult> ProcessFile(FileInfo fileInfo, ImportMode importMode, DownloadClientItem downloadClientItem)
+        private async Task<List<ImportResult>> ProcessFile(FileInfo fileInfo, ImportMode importMode, DownloadClientItem downloadClientItem)
         {
-            var series = _parsingService.GetSeries(Path.GetFileNameWithoutExtension(fileInfo.Name));
+            var series = await _parsingService.GetSeries(Path.GetFileNameWithoutExtension(fileInfo.Name));
 
             if (series == null)
             {
@@ -258,10 +259,10 @@ namespace NzbDrone.Core.MediaFiles
                        };
             }
 
-            return ProcessFile(fileInfo, importMode, series, downloadClientItem);
+            return await ProcessFile(fileInfo, importMode, series, downloadClientItem);
         }
 
-        private List<ImportResult> ProcessFile(FileInfo fileInfo, ImportMode importMode, Series series, DownloadClientItem downloadClientItem)
+        private async Task<List<ImportResult>> ProcessFile(FileInfo fileInfo, ImportMode importMode, Series series, DownloadClientItem downloadClientItem)
         {
             if (Path.GetFileNameWithoutExtension(fileInfo.Name).StartsWith("._"))
             {
@@ -332,9 +333,9 @@ namespace NzbDrone.Core.MediaFiles
             }
 
             var downloadClientItemInfo = downloadClientItem == null ? null : Parser.Parser.ParseTitle(downloadClientItem.Title);
-            var decisions = _importDecisionMaker.GetImportDecisions(new List<string>() { fileInfo.FullName }, series, downloadClientItem, downloadClientItemInfo, null, true);
+            var decisions = await _importDecisionMaker.GetImportDecisions(new List<string>() { fileInfo.FullName }, series, downloadClientItem, downloadClientItemInfo, null, true);
 
-            return _importApprovedEpisodes.Import(decisions, true, downloadClientItem, importMode);
+            return await _importApprovedEpisodes.Import(decisions, true, downloadClientItem, importMode);
         }
 
         private string GetCleanedUpFolderName(string folder)

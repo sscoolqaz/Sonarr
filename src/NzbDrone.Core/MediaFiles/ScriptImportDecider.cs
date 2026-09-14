@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -17,7 +18,7 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IImportScript
     {
-        public ScriptImportDecision TryImport(string sourcePath, string destinationFilePath, LocalEpisode localEpisode, EpisodeFile episodeFile, TransferMode mode);
+        public Task<ScriptImportDecision> TryImport(string sourcePath, string destinationFilePath, LocalEpisode localEpisode, EpisodeFile episodeFile, TransferMode mode);
     }
 
     public class ImportScriptService : IImportScript
@@ -110,7 +111,7 @@ namespace NzbDrone.Core.MediaFiles
             return new ScriptImportInfo(possibleExtraFiles, mediaFile, decision, importExtraFiles);
         }
 
-        public ScriptImportDecision TryImport(string sourcePath, string destinationFilePath, LocalEpisode localEpisode, EpisodeFile episodeFile, TransferMode mode)
+        public async Task<ScriptImportDecision> TryImport(string sourcePath, string destinationFilePath, LocalEpisode localEpisode, EpisodeFile episodeFile, TransferMode mode)
         {
             var series = localEpisode.Series;
             var oldFiles = localEpisode.OldFiles;
@@ -142,7 +143,7 @@ namespace NzbDrone.Core.MediaFiles
             environmentVariables.Add("Sonarr_Series_Type", series.SeriesType.ToString());
             environmentVariables.Add("Sonarr_Series_OriginalLanguage", IsoLanguages.Get(series.OriginalLanguage).ThreeLetterCode);
             environmentVariables.Add("Sonarr_Series_Genres", string.Join("|", series.Genres));
-            environmentVariables.Add("Sonarr_Series_Tags", string.Join("|", _tagRepository.GetTags(series.Tags).Select(t => t.Label)));
+            environmentVariables.Add("Sonarr_Series_Tags", string.Join("|", (await _tagRepository.GetTags(series.Tags)).Select(t => t.Label)));
 
             environmentVariables.Add("Sonarr_EpisodeFile_EpisodeCount", localEpisode.Episodes.Count.ToString());
             environmentVariables.Add("Sonarr_EpisodeFile_EpisodeIds", string.Join(",", localEpisode.Episodes.Select(e => e.Id)));

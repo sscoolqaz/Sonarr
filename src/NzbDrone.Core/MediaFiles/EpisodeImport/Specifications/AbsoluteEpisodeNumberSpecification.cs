@@ -19,6 +19,9 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
             _logger = logger;
         }
 
+        // IImportDecisionEngineSpecification is a shared interface with 17 implementers app-wide (most out of
+        // scope this round) - its signature can't change here. Bridging with GetAwaiter().GetResult() is safe
+        // for the same reason as the IHandle bridges elsewhere this session.
         public ImportSpecDecision IsSatisfiedBy(LocalEpisode localEpisode, DownloadClientItem downloadClientItem)
         {
             if (localEpisode.Series.SeriesType != SeriesTypes.Anime)
@@ -27,7 +30,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
                 return ImportSpecDecision.Accept();
             }
 
-            if (!_buildFileNames.RequiresAbsoluteEpisodeNumber())
+            if (!_buildFileNames.RequiresAbsoluteEpisodeNumber().GetAwaiter().GetResult())
             {
                 _logger.Debug("File name format does not require absolute episode number, skipping check");
                 return ImportSpecDecision.Accept();

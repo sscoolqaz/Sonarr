@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.IndexerSearch;
 using NzbDrone.Core.MediaFiles.Events;
@@ -33,18 +34,18 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        private void HandleScanEvents(Series series)
+        private async Task HandleScanEvents(Series series)
         {
             var addOptions = series.AddOptions;
 
             if (addOptions == null)
             {
-                _episodeRefreshedService.Search(series);
+                await _episodeRefreshedService.Search(series);
                 return;
             }
 
             _logger.Info("[{0}] was recently added, performing post-add actions", series.Title);
-            _episodeMonitoredService.SetEpisodeMonitoredStatus(series, addOptions);
+            await _episodeMonitoredService.SetEpisodeMonitoredStatus(series, addOptions);
 
             _eventAggregator.PublishEvent(new SeriesAddCompletedEvent(series));
 
@@ -54,33 +55,37 @@ namespace NzbDrone.Core.Tv
 
             if (addOptions.SearchForMissingEpisodes && addOptions.SearchForCutoffUnmetEpisodes)
             {
-                _commandQueueManager.Push(new SeriesSearchCommand(series.Id));
+                await _commandQueueManager.Push(new SeriesSearchCommand(series.Id));
             }
             else
             {
                 if (addOptions.SearchForMissingEpisodes)
                 {
-                    _commandQueueManager.Push(new MissingEpisodeSearchCommand(series.Id));
+                    await _commandQueueManager.Push(new MissingEpisodeSearchCommand(series.Id));
                 }
 
                 if (addOptions.SearchForCutoffUnmetEpisodes)
                 {
-                    _commandQueueManager.Push(new CutoffUnmetEpisodeSearchCommand(series.Id));
+                    await _commandQueueManager.Push(new CutoffUnmetEpisodeSearchCommand(series.Id));
                 }
             }
 
             series.AddOptions = null;
-            _seriesService.RemoveAddOptions(series);
+            await _seriesService.RemoveAddOptions(series);
         }
 
+        // IHandle<T> is a shared, synchronous, app-wide eventing interface (50+ implementers) - its signature
+        // can't change here. EventAggregator invokes Handle() off the request thread via Task.Factory.StartNew,
+        // and ASP.NET Core carries no SynchronizationContext, so bridging with GetAwaiter().GetResult() is safe
+        // (same reasoning already applied elsewhere this session).
         public void Handle(SeriesScannedEvent message)
         {
-            HandleScanEvents(message.Series);
+            HandleScanEvents(message.Series).GetAwaiter().GetResult();
         }
 
         public void Handle(SeriesScanSkippedEvent message)
         {
-            HandleScanEvents(message.Series);
+            HandleScanEvents(message.Series).GetAwaiter().GetResult();
         }
     }
 }

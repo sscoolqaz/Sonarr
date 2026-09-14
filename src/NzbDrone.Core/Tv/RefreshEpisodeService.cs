@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Messaging.Events;
@@ -10,7 +11,7 @@ namespace NzbDrone.Core.Tv
 {
     public interface IRefreshEpisodeService
     {
-        void RefreshEpisodeInfo(Series series, IEnumerable<Episode> remoteEpisodes);
+        Task RefreshEpisodeInfo(Series series, IEnumerable<Episode> remoteEpisodes);
     }
 
     public class RefreshEpisodeService : IRefreshEpisodeService
@@ -26,13 +27,13 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        public void RefreshEpisodeInfo(Series series, IEnumerable<Episode> remoteEpisodes)
+        public async Task RefreshEpisodeInfo(Series series, IEnumerable<Episode> remoteEpisodes)
         {
             _logger.Info("Starting episode info refresh for: {0}", series);
             var successCount = 0;
             var failCount = 0;
 
-            var existingEpisodes = _episodeService.GetEpisodeBySeries(series.Id);
+            var existingEpisodes = await _episodeService.GetEpisodeBySeries(series.Id);
             var seasons = series.Seasons;
             var hasExisting = existingEpisodes.Any();
 
@@ -124,9 +125,9 @@ namespace NzbDrone.Core.Tv
             AdjustMultiEpisodeAirTime(series, allEpisodes);
             AdjustDirectToDvdAirDate(series, allEpisodes);
 
-            _episodeService.DeleteMany(existingEpisodes);
-            _episodeService.UpdateMany(updateList);
-            _episodeService.InsertMany(newList);
+            await _episodeService.DeleteMany(existingEpisodes);
+            await _episodeService.UpdateMany(updateList);
+            await _episodeService.InsertMany(newList);
 
             _eventAggregator.PublishEvent(new EpisodeInfoRefreshedEvent(series, newList, updateList, existingEpisodes));
 

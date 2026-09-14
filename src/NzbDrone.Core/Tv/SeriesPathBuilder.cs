@@ -39,7 +39,7 @@ namespace NzbDrone.Core.Tv
                 return Path.Combine(series.RootFolderPath, relativePath);
             }
 
-            return Path.Combine(series.RootFolderPath, _fileNameBuilder.GetSeriesFolder(series));
+            return Path.Combine(series.RootFolderPath, await _fileNameBuilder.GetSeriesFolder(series));
         }
 
         private async Task<string> GetExistingRelativePath(Series series)

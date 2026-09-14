@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Common.Extensions;
@@ -13,7 +14,7 @@ namespace NzbDrone.Core.Tv
 {
     public interface IEpisodeRefreshedService
     {
-        void Search(Series series);
+        Task Search(Series series);
     }
 
     public class EpisodeRefreshedService : IEpisodeRefreshedService, IHandle<EpisodeInfoRefreshedEvent>
@@ -34,18 +35,28 @@ namespace NzbDrone.Core.Tv
             _searchCache = cacheManager.GetCache<List<int>>(GetType());
         }
 
-        public void Search(Series series)
+        public async Task Search(Series series)
         {
             var previouslyAired = _searchCache.Find(series.Id.ToString());
 
             if (previouslyAired != null && previouslyAired.Any())
             {
-                var missing = previouslyAired.Select(e => _episodeService.GetEpisode(e)).Where(e => !e.HasFile).ToList();
+                var missing = new List<Episode>();
+
+                foreach (var episodeId in previouslyAired)
+                {
+                    var episode = await _episodeService.GetEpisode(episodeId);
+
+                    if (!episode.HasFile)
+                    {
+                        missing.Add(episode);
+                    }
+                }
 
                 if (missing.Any())
                 {
                     _logger.Info("Searching for {MissingCount} episodes from '{SeriesTitle}' that were recently added or had absolute episode number added", missing.Count, series.Title);
-                    _commandQueueManager.Push(new EpisodeSearchCommand(missing.Select(e => e.Id).ToList()));
+                    await _commandQueueManager.Push(new EpisodeSearchCommand(missing.Select(e => e.Id).ToList()));
                 }
             }
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Core.Extras.Metadata.Files;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.ThingiProvider;
@@ -10,7 +11,7 @@ namespace NzbDrone.Core.Extras.Metadata
     {
         string GetFilenameAfterMove(Series series, EpisodeFile episodeFile, MetadataFile metadataFile);
         MetadataFile FindMetadataFile(Series series, string path);
-        MetadataFileResult SeriesMetadata(Series series, SeriesMetadataReason reason);
+        Task<MetadataFileResult> SeriesMetadata(Series series, SeriesMetadataReason reason);
         MetadataFileResult EpisodeMetadata(Series series, EpisodeFile episodeFile);
         List<ImageFileResult> SeriesImages(Series series);
         List<ImageFileResult> SeasonImages(Series series, Season season);

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -14,10 +15,10 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
 {
     public interface IMakeImportDecision
     {
-        List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series);
-        List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series, bool filterExistingFiles);
-        List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource);
-        List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource, bool filterExistingFiles);
+        Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series);
+        Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series, bool filterExistingFiles);
+        Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource);
+        Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource, bool filterExistingFiles);
         ImportDecision GetDecision(LocalEpisode localEpisode, DownloadClientItem downloadClientItem);
     }
 
@@ -51,24 +52,24 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
             _logger = logger;
         }
 
-        public List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series)
+        public Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series)
         {
             return GetImportDecisions(videoFiles, series, false);
         }
 
-        public List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series, bool filterExistingFiles)
+        public Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series, bool filterExistingFiles)
         {
             return GetImportDecisions(videoFiles, series, null, null, null, false, filterExistingFiles);
         }
 
-        public List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource)
+        public Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource)
         {
             return GetImportDecisions(videoFiles, series, downloadClientItem, downloadClientItemInfo, folderInfo, sceneSource, true);
         }
 
-        public List<ImportDecision> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource, bool filterExistingFiles)
+        public async Task<List<ImportDecision>> GetImportDecisions(List<string> videoFiles, Series series, DownloadClientItem downloadClientItem, ParsedEpisodeInfo downloadClientItemInfo, ParsedEpisodeInfo folderInfo, bool sceneSource, bool filterExistingFiles)
         {
-            var newFiles = filterExistingFiles ? _mediaFileService.FilterExistingFiles(videoFiles.ToList(), series) : videoFiles.ToList();
+            var newFiles = filterExistingFiles ? await _mediaFileService.FilterExistingFiles(videoFiles.ToList(), series) : videoFiles.ToList();
 
             _logger.Debug("Analyzing {0}/{1} files.", newFiles.Count, videoFiles.Count);
 
@@ -92,7 +93,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
                     OtherVideoFiles = nonSampleVideoFileCount > 1
                 };
 
-                decisions.AddIfNotNull(GetDecision(localEpisode, downloadClientItem, nonSampleVideoFileCount > 1));
+                decisions.AddIfNotNull(await GetDecision(localEpisode, downloadClientItem, nonSampleVideoFileCount > 1));
             }
 
             return decisions;
@@ -106,7 +107,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
             return new ImportDecision(localEpisode, reasons.ToArray());
         }
 
-        private ImportDecision GetDecision(LocalEpisode localEpisode, DownloadClientItem downloadClientItem, bool otherFiles)
+        private async Task<ImportDecision> GetDecision(LocalEpisode localEpisode, DownloadClientItem downloadClientItem, bool otherFiles)
         {
             ImportDecision decision = null;
 
@@ -150,7 +151,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport
                         }
                     }
 
-                    _formatCalculator.UpdateEpisodeCustomFormats(localEpisode);
+                    await _formatCalculator.UpdateEpisodeCustomFormats(localEpisode);
 
                     decision = GetDecision(localEpisode, downloadClientItem);
                 }

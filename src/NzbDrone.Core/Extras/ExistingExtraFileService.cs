@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.MediaFiles.Events;
 using NzbDrone.Core.Messaging.Events;
@@ -10,7 +11,7 @@ namespace NzbDrone.Core.Extras
 {
     public interface IExistingExtraFiles
     {
-        List<string> ImportExtraFiles(Series series, List<string> possibleExtraFiles, string fileNameBeforeRename);
+        Task<List<string>> ImportExtraFiles(Series series, List<string> possibleExtraFiles, string fileNameBeforeRename);
     }
 
     public class ExistingExtraFileService : IExistingExtraFiles, IHandle<SeriesScannedEvent>
@@ -25,7 +26,7 @@ namespace NzbDrone.Core.Extras
             _logger = logger;
         }
 
-        public List<string> ImportExtraFiles(Series series, List<string> possibleExtraFiles, string fileNameBeforeRename)
+        public async Task<List<string>> ImportExtraFiles(Series series, List<string> possibleExtraFiles, string fileNameBeforeRename)
         {
             _logger.Debug("Looking for existing extra files in {0}", series.Path);
 
@@ -33,7 +34,7 @@ namespace NzbDrone.Core.Extras
 
             foreach (var existingExtraFileImporter in _existingExtraFileImporters)
             {
-                var imported = existingExtraFileImporter.ProcessFiles(series, possibleExtraFiles, importedFiles, fileNameBeforeRename);
+                var imported = await existingExtraFileImporter.ProcessFiles(series, possibleExtraFiles, importedFiles, fileNameBeforeRename);
 
                 importedFiles.AddRange(imported.Select(f => Path.Combine(series.Path, f.RelativePath)));
             }
@@ -41,11 +42,14 @@ namespace NzbDrone.Core.Extras
             return importedFiles;
         }
 
+        // IHandle<T> is a shared, synchronous, app-wide eventing interface - its signature can't change here.
+        // Bridging with GetAwaiter().GetResult() is safe: EventAggregator runs handlers off the request thread
+        // via Task.Factory.StartNew, and ASP.NET Core carries no SynchronizationContext.
         public void Handle(SeriesScannedEvent message)
         {
             var series = message.Series;
             var possibleExtraFiles = message.PossibleExtraFiles;
-            var importedFiles = ImportExtraFiles(series, possibleExtraFiles, null);
+            var importedFiles = ImportExtraFiles(series, possibleExtraFiles, null).GetAwaiter().GetResult();
 
             _logger.Info("Found {0} possible extra files, imported {1} files.", possibleExtraFiles.Count, importedFiles.Count);
         }

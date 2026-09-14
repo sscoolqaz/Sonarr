@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -22,7 +23,7 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IDiskScanService
     {
-        void Scan(Series series);
+        Task Scan(Series series);
         string[] GetVideoFiles(string path, bool allDirectories = true);
         string[] GetNonVideoFiles(string path, bool allDirectories = true);
         List<string> FilterPaths(string basePath, IEnumerable<string> files, bool filterExtras = true);
@@ -74,9 +75,9 @@ namespace NzbDrone.Core.MediaFiles
         private static readonly Regex ExcludedExtraFilesRegex = new Regex(@"(-(trailer|other|behindthescenes|deleted|featurette|interview|scene|short)\.[^.]+$)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex ExcludedFilesRegex = new Regex(@"^\.(_|unmanic|DS_Store$)|^Thumbs\.db$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public void Scan(Series series)
+        public async Task Scan(Series series)
         {
-            var rootFolder = _rootFolderService.GetBestRootFolderPath(series.Path);
+            var rootFolder = await _rootFolderService.GetBestRootFolderPath(series.Path);
 
             var seriesFolderExists = _diskProvider.FolderExists(series.Path);
 
@@ -120,7 +121,7 @@ namespace NzbDrone.Core.MediaFiles
                     _logger.Debug("Series folder doesn't exist: {0}", series.Path);
                 }
 
-                CleanMediaFiles(series, new List<string>());
+                await CleanMediaFiles(series, new List<string>());
                 CompletedScanning(series, new List<string>());
 
                 return;
@@ -131,16 +132,16 @@ namespace NzbDrone.Core.MediaFiles
             videoFilesStopwatch.Stop();
             _logger.Trace("Finished getting episode files for: {0} [{1}]", series, videoFilesStopwatch.Elapsed);
 
-            CleanMediaFiles(series, mediaFileList);
+            await CleanMediaFiles(series, mediaFileList);
 
-            var seriesFiles = _mediaFileService.GetFilesBySeries(series.Id);
+            var seriesFiles = await _mediaFileService.GetFilesBySeries(series.Id);
             var unmappedFiles = MediaFileService.FilterExistingFiles(mediaFileList, seriesFiles, series);
 
             var decisionsStopwatch = Stopwatch.StartNew();
-            var decisions = _importDecisionMaker.GetImportDecisions(unmappedFiles, series, false);
+            var decisions = await _importDecisionMaker.GetImportDecisions(unmappedFiles, series, false);
             decisionsStopwatch.Stop();
             _logger.Trace("Import decisions complete for: {0} [{1}]", series, decisionsStopwatch.Elapsed);
-            _importApprovedEpisodes.Import(decisions, false);
+            await _importApprovedEpisodes.Import(decisions, false);
 
             // Update existing files that have a different file size
 
@@ -159,7 +160,7 @@ namespace NzbDrone.Core.MediaFiles
 
                 file.Size = fileSize;
 
-                if (!_updateMediaInfoService.Update(file, series))
+                if (!await _updateMediaInfoService.Update(file, series))
                 {
                     filesToUpdate.Add(file);
                 }
@@ -168,7 +169,7 @@ namespace NzbDrone.Core.MediaFiles
             // Update any files that had a file size change, but didn't get media info updated.
             if (filesToUpdate.Any())
             {
-                _mediaFileService.Update(filesToUpdate);
+                await _mediaFileService.Update(filesToUpdate);
             }
 
             fileInfoStopwatch.Stop();
@@ -187,10 +188,10 @@ namespace NzbDrone.Core.MediaFiles
             CompletedScanning(series, possibleExtraFiles);
         }
 
-        private void CleanMediaFiles(Series series, List<string> mediaFileList)
+        private async Task CleanMediaFiles(Series series, List<string> mediaFileList)
         {
             _logger.Debug("{0} Cleaning up media files in DB", series);
-            _mediaFileTableCleanupService.Clean(series, mediaFileList);
+            await _mediaFileTableCleanupService.Clean(series, mediaFileList);
         }
 
         private void CompletedScanning(Series series, List<string> possibleExtraFiles)
@@ -298,20 +299,23 @@ namespace NzbDrone.Core.MediaFiles
             }
         }
 
+        // IExecute<TCommand> is a shared, synchronous, app-wide command interface - its signature can't change
+        // here. Bridging with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges
+        // elsewhere this session (no SynchronizationContext on the threads command execution runs on).
         public void Execute(RescanSeriesCommand message)
         {
             if (message.SeriesId.HasValue)
             {
-                var series = _seriesService.GetSeries(message.SeriesId.Value);
-                Scan(series);
+                var series = _seriesService.GetSeries(message.SeriesId.Value).GetAwaiter().GetResult();
+                Scan(series).GetAwaiter().GetResult();
             }
             else
             {
-                var allSeries = _seriesService.GetAllSeries();
+                var allSeries = _seriesService.GetAllSeries().GetAwaiter().GetResult();
 
                 foreach (var series in allSeries)
                 {
-                    Scan(series);
+                    Scan(series).GetAwaiter().GetResult();
                 }
             }
         }

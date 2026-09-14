@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -43,34 +44,34 @@ namespace NzbDrone.Core.Extras.Subtitles
 
         public override int Order => 1;
 
-        public override IEnumerable<ExtraFile> CreateAfterMediaCoverUpdate(Series series)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterMediaCoverUpdate(Series series)
         {
-            return Enumerable.Empty<SubtitleFile>();
+            return Task.FromResult<IEnumerable<ExtraFile>>(Enumerable.Empty<SubtitleFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles)
         {
-            return Enumerable.Empty<SubtitleFile>();
+            return Task.FromResult<IEnumerable<ExtraFile>>(Enumerable.Empty<SubtitleFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodesImported(Series series)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterEpisodesImported(Series series)
         {
-            return Enumerable.Empty<SubtitleFile>();
+            return Task.FromResult<IEnumerable<ExtraFile>>(Enumerable.Empty<SubtitleFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
         {
-            return Enumerable.Empty<SubtitleFile>();
+            return Task.FromResult<IEnumerable<ExtraFile>>(Enumerable.Empty<SubtitleFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder)
         {
-            return Enumerable.Empty<SubtitleFile>();
+            return Task.FromResult<IEnumerable<ExtraFile>>(Enumerable.Empty<SubtitleFile>());
         }
 
-        public override IEnumerable<ExtraFile> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles)
+        public override async Task<IEnumerable<ExtraFile>> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles)
         {
-            var subtitleFiles = _subtitleFileService.GetFilesBySeries(series.Id);
+            var subtitleFiles = await _subtitleFileService.GetFilesBySeries(series.Id);
 
             var movedFiles = new List<SubtitleFile>();
 
@@ -99,7 +100,7 @@ namespace NzbDrone.Core.Extras.Subtitles
                 }
             }
 
-            _subtitleFileService.Upsert(movedFiles);
+            await _subtitleFileService.Upsert(movedFiles);
 
             return movedFiles;
         }
@@ -109,7 +110,7 @@ namespace NzbDrone.Core.Extras.Subtitles
             return SubtitleFileExtensions.Extensions.Contains(extension.ToLowerInvariant());
         }
 
-        public override IEnumerable<ExtraFile> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly)
+        public override async Task<IEnumerable<ExtraFile>> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly)
         {
             var importedFiles = new List<SubtitleFile>();
 
@@ -222,7 +223,7 @@ namespace NzbDrone.Core.Extras.Subtitles
                         subtitleFile.LanguageTags = file.LanguageTags;
 
                         _mediaFileAttributeService.SetFilePermissions(path);
-                        _subtitleFileService.Upsert(subtitleFile);
+                        await _subtitleFileService.Upsert(subtitleFile);
 
                         importedFiles.Add(subtitleFile);
 

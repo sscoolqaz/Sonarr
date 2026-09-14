@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
@@ -16,7 +17,7 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IUpdateEpisodeFileService
     {
-        void ChangeFileDateForFile(EpisodeFile episodeFile, Series series, List<Episode> episodes);
+        Task ChangeFileDateForFile(EpisodeFile episodeFile, Series series, List<Episode> episodes);
     }
 
     public class UpdateEpisodeFileService : IUpdateEpisodeFileService,
@@ -38,9 +39,10 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public void ChangeFileDateForFile(EpisodeFile episodeFile, Series series, List<Episode> episodes)
+        public Task ChangeFileDateForFile(EpisodeFile episodeFile, Series series, List<Episode> episodes)
         {
             ChangeFileDate(episodeFile, series, episodes);
+            return Task.CompletedTask;
         }
 
         private bool ChangeFileDate(EpisodeFile episodeFile, Series series, List<Episode> episodes)
@@ -100,6 +102,9 @@ namespace NzbDrone.Core.MediaFiles
             return false;
         }
 
+        // IHandle<T> is a shared, synchronous, app-wide eventing interface - its signature can't change here.
+        // Bridging with GetAwaiter().GetResult() is safe: EventAggregator runs handlers off the request thread
+        // via Task.Factory.StartNew, and ASP.NET Core carries no SynchronizationContext.
         public void Handle(SeriesScannedEvent message)
         {
             if (_configService.FileDate == FileDateType.None)
@@ -107,7 +112,7 @@ namespace NzbDrone.Core.MediaFiles
                 return;
             }
 
-            var episodes = _episodeService.EpisodesWithFiles(message.Series.Id);
+            var episodes = _episodeService.EpisodesWithFiles(message.Series.Id).GetAwaiter().GetResult();
 
             var episodeFiles = new List<EpisodeFile>();
             var updated = new List<EpisodeFile>();

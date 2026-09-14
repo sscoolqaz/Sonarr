@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -37,7 +38,7 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        private List<ImportResult> ProcessPath(DownloadedEpisodesScanCommand message)
+        private async Task<List<ImportResult>> ProcessPath(DownloadedEpisodesScanCommand message)
         {
             if (!_diskProvider.FolderExists(message.Path) && !_diskProvider.FileExists(message.Path))
             {
@@ -53,7 +54,7 @@ namespace NzbDrone.Core.MediaFiles
                 {
                     _logger.Debug("External directory scan request for known download {0}. [{1}]", message.DownloadClientId, message.Path);
 
-                    var importResults = _downloadedEpisodesImportService.ProcessPath(message.Path, message.ImportMode, trackedDownload.RemoteEpisode.Series, trackedDownload.DownloadItem);
+                    var importResults = await _downloadedEpisodesImportService.ProcessPath(message.Path, message.ImportMode, trackedDownload.RemoteEpisode.Series, trackedDownload.DownloadItem);
 
                     _completedDownloadService.VerifyImport(trackedDownload, importResults);
 
@@ -63,16 +64,19 @@ namespace NzbDrone.Core.MediaFiles
                 _logger.Warn("External directory scan request for unknown download {0}, attempting normal import. [{1}]", message.DownloadClientId, message.Path);
             }
 
-            return _downloadedEpisodesImportService.ProcessPath(message.Path, message.ImportMode);
+            return await _downloadedEpisodesImportService.ProcessPath(message.Path, message.ImportMode);
         }
 
+        // IExecute<TCommand> is a shared, synchronous, app-wide command interface - its signature can't change
+        // here. Bridging with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges
+        // elsewhere this session (no SynchronizationContext on the threads command execution runs on).
         public void Execute(DownloadedEpisodesScanCommand message)
         {
             List<ImportResult> importResults;
 
             if (message.Path.IsNotNullOrWhiteSpace())
             {
-                importResults = ProcessPath(message);
+                importResults = ProcessPath(message).GetAwaiter().GetResult();
             }
             else
             {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Core.Configuration;
@@ -18,8 +19,8 @@ namespace NzbDrone.Core.Extras
 {
     public interface IExtraService
     {
-        void MoveFilesAfterRename(Series series, EpisodeFile episodeFile);
-        void ImportEpisode(LocalEpisode localEpisode, EpisodeFile episodeFile, bool isReadOnly);
+        Task MoveFilesAfterRename(Series series, EpisodeFile episodeFile);
+        Task ImportEpisode(LocalEpisode localEpisode, EpisodeFile episodeFile, bool isReadOnly);
     }
 
     public class ExtraService : IExtraService,
@@ -51,14 +52,14 @@ namespace NzbDrone.Core.Extras
             _seriesWithImportedFiles = new Dictionary<int, Series>();
         }
 
-        public void ImportEpisode(LocalEpisode localEpisode, EpisodeFile episodeFile, bool isReadOnly)
+        public async Task ImportEpisode(LocalEpisode localEpisode, EpisodeFile episodeFile, bool isReadOnly)
         {
-            ImportExtraFiles(localEpisode, episodeFile, isReadOnly);
+            await ImportExtraFiles(localEpisode, episodeFile, isReadOnly);
 
-            CreateAfterEpisodeImport(localEpisode.Series, episodeFile);
+            await CreateAfterEpisodeImport(localEpisode.Series, episodeFile);
         }
 
-        private void ImportExtraFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, bool isReadOnly)
+        private async Task ImportExtraFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, bool isReadOnly)
         {
             if (!_configService.ImportExtraFiles)
             {
@@ -98,11 +99,11 @@ namespace NzbDrone.Core.Extras
 
             for (var i = 0; i < _extraFileManagers.Count; i++)
             {
-                _extraFileManagers[i].ImportFiles(localEpisode, episodeFile, managedFiles[i], isReadOnly);
+                await _extraFileManagers[i].ImportFiles(localEpisode, episodeFile, managedFiles[i], isReadOnly);
             }
         }
 
-        private void CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
+        private async Task CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
         {
             lock (_seriesWithImportedFiles)
             {
@@ -111,10 +112,13 @@ namespace NzbDrone.Core.Extras
 
             foreach (var extraFileManager in _extraFileManagers)
             {
-                extraFileManager.CreateAfterEpisodeImport(series, episodeFile);
+                await extraFileManager.CreateAfterEpisodeImport(series, episodeFile);
             }
         }
 
+        // IHandle<T> is a shared, synchronous, app-wide eventing interface - its signature can't change here.
+        // Bridging with GetAwaiter().GetResult() is safe: EventAggregator runs handlers off the request thread
+        // via Task.Factory.StartNew, and ASP.NET Core carries no SynchronizationContext.
         public void Handle(MediaCoversUpdatedEvent message)
         {
             if (message.Updated)
@@ -123,7 +127,7 @@ namespace NzbDrone.Core.Extras
 
                 foreach (var extraFileManager in _extraFileManagers)
                 {
-                    extraFileManager.CreateAfterMediaCoverUpdate(series);
+                    extraFileManager.CreateAfterMediaCoverUpdate(series).GetAwaiter().GetResult();
                 }
             }
         }
@@ -131,11 +135,11 @@ namespace NzbDrone.Core.Extras
         public void Handle(SeriesScannedEvent message)
         {
             var series = message.Series;
-            var episodeFiles = GetEpisodeFiles(series.Id);
+            var episodeFiles = GetEpisodeFiles(series.Id).GetAwaiter().GetResult();
 
             foreach (var extraFileManager in _extraFileManagers)
             {
-                extraFileManager.CreateAfterSeriesScan(series, episodeFiles);
+                extraFileManager.CreateAfterSeriesScan(series, episodeFiles).GetAwaiter().GetResult();
             }
         }
 
@@ -145,28 +149,28 @@ namespace NzbDrone.Core.Extras
 
             foreach (var extraFileManager in _extraFileManagers)
             {
-                extraFileManager.CreateAfterEpisodeFolder(series, message.SeriesFolder, message.SeasonFolder);
+                extraFileManager.CreateAfterEpisodeFolder(series, message.SeriesFolder, message.SeasonFolder).GetAwaiter().GetResult();
             }
         }
 
-        public void MoveFilesAfterRename(Series series, EpisodeFile episodeFile)
+        public async Task MoveFilesAfterRename(Series series, EpisodeFile episodeFile)
         {
             var episodeFiles = new List<EpisodeFile> { episodeFile };
 
             foreach (var extraFileManager in _extraFileManagers)
             {
-                extraFileManager.MoveFilesAfterRename(series, episodeFiles);
+                await extraFileManager.MoveFilesAfterRename(series, episodeFiles);
             }
         }
 
         public void Handle(SeriesRenamedEvent message)
         {
             var series = message.Series;
-            var episodeFiles = GetEpisodeFiles(series.Id);
+            var episodeFiles = GetEpisodeFiles(series.Id).GetAwaiter().GetResult();
 
             foreach (var extraFileManager in _extraFileManagers)
             {
-                extraFileManager.MoveFilesAfterRename(series, episodeFiles);
+                extraFileManager.MoveFilesAfterRename(series, episodeFiles).GetAwaiter().GetResult();
             }
         }
 
@@ -185,15 +189,15 @@ namespace NzbDrone.Core.Extras
             {
                 foreach (var extraFileManager in _extraFileManagers)
                 {
-                    extraFileManager.CreateAfterEpisodesImported(series);
+                    extraFileManager.CreateAfterEpisodesImported(series).GetAwaiter().GetResult();
                 }
             }
         }
 
-        private List<EpisodeFile> GetEpisodeFiles(int seriesId)
+        private async Task<List<EpisodeFile>> GetEpisodeFiles(int seriesId)
         {
-            var episodeFiles = _mediaFileService.GetFilesBySeries(seriesId);
-            var episodes = _episodeService.GetEpisodeBySeries(seriesId);
+            var episodeFiles = await _mediaFileService.GetFilesBySeries(seriesId);
+            var episodes = await _episodeService.GetEpisodeBySeries(seriesId);
 
             foreach (var episodeFile in episodeFiles)
             {

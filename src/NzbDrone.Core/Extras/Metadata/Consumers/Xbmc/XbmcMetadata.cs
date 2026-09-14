@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using NLog;
@@ -138,7 +139,7 @@ namespace NzbDrone.Core.Extras.Metadata.Consumers.Xbmc
             return null;
         }
 
-        public override MetadataFileResult SeriesMetadata(Series series, SeriesMetadataReason reason)
+        public override async Task<MetadataFileResult> SeriesMetadata(Series series, SeriesMetadataReason reason)
         {
             if (reason == SeriesMetadataReason.EpisodesImported)
             {
@@ -197,7 +198,7 @@ namespace NzbDrone.Core.Extras.Metadata.Consumers.Xbmc
 
                 if (series.Tags.Any())
                 {
-                    var tags = _tagRepo.GetTags(series.Tags);
+                    var tags = await _tagRepo.GetTags(series.Tags);
 
                     foreach (var tag in tags)
                     {

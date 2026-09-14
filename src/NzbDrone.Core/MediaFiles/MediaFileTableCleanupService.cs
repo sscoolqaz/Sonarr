@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common;
 using NzbDrone.Common.Extensions;
@@ -10,7 +11,7 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IMediaFileTableCleanupService
     {
-        void Clean(Series series, List<string> filesOnDisk);
+        Task Clean(Series series, List<string> filesOnDisk);
     }
 
     public class MediaFileTableCleanupService : IMediaFileTableCleanupService
@@ -28,10 +29,10 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public void Clean(Series series, List<string> filesOnDisk)
+        public async Task Clean(Series series, List<string> filesOnDisk)
         {
-            var seriesFiles = _mediaFileService.GetFilesBySeries(series.Id);
-            var episodes = _episodeService.GetEpisodeBySeries(series.Id);
+            var seriesFiles = await _mediaFileService.GetFilesBySeries(series.Id);
+            var episodes = await _episodeService.GetEpisodeBySeries(series.Id);
 
             var filesOnDiskKeys = new HashSet<string>(filesOnDisk, PathEqualityComparer.Instance);
 
@@ -45,14 +46,14 @@ namespace NzbDrone.Core.MediaFiles
                     if (!filesOnDiskKeys.Contains(episodeFilePath))
                     {
                         _logger.Debug("File [{0}] no longer exists on disk, removing from db", episodeFilePath);
-                        _mediaFileService.Delete(seriesFile, DeleteMediaFileReason.MissingFromDisk);
+                        await _mediaFileService.Delete(seriesFile, DeleteMediaFileReason.MissingFromDisk);
                         continue;
                     }
 
                     if (episodes.None(e => e.EpisodeFileId == episodeFile.Id))
                     {
                         _logger.Debug("File [{0}] is not assigned to any episodes, removing from db", episodeFilePath);
-                        _mediaFileService.Delete(episodeFile, DeleteMediaFileReason.NoLinkedEpisodes);
+                        await _mediaFileService.Delete(episodeFile, DeleteMediaFileReason.NoLinkedEpisodes);
                         continue;
                     }
 
@@ -78,7 +79,7 @@ namespace NzbDrone.Core.MediaFiles
                 if (episode.EpisodeFileId > 0 && seriesFiles.None(f => f.Id == episode.EpisodeFileId))
                 {
                     episode.EpisodeFileId = 0;
-                    _episodeService.UpdateEpisode(episode);
+                    await _episodeService.UpdateEpisode(episode);
                 }
             }
         }

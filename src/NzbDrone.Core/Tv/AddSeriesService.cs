@@ -47,7 +47,7 @@ namespace NzbDrone.Core.Tv
             Ensure.That(newSeries, () => newSeries).IsNotNull();
 
             newSeries = AddSkyhookData(newSeries);
-            newSeries = SetPropertiesAndValidate(newSeries);
+            newSeries = await SetPropertiesAndValidate(newSeries);
 
             _logger.Info("Adding Series {0} Path: [{1}]", newSeries, newSeries.Path);
             await _seriesService.AddSeries(newSeries);
@@ -75,7 +75,7 @@ namespace NzbDrone.Core.Tv
                 try
                 {
                     var series = AddSkyhookData(s);
-                    series = SetPropertiesAndValidate(series);
+                    series = await SetPropertiesAndValidate(series);
                     series.Added = added;
                     if (existingSeriesTvdbIds.ContainsValue(series.TvdbId))
                     {
@@ -140,11 +140,11 @@ namespace NzbDrone.Core.Tv
             return series;
         }
 
-        private Series SetPropertiesAndValidate(Series newSeries)
+        private async Task<Series> SetPropertiesAndValidate(Series newSeries)
         {
             if (string.IsNullOrWhiteSpace(newSeries.Path))
             {
-                var folderName = _fileNameBuilder.GetSeriesFolder(newSeries);
+                var folderName = await _fileNameBuilder.GetSeriesFolder(newSeries);
                 newSeries.Path = Path.Combine(newSeries.RootFolderPath, folderName);
             }
 

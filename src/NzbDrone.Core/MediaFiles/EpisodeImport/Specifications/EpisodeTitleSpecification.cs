@@ -28,6 +28,9 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
             _logger = logger;
         }
 
+        // IImportDecisionEngineSpecification is a shared interface with 17 implementers app-wide (most out of
+        // scope this round) - its signature can't change here. Bridging with GetAwaiter().GetResult() is safe
+        // for the same reason as the IHandle bridges elsewhere this session.
         public ImportSpecDecision IsSatisfiedBy(LocalEpisode localEpisode, DownloadClientItem downloadClientItem)
         {
             if (localEpisode.ExistingFile)
@@ -44,7 +47,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
                 return ImportSpecDecision.Accept();
             }
 
-            if (!_buildFileNames.RequiresEpisodeTitle(localEpisode.Series, localEpisode.Episodes))
+            if (!_buildFileNames.RequiresEpisodeTitle(localEpisode.Series, localEpisode.Episodes).GetAwaiter().GetResult())
             {
                 _logger.Debug("File name format does not require episode title, skipping check");
                 return ImportSpecDecision.Accept();
@@ -52,7 +55,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
 
             var episodes = localEpisode.Episodes;
             var firstEpisode = episodes.First();
-            var episodesInSeason = _episodeService.GetEpisodesBySeason(firstEpisode.SeriesId, firstEpisode.EpisodeNumber);
+            var episodesInSeason = _episodeService.GetEpisodesBySeason(firstEpisode.SeriesId, firstEpisode.EpisodeNumber).GetAwaiter().GetResult();
             var allEpisodesOnTheSameDay = firstEpisode.AirDateUtc.HasValue && episodes.All(e =>
                                               !e.AirDateUtc.HasValue ||
                                               e.AirDateUtc.Value == firstEpisode.AirDateUtc.Value);

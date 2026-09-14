@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Extras.Files;
@@ -29,12 +30,12 @@ namespace NzbDrone.Core.Extras.Subtitles
 
         public override int Order => 1;
 
-        public override IEnumerable<ExtraFile> ProcessFiles(Series series, List<string> filesOnDisk, List<string> importedFiles, string fileNameBeforeRename)
+        public override async Task<IEnumerable<ExtraFile>> ProcessFiles(Series series, List<string> filesOnDisk, List<string> importedFiles, string fileNameBeforeRename)
         {
             _logger.Debug("Looking for existing subtitle files in {0}", series.Path);
 
             var subtitleFiles = new List<SubtitleFile>();
-            var filterResult = FilterAndClean(series, filesOnDisk, importedFiles, fileNameBeforeRename is not null);
+            var filterResult = await FilterAndClean(series, filesOnDisk, importedFiles, fileNameBeforeRename is not null);
 
             foreach (var possibleSubtitleFile in filterResult.FilesOnDisk)
             {
@@ -92,7 +93,7 @@ namespace NzbDrone.Core.Extras.Subtitles
             }
 
             _logger.Info("Found {0} existing subtitle files", subtitleFiles.Count);
-            _subtitleFileService.Upsert(subtitleFiles);
+            await _subtitleFileService.Upsert(subtitleFiles);
 
             // Return files that were just imported along with files that were
             // previously imported so previously imported files aren't imported twice

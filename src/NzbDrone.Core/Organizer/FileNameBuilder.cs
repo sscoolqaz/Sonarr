@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Common.Disk;
@@ -20,13 +21,13 @@ namespace NzbDrone.Core.Organizer
 {
     public interface IBuildFileNames
     {
-        string BuildFileName(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension = "", NamingConfig namingConfig = null, List<CustomFormat> customFormats = null);
-        string BuildFilePath(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension, NamingConfig namingConfig = null, List<CustomFormat> customFormats = null);
-        string BuildSeasonPath(Series series, int seasonNumber);
-        string GetSeriesFolder(Series series, NamingConfig namingConfig = null);
-        string GetSeasonFolder(Series series, int seasonNumber, NamingConfig namingConfig = null);
-        bool RequiresEpisodeTitle(Series series, List<Episode> episodes);
-        bool RequiresAbsoluteEpisodeNumber();
+        Task<string> BuildFileName(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension = "", NamingConfig namingConfig = null, List<CustomFormat> customFormats = null);
+        Task<string> BuildFilePath(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension, NamingConfig namingConfig = null, List<CustomFormat> customFormats = null);
+        Task<string> BuildSeasonPath(Series series, int seasonNumber);
+        Task<string> GetSeriesFolder(Series series, NamingConfig namingConfig = null);
+        Task<string> GetSeasonFolder(Series series, int seasonNumber, NamingConfig namingConfig = null);
+        Task<bool> RequiresEpisodeTitle(Series series, List<Episode> episodes);
+        Task<bool> RequiresAbsoluteEpisodeNumber();
     }
 
     public class FileNameBuilder : IBuildFileNames
@@ -133,11 +134,11 @@ namespace NzbDrone.Core.Organizer
             _logger = logger;
         }
 
-        private string BuildFileName(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension, int maxPath, NamingConfig namingConfig = null, List<CustomFormat> customFormats = null)
+        private async Task<string> BuildFileName(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension, int maxPath, NamingConfig namingConfig = null, List<CustomFormat> customFormats = null)
         {
             if (namingConfig == null)
             {
-                namingConfig = _namingConfigService.GetConfig();
+                namingConfig = await _namingConfigService.GetConfig();
             }
 
             if (!namingConfig.RenameEpisodes)
@@ -171,7 +172,7 @@ namespace NzbDrone.Core.Organizer
 
             if (series.SeriesType == SeriesTypes.Anime &&
                 (episodes.All(e => e.AbsoluteEpisodeNumber.HasValue) ||
-                !RequiresAbsoluteEpisodeNumber()))
+                !await RequiresAbsoluteEpisodeNumber()))
             {
                 pattern = namingConfig.AnimeEpisodeFormat;
             }
@@ -189,7 +190,7 @@ namespace NzbDrone.Core.Organizer
                 splitPattern = AddAbsoluteNumberingTokens(splitPattern, tokenHandlers, series, episodes, namingConfig);
                 splitPattern = splitPattern.Replace("...", "{{ellipsis}}");
 
-                UpdateMediaInfoIfNeeded(splitPattern, episodeFile, series);
+                await UpdateMediaInfoIfNeeded(splitPattern, episodeFile, series);
 
                 AddSeriesTokens(tokenHandlers, series);
                 AddIdTokens(tokenHandlers, series);
@@ -223,29 +224,29 @@ namespace NzbDrone.Core.Organizer
             return string.Join(Path.DirectorySeparatorChar.ToString(), components) + extension;
         }
 
-        public string BuildFileName(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension = "", NamingConfig namingConfig = null, List<CustomFormat> customFormats = null)
+        public Task<string> BuildFileName(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension = "", NamingConfig namingConfig = null, List<CustomFormat> customFormats = null)
         {
             return BuildFileName(episodes, series, episodeFile, extension, LongPathSupport.MaxFilePathLength, namingConfig, customFormats);
         }
 
-        public string BuildFilePath(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension, NamingConfig namingConfig = null, List<CustomFormat> customFormats = null)
+        public async Task<string> BuildFilePath(List<Episode> episodes, Series series, EpisodeFile episodeFile, string extension, NamingConfig namingConfig = null, List<CustomFormat> customFormats = null)
         {
             Ensure.That(extension, () => extension).IsNotNullOrWhiteSpace();
 
-            var seasonPath = BuildSeasonPath(series, episodes.First().SeasonNumber);
+            var seasonPath = await BuildSeasonPath(series, episodes.First().SeasonNumber);
             var remainingPathLength = LongPathSupport.MaxFilePathLength - seasonPath.GetByteCount() - 1;
-            var fileName = BuildFileName(episodes, series, episodeFile, extension, remainingPathLength, namingConfig, customFormats);
+            var fileName = await BuildFileName(episodes, series, episodeFile, extension, remainingPathLength, namingConfig, customFormats);
 
             return Path.Combine(seasonPath, fileName);
         }
 
-        public string BuildSeasonPath(Series series, int seasonNumber)
+        public async Task<string> BuildSeasonPath(Series series, int seasonNumber)
         {
             var path = series.Path;
 
             if (series.SeasonFolder)
             {
-                var seasonFolder = GetSeasonFolder(series, seasonNumber);
+                var seasonFolder = await GetSeasonFolder(series, seasonNumber);
 
                 seasonFolder = CleanFileName(seasonFolder);
 
@@ -255,11 +256,11 @@ namespace NzbDrone.Core.Organizer
             return path;
         }
 
-        public string GetSeriesFolder(Series series, NamingConfig namingConfig = null)
+        public async Task<string> GetSeriesFolder(Series series, NamingConfig namingConfig = null)
         {
             if (namingConfig == null)
             {
-                namingConfig = _namingConfigService.GetConfig();
+                namingConfig = await _namingConfigService.GetConfig();
             }
 
             var tokenHandlers = new Dictionary<string, Func<TokenMatch, string>>(FileNameBuilderTokenEqualityComparer.Instance);
@@ -276,11 +277,11 @@ namespace NzbDrone.Core.Organizer
             return folderName;
         }
 
-        public string GetSeasonFolder(Series series, int seasonNumber, NamingConfig namingConfig = null)
+        public async Task<string> GetSeasonFolder(Series series, int seasonNumber, NamingConfig namingConfig = null)
         {
             if (namingConfig == null)
             {
-                namingConfig = _namingConfigService.GetConfig();
+                namingConfig = await _namingConfigService.GetConfig();
             }
 
             var tokenHandlers = new Dictionary<string, Func<TokenMatch, string>>(FileNameBuilderTokenEqualityComparer.Instance);
@@ -396,9 +397,9 @@ namespace NzbDrone.Core.Organizer
             return name.Trim(' ', '.');
         }
 
-        public bool RequiresEpisodeTitle(Series series, List<Episode> episodes)
+        public async Task<bool> RequiresEpisodeTitle(Series series, List<Episode> episodes)
         {
-            var namingConfig = _namingConfigService.GetConfig();
+            var namingConfig = await _namingConfigService.GetConfig();
             var pattern = namingConfig.StandardEpisodeFormat;
 
             if (!namingConfig.RenameEpisodes)
@@ -435,9 +436,9 @@ namespace NzbDrone.Core.Organizer
             });
         }
 
-        public bool RequiresAbsoluteEpisodeNumber()
+        public async Task<bool> RequiresAbsoluteEpisodeNumber()
         {
-            var namingConfig = _namingConfigService.GetConfig();
+            var namingConfig = await _namingConfigService.GetConfig();
             var pattern = namingConfig.AnimeEpisodeFormat;
 
             return _requiresAbsoluteEpisodeNumberCache.Get(pattern, () =>
@@ -813,7 +814,7 @@ namespace NzbDrone.Core.Organizer
             }
         }
 
-        private void UpdateMediaInfoIfNeeded(string pattern, EpisodeFile episodeFile, Series series)
+        private async Task UpdateMediaInfoIfNeeded(string pattern, EpisodeFile episodeFile, Series series)
         {
             if (series.Path.IsNullOrWhiteSpace())
             {
@@ -829,7 +830,7 @@ namespace NzbDrone.Core.Organizer
 
             if (shouldUpdateMediaInfo)
             {
-                _mediaInfoUpdater.Update(episodeFile, series);
+                await _mediaInfoUpdater.Update(episodeFile, series);
             }
         }
 

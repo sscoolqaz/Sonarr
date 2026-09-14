@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -13,7 +14,7 @@ namespace NzbDrone.Core.DiskSpace
 {
     public interface IDiskSpaceService
     {
-        List<DiskSpace> GetFreeSpace();
+        Task<List<DiskSpace>> GetFreeSpace();
     }
 
     public class DiskSpaceService : IDiskSpaceService
@@ -33,9 +34,9 @@ namespace NzbDrone.Core.DiskSpace
             _logger = logger;
         }
 
-        public List<DiskSpace> GetFreeSpace()
+        public async Task<List<DiskSpace>> GetFreeSpace()
         {
-            var importantRootFolders = GetSeriesRootPaths().Distinct().ToList();
+            var importantRootFolders = (await GetSeriesRootPaths()).Distinct().ToList();
 
             var optionalRootFolders = GetFixedDisksRootPaths().Except(importantRootFolders).Distinct().ToList();
 
@@ -47,15 +48,21 @@ namespace NzbDrone.Core.DiskSpace
             return diskSpace;
         }
 
-        private IEnumerable<string> GetSeriesRootPaths()
+        private async Task<IEnumerable<string>> GetSeriesRootPaths()
         {
             // Get all series paths and find the correct root folder for each. For each unique root folder path,
             // ensure the path exists and get its path root and return all unique path roots.
 
-            return _seriesService.GetAllSeriesPaths()
-                .Where(s => s.Value.IsPathValid(PathValidationType.CurrentOs))
-                .Select(s => _rootFolderService.GetBestRootFolderPath(s.Value))
-                .Distinct()
+            var seriesPaths = await _seriesService.GetAllSeriesPaths();
+
+            var rootFolderPaths = new List<string>();
+
+            foreach (var seriesPath in seriesPaths.Where(s => s.Value.IsPathValid(PathValidationType.CurrentOs)))
+            {
+                rootFolderPaths.Add(await _rootFolderService.GetBestRootFolderPath(seriesPath.Value));
+            }
+
+            return rootFolderPaths.Distinct()
                 .Where(r => _diskProvider.FolderExists(r))
                 .Select(r => _diskProvider.GetPathRoot(r))
                 .Distinct();

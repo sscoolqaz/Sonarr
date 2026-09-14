@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Common;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Extras.Files;
@@ -19,22 +20,22 @@ namespace NzbDrone.Core.Extras
         }
 
         public abstract int Order { get; }
-        public abstract IEnumerable<ExtraFile> ProcessFiles(Series series, List<string> filesOnDisk, List<string> importedFiles, string fileNameBeforeRename);
+        public abstract Task<IEnumerable<ExtraFile>> ProcessFiles(Series series, List<string> filesOnDisk, List<string> importedFiles, string fileNameBeforeRename);
 
-        public virtual ImportExistingExtraFileFilterResult<TExtraFile> FilterAndClean(Series series, List<string> filesOnDisk, List<string> importedFiles, bool keepExistingEntries)
+        public virtual async Task<ImportExistingExtraFileFilterResult<TExtraFile>> FilterAndClean(Series series, List<string> filesOnDisk, List<string> importedFiles, bool keepExistingEntries)
         {
-            var seriesFiles = _extraFileService.GetFilesBySeries(series.Id);
+            var seriesFiles = await _extraFileService.GetFilesBySeries(series.Id);
 
             if (keepExistingEntries)
             {
                 var incompleteImports = seriesFiles.IntersectBy(f => Path.Combine(series.Path, f.RelativePath), filesOnDisk, i => i, PathEqualityComparer.Instance).Select(f => f.Id);
 
-                _extraFileService.DeleteMany(incompleteImports);
+                await _extraFileService.DeleteMany(incompleteImports);
 
                 return Filter(series, filesOnDisk, importedFiles, new List<TExtraFile>());
             }
 
-            Clean(series, filesOnDisk, importedFiles, seriesFiles);
+            await Clean(series, filesOnDisk, importedFiles, seriesFiles);
 
             return Filter(series, filesOnDisk, importedFiles, seriesFiles);
         }
@@ -51,7 +52,7 @@ namespace NzbDrone.Core.Extras
             return new ImportExistingExtraFileFilterResult<TExtraFile>(previouslyImported, filteredFiles);
         }
 
-        private void Clean(Series series, List<string> filesOnDisk, List<string> importedFiles, List<TExtraFile> seriesFiles)
+        private async Task Clean(Series series, List<string> filesOnDisk, List<string> importedFiles, List<TExtraFile> seriesFiles)
         {
             var alreadyImportedFileIds = seriesFiles.IntersectBy(f => Path.Combine(series.Path, f.RelativePath), importedFiles, i => i, PathEqualityComparer.Instance)
                 .Select(f => f.Id);
@@ -59,8 +60,8 @@ namespace NzbDrone.Core.Extras
             var deletedFiles = seriesFiles.ExceptBy(f => Path.Combine(series.Path, f.RelativePath), filesOnDisk, i => i, PathEqualityComparer.Instance)
                 .Select(f => f.Id);
 
-            _extraFileService.DeleteMany(alreadyImportedFileIds);
-            _extraFileService.DeleteMany(deletedFiles);
+            await _extraFileService.DeleteMany(alreadyImportedFileIds);
+            await _extraFileService.DeleteMany(deletedFiles);
         }
     }
 }

@@ -20,9 +20,13 @@ namespace NzbDrone.Core.HealthCheck.Checks
             _seriesService = seriesService;
         }
 
+        // IProvideHealthCheck.Check() is a shared, synchronous interface with 27 implementers app-wide - its
+        // signature can't change here. Bridging with GetAwaiter().GetResult() is safe for the same reason as
+        // the IHandle bridges elsewhere this session (no SynchronizationContext on the threads this runs on).
         public override HealthCheck Check()
         {
-            var deletedSeries = _seriesService.GetAllSeries().Where(v => v.Status == SeriesStatusType.Deleted).ToList();
+            var allSeries = _seriesService.GetAllSeries().GetAwaiter().GetResult();
+            var deletedSeries = allSeries.Where(v => v.Status == SeriesStatusType.Deleted).ToList();
 
             if (deletedSeries.Empty())
             {

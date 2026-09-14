@@ -56,10 +56,14 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Aggregation.Aggregators
             return parsedEpisodeInfo;
         }
 
+        // IAggregateLocalEpisode is a shared interface with 9 implementers app-wide (most out of scope this
+        // round) invoked synchronously from IAggregationService.Augment, which is also out of scope. Bridging
+        // with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges elsewhere this
+        // session.
         private ParsedEpisodeInfo GetSpecialEpisodeInfo(LocalEpisode localEpisode, ParsedEpisodeInfo parsedEpisodeInfo)
         {
             var title = Path.GetFileNameWithoutExtension(localEpisode.Path);
-            var specialEpisodeInfo = _parsingService.ParseSpecialEpisodeTitle(parsedEpisodeInfo, title, localEpisode.Series);
+            var specialEpisodeInfo = _parsingService.ParseSpecialEpisodeTitle(parsedEpisodeInfo, title, localEpisode.Series).GetAwaiter().GetResult();
 
             return specialEpisodeInfo;
         }
@@ -76,7 +80,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Aggregation.Aggregators
 
             if (ValidateParsedEpisodeInfo.ValidateForSeriesType(bestEpisodeInfoForEpisodes, localEpisode.Series, isMediaFile))
             {
-                var episodes = _parsingService.GetEpisodes(bestEpisodeInfoForEpisodes, localEpisode.Series, localEpisode.SceneSource);
+                var episodes = _parsingService.GetEpisodes(bestEpisodeInfoForEpisodes, localEpisode.Series, localEpisode.SceneSource).GetAwaiter().GetResult();
 
                 if (episodes.Empty() && bestEpisodeInfoForEpisodes.IsPossibleSpecialEpisode)
                 {
@@ -84,7 +88,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Aggregation.Aggregators
 
                     if (parsedSpecialEpisodeInfo != null)
                     {
-                        episodes = _parsingService.GetEpisodes(parsedSpecialEpisodeInfo, localEpisode.Series, localEpisode.SceneSource);
+                        episodes = _parsingService.GetEpisodes(parsedSpecialEpisodeInfo, localEpisode.Series, localEpisode.SceneSource).GetAwaiter().GetResult();
                     }
                 }
 

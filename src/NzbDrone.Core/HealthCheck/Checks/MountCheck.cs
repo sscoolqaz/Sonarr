@@ -18,10 +18,15 @@ namespace NzbDrone.Core.HealthCheck.Checks
             _seriesService = seriesService;
         }
 
+        // IProvideHealthCheck.Check() is a shared, synchronous interface with 27 implementers app-wide - its
+        // signature can't change here. Bridging with GetAwaiter().GetResult() is safe for the same reason as
+        // the IHandle bridges elsewhere this session (no SynchronizationContext on the threads this runs on).
         public override HealthCheck Check()
         {
             // Not best for optimization but due to possible symlinks and junctions, we get mounts based on series path so internals can handle mount resolution.
-            var mounts = _seriesService.GetAllSeriesPaths()
+            var seriesPaths = _seriesService.GetAllSeriesPaths().GetAwaiter().GetResult();
+
+            var mounts = seriesPaths
                 .Select(p => new Tuple<IMount, string>(_diskProvider.GetMount(p.Value), p.Value))
                 .Where(m => m.Item1 is { MountOptions.IsReadOnly: true })
                 .DistinctBy(m => m.Item1.RootDirectory)

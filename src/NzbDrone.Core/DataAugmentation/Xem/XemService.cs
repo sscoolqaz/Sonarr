@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Core.DataAugmentation.Scene;
@@ -31,7 +32,7 @@ namespace NzbDrone.Core.DataAugmentation.Xem
             _cache = cacheManager.GetCacheDictionary<bool>(GetType(), "mappedTvdbid");
         }
 
-        private void PerformUpdate(Series series)
+        private async Task PerformUpdate(Series series)
         {
             _logger.Debug("Updating scene numbering mapping for: {0}", series);
 
@@ -45,7 +46,7 @@ namespace NzbDrone.Core.DataAugmentation.Xem
                     return;
                 }
 
-                var episodes = _episodeService.GetEpisodeBySeries(series.Id);
+                var episodes = await _episodeService.GetEpisodeBySeries(series.Id);
 
                 foreach (var episode in episodes)
                 {
@@ -85,9 +86,9 @@ namespace NzbDrone.Core.DataAugmentation.Xem
                     ExtrapolateMappings(series, episodes, mappings);
                 }
 
-                _episodeService.UpdateEpisodes(episodes);
+                await _episodeService.UpdateEpisodes(episodes);
                 series.UseSceneNumbering = mappings.Any();
-                _seriesService.UpdateSeries(series);
+                await _seriesService.UpdateSeries(series);
 
                 _logger.Debug("XEM mapping updated for {0}", series);
             }
@@ -232,6 +233,9 @@ namespace NzbDrone.Core.DataAugmentation.Xem
             return mappings;
         }
 
+        // IHandle<T> is a shared, synchronous, app-wide eventing interface - its signature can't change here.
+        // Bridging with GetAwaiter().GetResult() is safe: EventAggregator runs handlers off the request thread
+        // via Task.Factory.StartNew, and ASP.NET Core carries no SynchronizationContext.
         public void Handle(SeriesUpdatedEvent message)
         {
             if (_cache.IsExpired(TimeSpan.FromHours(3)))
@@ -251,7 +255,7 @@ namespace NzbDrone.Core.DataAugmentation.Xem
                 return;
             }
 
-            PerformUpdate(message.Series);
+            PerformUpdate(message.Series).GetAwaiter().GetResult();
         }
 
         public void Handle(SeriesRefreshStartingEvent message)

@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -35,7 +36,7 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        private void MoveSingleSeries(Series series, string sourcePath, string destinationPath, int? index = null, int? total = null)
+        private async Task MoveSingleSeries(Series series, string sourcePath, string destinationPath, int? index = null, int? total = null)
         {
             if (!sourcePath.IsPathValid(PathValidationType.CurrentOs))
             {
@@ -79,22 +80,25 @@ namespace NzbDrone.Core.Tv
             {
                 _logger.Error(ex, "Unable to move series from '{0}' to '{1}'. Try moving files manually", sourcePath, destinationPath);
 
-                RevertPath(series.Id, sourcePath);
+                await RevertPath(series.Id, sourcePath);
             }
         }
 
-        private void RevertPath(int seriesId, string path)
+        private async Task RevertPath(int seriesId, string path)
         {
-            var series = _seriesService.GetSeries(seriesId);
+            var series = await _seriesService.GetSeries(seriesId);
 
             series.Path = path;
-            _seriesService.UpdateSeries(series);
+            await _seriesService.UpdateSeries(series);
         }
 
+        // IExecute<TCommand> is a shared, synchronous, app-wide command interface - its signature can't change
+        // here. Bridging with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges
+        // elsewhere this session (no SynchronizationContext on the threads command execution runs on).
         public void Execute(MoveSeriesCommand message)
         {
-            var series = _seriesService.GetSeries(message.SeriesId);
-            MoveSingleSeries(series, message.SourcePath, message.DestinationPath);
+            var series = _seriesService.GetSeries(message.SeriesId).GetAwaiter().GetResult();
+            MoveSingleSeries(series, message.SourcePath, message.DestinationPath).GetAwaiter().GetResult();
         }
 
         public void Execute(BulkMoveSeriesCommand message)
@@ -107,10 +111,10 @@ namespace NzbDrone.Core.Tv
             for (var index = 0; index < seriesToMove.Count; index++)
             {
                 var s = seriesToMove[index];
-                var series = _seriesService.GetSeries(s.SeriesId);
-                var destinationPath = Path.Combine(destinationRootFolder, _filenameBuilder.GetSeriesFolder(series));
+                var series = _seriesService.GetSeries(s.SeriesId).GetAwaiter().GetResult();
+                var destinationPath = Path.Combine(destinationRootFolder, _filenameBuilder.GetSeriesFolder(series).GetAwaiter().GetResult());
 
-                MoveSingleSeries(series, s.SourcePath, destinationPath, index, seriesToMove.Count);
+                MoveSingleSeries(series, s.SourcePath, destinationPath, index, seriesToMove.Count).GetAwaiter().GetResult();
             }
 
             _logger.ProgressInfo("Finished moving {0} series to '{1}'", seriesToMove.Count, destinationRootFolder);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
@@ -50,11 +51,11 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        private Series RefreshSeriesInfo(int seriesId)
+        private async Task<Series> RefreshSeriesInfo(int seriesId)
         {
             // Get the series before updating, that way any changes made to the series after the refresh started,
             // but before this series was refreshed won't be lost.
-            var series = _seriesService.GetSeries(seriesId);
+            var series = await _seriesService.GetSeries(seriesId);
 
             _logger.ProgressInfo("Updating {0}", series.Title);
 
@@ -72,7 +73,7 @@ namespace NzbDrone.Core.Tv
                 if (series.Status != SeriesStatusType.Deleted)
                 {
                     series.Status = SeriesStatusType.Deleted;
-                    _seriesService.UpdateSeries(series, publishUpdatedEvent: false);
+                    await _seriesService.UpdateSeries(series, publishUpdatedEvent: false);
                     _logger.Debug("Series marked as deleted on tvdb for {0}", series.Title);
                     _eventAggregator.PublishEvent(new SeriesUpdatedEvent(series));
                 }
@@ -125,8 +126,8 @@ namespace NzbDrone.Core.Tv
 
             series.Seasons = UpdateSeasons(series, seriesInfo);
 
-            _seriesService.UpdateSeries(series, publishUpdatedEvent: false);
-            _refreshEpisodeService.RefreshEpisodeInfo(series, episodes);
+            await _seriesService.UpdateSeries(series, publishUpdatedEvent: false);
+            await _refreshEpisodeService.RefreshEpisodeInfo(series, episodes);
 
             _logger.Debug("Finished series refresh for {0}", series.Title);
             _eventAggregator.PublishEvent(new SeriesUpdatedEvent(series));
@@ -165,7 +166,7 @@ namespace NzbDrone.Core.Tv
             return seasons;
         }
 
-        private void RescanSeries(Series series, bool isNew, CommandTrigger trigger)
+        private async Task RescanSeries(Series series, bool isNew, CommandTrigger trigger)
         {
             var rescanAfterRefresh = _configService.RescanAfterRefresh;
 
@@ -190,7 +191,7 @@ namespace NzbDrone.Core.Tv
 
             try
             {
-                _diskScanService.Scan(series);
+                await _diskScanService.Scan(series);
             }
             catch (Exception e)
             {
@@ -198,17 +199,25 @@ namespace NzbDrone.Core.Tv
             }
         }
 
-        private void UpdateTags(Series series)
+        private async Task UpdateTags(Series series)
         {
-            var tagsUpdated = _seriesService.UpdateAutoTaggingTags(series);
+            var tagsUpdated = await _seriesService.UpdateAutoTaggingTags(series);
 
             if (tagsUpdated)
             {
-                _seriesService.UpdateSeries(series);
+                await _seriesService.UpdateSeries(series);
             }
         }
 
+        // IExecute<TCommand> is a shared, synchronous, app-wide command interface - its signature can't change
+        // here. Bridging with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges
+        // elsewhere this session (no SynchronizationContext on the threads command execution runs on).
         public void Execute(RefreshSeriesCommand message)
+        {
+            ExecuteInternal(message).GetAwaiter().GetResult();
+        }
+
+        private async Task ExecuteInternal(RefreshSeriesCommand message)
         {
             var trigger = message.Trigger;
             var isNew = message.IsNewSeries;
@@ -218,13 +227,13 @@ namespace NzbDrone.Core.Tv
             {
                 foreach (var seriesId in message.SeriesIds)
                 {
-                    var series = _seriesService.GetSeries(seriesId);
+                    var series = await _seriesService.GetSeries(seriesId);
 
                     try
                     {
-                        series = RefreshSeriesInfo(seriesId);
-                        UpdateTags(series);
-                        RescanSeries(series, isNew, trigger);
+                        series = await RefreshSeriesInfo(seriesId);
+                        await UpdateTags(series);
+                        await RescanSeries(series, isNew, trigger);
                     }
                     catch (SeriesNotFoundException)
                     {
@@ -237,8 +246,8 @@ namespace NzbDrone.Core.Tv
                     catch (Exception e)
                     {
                         _logger.Error(e, "Couldn't refresh info for {0}", series);
-                        UpdateTags(series);
-                        RescanSeries(series, isNew, trigger);
+                        await UpdateTags(series);
+                        await RescanSeries(series, isNew, trigger);
 
                         // Mark the result as indeterminate so it's not marked as a full success,
                         // but we can still process other series if needed.
@@ -248,16 +257,16 @@ namespace NzbDrone.Core.Tv
             }
             else
             {
-                var allSeries = _seriesService.GetAllSeries().OrderBy(c => c.SortTitle).ToList();
+                var allSeries = (await _seriesService.GetAllSeries()).OrderBy(c => c.SortTitle).ToList();
 
                 foreach (var series in allSeries)
                 {
                     var seriesLocal = series;
-                    if (trigger == CommandTrigger.Manual || _checkIfSeriesShouldBeRefreshed.ShouldRefresh(seriesLocal))
+                    if (trigger == CommandTrigger.Manual || await _checkIfSeriesShouldBeRefreshed.ShouldRefresh(seriesLocal))
                     {
                         try
                         {
-                            seriesLocal = RefreshSeriesInfo(seriesLocal.Id);
+                            seriesLocal = await RefreshSeriesInfo(seriesLocal.Id);
                         }
                         catch (SeriesNotFoundException)
                         {
@@ -269,14 +278,14 @@ namespace NzbDrone.Core.Tv
                             _logger.Error(e, "Couldn't refresh info for {0}", seriesLocal);
                         }
 
-                        UpdateTags(series);
-                        RescanSeries(seriesLocal, false, trigger);
+                        await UpdateTags(series);
+                        await RescanSeries(seriesLocal, false, trigger);
                     }
                     else
                     {
                         _logger.Info("Skipping refresh of series: {0}", seriesLocal.Title);
-                        UpdateTags(series);
-                        RescanSeries(seriesLocal, false, trigger);
+                        await UpdateTags(series);
+                        await RescanSeries(seriesLocal, false, trigger);
                     }
                 }
             }

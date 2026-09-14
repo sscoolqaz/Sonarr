@@ -127,7 +127,12 @@ namespace NzbDrone.Core.MetadataSource.SkyHook
 
                     try
                     {
-                        var existingSeries = _seriesService.FindByTvdbId(tvdbId);
+                        // IProvideSeriesInfo/ISearchForNewSeries are consumed synchronously by other domains
+                        // (ImportListSyncService, the SeriesLookup controllers) that aren't part of this
+                        // migration round, so this proxy's public surface stays sync. Bridging the repository
+                        // lookup with GetAwaiter().GetResult() is safe here for the same reason as the IHandle
+                        // bridges elsewhere this session (no SynchronizationContext on the calling thread).
+                        var existingSeries = _seriesService.FindByTvdbId(tvdbId).GetAwaiter().GetResult();
                         if (existingSeries != null)
                         {
                             return new List<Series> { existingSeries };
@@ -169,7 +174,7 @@ namespace NzbDrone.Core.MetadataSource.SkyHook
 
         private Series MapSearchResult(ShowResource show)
         {
-            var series = _seriesService.FindByTvdbId(show.TvdbId);
+            var series = _seriesService.FindByTvdbId(show.TvdbId).GetAwaiter().GetResult();
 
             if (series == null)
             {

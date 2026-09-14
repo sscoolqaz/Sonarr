@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -22,9 +23,9 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 {
     public interface IManualImportService
     {
-        List<ManualImportItem> GetMediaFiles(int seriesId, int? seasonNumber);
-        List<ManualImportItem> GetMediaFiles(string path, string downloadId, int? seriesId, bool filterExistingFiles);
-        ManualImportItem ReprocessItem(string path, string downloadId, int seriesId, int? seasonNumber, List<int> episodeIds, string releaseGroup, QualityModel quality, List<Language> languages, int indexerFlags, ReleaseType releaseType);
+        Task<List<ManualImportItem>> GetMediaFiles(int seriesId, int? seasonNumber);
+        Task<List<ManualImportItem>> GetMediaFiles(string path, string downloadId, int? seriesId, bool filterExistingFiles);
+        Task<ManualImportItem> ReprocessItem(string path, string downloadId, int seriesId, int? seasonNumber, List<int> episodeIds, string releaseGroup, QualityModel quality, List<Language> languages, int indexerFlags, ReleaseType releaseType);
     }
 
     public class ManualImportService : IExecute<ManualImportCommand>, IManualImportService
@@ -78,12 +79,12 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
             _logger = logger;
         }
 
-        public List<ManualImportItem> GetMediaFiles(int seriesId, int? seasonNumber)
+        public async Task<List<ManualImportItem>> GetMediaFiles(int seriesId, int? seasonNumber)
         {
-            var series = _seriesService.GetSeries(seriesId);
+            var series = await _seriesService.GetSeries(seriesId);
             var directoryInfo = new DirectoryInfo(series.Path);
-            var seriesFiles = seasonNumber.HasValue ? _mediaFileService.GetFilesBySeason(seriesId, seasonNumber.Value) : _mediaFileService.GetFilesBySeries(seriesId);
-            var episodes = _episodeService.GetEpisodeBySeries(series.Id);
+            var seriesFiles = seasonNumber.HasValue ? await _mediaFileService.GetFilesBySeason(seriesId, seasonNumber.Value) : await _mediaFileService.GetFilesBySeries(seriesId);
+            var episodes = await _episodeService.GetEpisodeBySeries(series.Id);
 
             var items = seriesFiles.Select(episodeFile => MapItem(episodeFile, series, directoryInfo.Name, episodes)).ToList();
 
@@ -113,7 +114,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
             return items;
         }
 
-        public List<ManualImportItem> GetMediaFiles(string path, string downloadId, int? seriesId, bool filterExistingFiles)
+        public async Task<List<ManualImportItem>> GetMediaFiles(string path, string downloadId, int? seriesId, bool filterExistingFiles)
         {
             if (downloadId.IsNotNullOrWhiteSpace())
             {
@@ -135,16 +136,16 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                 }
 
                 var rootFolder = Path.GetDirectoryName(path);
-                return new List<ManualImportItem> { ProcessFile(rootFolder, rootFolder, path, downloadId) };
+                return new List<ManualImportItem> { await ProcessFile(rootFolder, rootFolder, path, downloadId) };
             }
 
-            return ProcessFolder(path, path, downloadId, seriesId, filterExistingFiles);
+            return await ProcessFolder(path, path, downloadId, seriesId, filterExistingFiles);
         }
 
-        public ManualImportItem ReprocessItem(string path, string downloadId, int seriesId, int? seasonNumber, List<int> episodeIds, string releaseGroup, QualityModel quality, List<Language> languages, int indexerFlags, ReleaseType releaseType)
+        public async Task<ManualImportItem> ReprocessItem(string path, string downloadId, int seriesId, int? seasonNumber, List<int> episodeIds, string releaseGroup, QualityModel quality, List<Language> languages, int indexerFlags, ReleaseType releaseType)
         {
             var rootFolder = Path.GetDirectoryName(path);
-            var series = _seriesService.GetSeries(seriesId);
+            var series = await _seriesService.GetSeries(seriesId);
 
             var languageParse = LanguageParser.ParseLanguages(path);
 
@@ -157,7 +158,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
             if (episodeIds.Any())
             {
                 var downloadClientItem = GetTrackedDownload(downloadId)?.DownloadItem;
-                var episodes = _episodeService.GetEpisodes(episodeIds);
+                var episodes = await _episodeService.GetEpisodes(episodeIds);
                 var finalReleaseGroup = releaseGroup.IsNullOrWhiteSpace()
                     ? Parser.ReleaseGroupParser.ParseReleaseGroup(path)
                     : releaseGroup;
@@ -183,7 +184,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                 localEpisode.IndexerFlags = (IndexerFlags)indexerFlags;
                 localEpisode.ReleaseType = releaseType;
 
-                _localEpisodeFormatCalculator.UpdateEpisodeCustomFormats(localEpisode);
+                await _localEpisodeFormatCalculator.UpdateEpisodeCustomFormats(localEpisode);
 
                 // Augment episode file so imported files have all additional information an automatic import would
                 localEpisode = _aggregationService.Augment(localEpisode, downloadClientItem);
@@ -197,7 +198,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                 localEpisode.IndexerFlags = (IndexerFlags)indexerFlags;
                 localEpisode.ReleaseType = releaseType;
 
-                return MapItem(_importDecisionMaker.GetDecision(localEpisode, downloadClientItem), rootFolder, downloadId, null);
+                return await MapItem(_importDecisionMaker.GetDecision(localEpisode, downloadClientItem), rootFolder, downloadId, null);
             }
 
             // This case will happen if the user selected a season, but didn't select the episodes in the season then changed the language or quality.
@@ -227,13 +228,13 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                     ReleaseType = releaseType
                 };
 
-                return MapItem(new ImportDecision(localEpisode, new ImportRejection(ImportRejectionReason.NoEpisodes, "Episodes not selected")), rootFolder, downloadId, null);
+                return await MapItem(new ImportDecision(localEpisode, new ImportRejection(ImportRejectionReason.NoEpisodes, "Episodes not selected")), rootFolder, downloadId, null);
             }
 
-            return ProcessFile(rootFolder, rootFolder, path, downloadId, series);
+            return await ProcessFile(rootFolder, rootFolder, path, downloadId, series);
         }
 
-        private List<ManualImportItem> ProcessFolder(string rootFolder, string baseFolder, string downloadId, int? seriesId, bool filterExistingFiles)
+        private async Task<List<ManualImportItem>> ProcessFolder(string rootFolder, string baseFolder, string downloadId, int? seriesId, bool filterExistingFiles)
         {
             DownloadClientItem downloadClientItem = null;
             Series series = null;
@@ -242,13 +243,13 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 
             if (seriesId.HasValue)
             {
-                series = _seriesService.GetSeries(seriesId.Value);
+                series = await _seriesService.GetSeries(seriesId.Value);
             }
             else
             {
                 try
                 {
-                    series = _parsingService.GetSeries(directoryInfo.Name);
+                    series = await _parsingService.GetSeries(directoryInfo.Name);
                 }
                 catch (MultipleSeriesFoundException e)
                 {
@@ -279,13 +280,24 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                 if (files.Count > 100)
                 {
                     _logger.Warn("Unable to determine series from folder name and found more than 100 files. Skipping parsing");
-                    return ProcessDownloadDirectory(rootFolder, files);
+                    return await ProcessDownloadDirectory(rootFolder, files);
                 }
 
                 var subfolders = _diskScanService.FilterPaths(rootFolder, _diskProvider.GetDirectories(baseFolder));
 
-                var processedFiles = files.Select(file => ProcessFile(rootFolder, baseFolder, file, downloadId));
-                var processedFolders = subfolders.SelectMany(subfolder => ProcessFolder(rootFolder, subfolder, downloadId, null, filterExistingFiles));
+                var processedFiles = new List<ManualImportItem>();
+
+                foreach (var file in files)
+                {
+                    processedFiles.Add(await ProcessFile(rootFolder, baseFolder, file, downloadId));
+                }
+
+                var processedFolders = new List<ManualImportItem>();
+
+                foreach (var subfolder in subfolders)
+                {
+                    processedFolders.AddRange(await ProcessFolder(rootFolder, subfolder, downloadId, null, filterExistingFiles));
+                }
 
                 return processedFiles.Concat(processedFolders).Where(i => i != null).ToList();
             }
@@ -293,12 +305,19 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
             var downloadClientItemInfo = downloadClientItem == null ? null : Parser.Parser.ParseTitle(downloadClientItem.Title);
             var folderInfo = Parser.Parser.ParseTitle(directoryInfo.Name);
             var seriesFiles = _diskScanService.FilterPaths(rootFolder, _diskScanService.GetVideoFiles(baseFolder).ToList());
-            var decisions = _importDecisionMaker.GetImportDecisions(seriesFiles, series, downloadClientItem, downloadClientItemInfo, folderInfo, SceneSource(series, baseFolder), filterExistingFiles);
+            var decisions = await _importDecisionMaker.GetImportDecisions(seriesFiles, series, downloadClientItem, downloadClientItemInfo, folderInfo, SceneSource(series, baseFolder), filterExistingFiles);
 
-            return decisions.Select(decision => MapItem(decision, rootFolder, downloadId, directoryInfo.Name)).ToList();
+            var results = new List<ManualImportItem>();
+
+            foreach (var decision in decisions)
+            {
+                results.Add(await MapItem(decision, rootFolder, downloadId, directoryInfo.Name));
+            }
+
+            return results;
         }
 
-        private ManualImportItem ProcessFile(string rootFolder, string baseFolder, string file, string downloadId, Series series = null)
+        private async Task<ManualImportItem> ProcessFile(string rootFolder, string baseFolder, string file, string downloadId, Series series = null)
         {
             try
             {
@@ -307,12 +326,12 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 
                 if (series == null)
                 {
-                    series = _parsingService.GetSeries(relativeFile.Split('\\', '/')[0]);
+                    series = await _parsingService.GetSeries(relativeFile.Split('\\', '/')[0]);
                 }
 
                 if (series == null)
                 {
-                    series = _parsingService.GetSeries(relativeFile);
+                    series = await _parsingService.GetSeries(relativeFile);
                 }
 
                 if (trackedDownload != null && series == null)
@@ -326,7 +345,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 
                     if (relativeParseInfo != null)
                     {
-                        series = _seriesService.FindByTitle(relativeParseInfo.SeriesTitle);
+                        series = await _seriesService.FindByTitle(relativeParseInfo.SeriesTitle);
                     }
                 }
 
@@ -339,7 +358,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                     localEpisode.Languages = LanguageParser.ParseLanguages(file);
                     localEpisode.Size = _diskProvider.GetFileSize(file);
 
-                    return MapItem(new ImportDecision(localEpisode,
+                    return await MapItem(new ImportDecision(localEpisode,
                         new ImportRejection(ImportRejectionReason.UnknownSeries, "Unknown Series")),
                         rootFolder,
                         downloadId,
@@ -348,7 +367,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 
                 var downloadClientItemInfo = trackedDownload?.DownloadItem == null ? null : Parser.Parser.ParseTitle(trackedDownload.DownloadItem.Title);
 
-                var importDecisions = _importDecisionMaker.GetImportDecisions(new List<string> { file },
+                var importDecisions = await _importDecisionMaker.GetImportDecisions(new List<string> { file },
                     series,
                     trackedDownload?.DownloadItem,
                     downloadClientItemInfo,
@@ -357,7 +376,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 
                 if (importDecisions.Any())
                 {
-                    return MapItem(importDecisions.First(), rootFolder, downloadId, null);
+                    return await MapItem(importDecisions.First(), rootFolder, downloadId, null);
                 }
             }
             catch (Exception ex)
@@ -376,7 +395,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
             };
         }
 
-        private List<ManualImportItem> ProcessDownloadDirectory(string rootFolder, List<string> videoFiles)
+        private async Task<List<ManualImportItem>> ProcessDownloadDirectory(string rootFolder, List<string> videoFiles)
         {
             var items = new List<ManualImportItem>();
 
@@ -388,7 +407,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                 localEpisode.Languages = new List<Language> { Language.Unknown };
                 localEpisode.Size = _diskProvider.GetFileSize(file);
 
-                items.Add(MapItem(new ImportDecision(localEpisode), rootFolder, null, null));
+                items.Add(await MapItem(new ImportDecision(localEpisode), rootFolder, null, null));
             }
 
             return items;
@@ -411,7 +430,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
             return null;
         }
 
-        private ManualImportItem MapItem(ImportDecision decision, string rootFolder, string downloadId, string folderName)
+        private async Task<ManualImportItem> MapItem(ImportDecision decision, string rootFolder, string downloadId, string folderName)
         {
             var item = new ManualImportItem();
 
@@ -454,7 +473,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 
                 if (item.SeasonNumber.HasValue)
                 {
-                    item.CustomFormats = _localEpisodeFormatCalculator.ParseEpisodeCustomFormats(decision.LocalEpisode);
+                    item.CustomFormats = await _localEpisodeFormatCalculator.ParseEpisodeCustomFormats(decision.LocalEpisode);
                     item.CustomFormatScore = item.Series.QualityProfile?.Value.CalculateCustomFormatScore(item.CustomFormats) ?? 0;
                 }
             }
@@ -486,6 +505,9 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
             return item;
         }
 
+        // IExecute<TCommand> is a shared, synchronous, app-wide command interface - its signature can't change
+        // here. Bridging with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges
+        // elsewhere this session (no SynchronizationContext on the threads command execution runs on).
         public void Execute(ManualImportCommand message)
         {
             _logger.ProgressTrace("Manually importing {0} files using mode {1}", message.Files.Count, message.ImportMode);
@@ -499,8 +521,8 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                 _logger.ProgressTrace("Processing file {0} of {1}", i + 1, message.Files.Count);
 
                 var file = message.Files[i];
-                var series = _seriesService.GetSeries(file.SeriesId);
-                var episodes = _episodeService.GetEpisodes(file.EpisodeIds);
+                var series = _seriesService.GetSeries(file.SeriesId).GetAwaiter().GetResult();
+                var episodes = _episodeService.GetEpisodes(file.EpisodeIds).GetAwaiter().GetResult();
                 var fileEpisodeInfo = Parser.Parser.ParsePath(file.Path) ?? new ParsedEpisodeInfo();
                 var existingFile = series.Path.IsParentPath(file.Path);
 
@@ -550,7 +572,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
                     localEpisode.Languages = file.Languages;
                 }
 
-                _localEpisodeFormatCalculator.UpdateEpisodeCustomFormats(localEpisode);
+                _localEpisodeFormatCalculator.UpdateEpisodeCustomFormats(localEpisode).GetAwaiter().GetResult();
 
                 // TODO: Cleanup non-tracked downloads
 
@@ -558,14 +580,14 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Manual
 
                 if (trackedDownload == null)
                 {
-                    var importResult = _importApprovedEpisodes.Import(new List<ImportDecision> { importDecision }, !existingFile, null, message.ImportMode);
+                    var importResult = _importApprovedEpisodes.Import(new List<ImportDecision> { importDecision }, !existingFile, null, message.ImportMode).GetAwaiter().GetResult();
 
                     imported.AddRange(importResult);
                     importedUntrackedDownload.AddRange(importResult);
                 }
                 else
                 {
-                    var importResult = _importApprovedEpisodes.Import(new List<ImportDecision> { importDecision }, true, trackedDownload.DownloadItem, message.ImportMode).First();
+                    var importResult = _importApprovedEpisodes.Import(new List<ImportDecision> { importDecision }, true, trackedDownload.DownloadItem, message.ImportMode).GetAwaiter().GetResult().First();
 
                     imported.Add(importResult);
 

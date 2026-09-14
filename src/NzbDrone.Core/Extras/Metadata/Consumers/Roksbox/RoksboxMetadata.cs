@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
 using NLog;
@@ -124,10 +125,10 @@ namespace NzbDrone.Core.Extras.Metadata.Consumers.Roksbox
             return null;
         }
 
-        public override MetadataFileResult SeriesMetadata(Series series, SeriesMetadataReason reason)
+        public override Task<MetadataFileResult> SeriesMetadata(Series series, SeriesMetadataReason reason)
         {
             // Series metadata is not supported
-            return null;
+            return Task.FromResult<MetadataFileResult>(null);
         }
 
         public override MetadataFileResult EpisodeMetadata(Series series, EpisodeFile episodeFile)

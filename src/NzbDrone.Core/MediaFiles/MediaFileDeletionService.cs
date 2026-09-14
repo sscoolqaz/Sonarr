@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -20,7 +21,7 @@ namespace NzbDrone.Core.MediaFiles
 {
     public interface IDeleteMediaFiles
     {
-        void DeleteEpisodeFile(Series series, EpisodeFile episodeFile);
+        Task DeleteEpisodeFile(Series series, EpisodeFile episodeFile);
     }
 
     public class MediaFileDeletionService : IDeleteMediaFiles,
@@ -59,10 +60,10 @@ namespace NzbDrone.Core.MediaFiles
             _logger = logger;
         }
 
-        public void DeleteEpisodeFile(Series series, EpisodeFile episodeFile)
+        public async Task DeleteEpisodeFile(Series series, EpisodeFile episodeFile)
         {
             var fullPath = Path.Combine(series.Path, episodeFile.RelativePath);
-            var rootFolder = _rootFolderService.GetBestRootFolderPath(series.Path);
+            var rootFolder = await _rootFolderService.GetBestRootFolderPath(series.Path);
 
             if (!_diskProvider.FolderExists(rootFolder))
             {
@@ -94,19 +95,22 @@ namespace NzbDrone.Core.MediaFiles
             }
 
             // Delete the episode file from the database to clean it up even if the file was already deleted
-            _mediaFileService.Delete(episodeFile, DeleteMediaFileReason.Manual);
+            await _mediaFileService.Delete(episodeFile, DeleteMediaFileReason.Manual);
 
             _eventAggregator.PublishEvent(new DeleteCompletedEvent());
         }
 
+        // IExecute<TCommand> is a shared, synchronous, app-wide command interface - its signature can't change
+        // here. Bridging with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges
+        // elsewhere this session (no SynchronizationContext on the threads command execution runs on).
         public void Execute(DeleteSeriesFilesCommand message)
         {
             foreach (var seriesId in message.SeriesIds)
             {
                 try
                 {
-                    var series = _seriesService.GetSeries(seriesId);
-                    var mediaFiles = _mediaFileService.GetFilesBySeries(seriesId);
+                    var series = _seriesService.GetSeries(seriesId).GetAwaiter().GetResult();
+                    var mediaFiles = _mediaFileService.GetFilesBySeries(seriesId).GetAwaiter().GetResult();
 
                     _logger.ProgressDebug("{0}: Deleting episode files}", series.Title);
 
@@ -116,7 +120,7 @@ namespace NzbDrone.Core.MediaFiles
                         continue;
                     }
 
-                    var rootFolder = _rootFolderService.GetBestRootFolderPath(series.Path);
+                    var rootFolder = _rootFolderService.GetBestRootFolderPath(series.Path).GetAwaiter().GetResult();
 
                     if (!_diskProvider.FolderExists(rootFolder))
                     {
@@ -160,7 +164,7 @@ namespace NzbDrone.Core.MediaFiles
                                 continue;
                             }
 
-                            _mediaFileService.Delete(episodeFile, DeleteMediaFileReason.Manual);
+                            _mediaFileService.Delete(episodeFile, DeleteMediaFileReason.Manual).GetAwaiter().GetResult();
                         }
                     }
 
@@ -174,11 +178,14 @@ namespace NzbDrone.Core.MediaFiles
             }
         }
 
+        // IHandleAsync<TEvent> is a shared eventing interface app-wide; its signature (void HandleAsync) can't
+        // change here. Bridging with GetAwaiter().GetResult() is safe - EventAggregator runs handlers off the
+        // request thread via Task.Factory.StartNew, and ASP.NET Core carries no SynchronizationContext.
         public void HandleAsync(SeriesDeletedEvent message)
         {
             if (message.DeleteFiles)
             {
-                var allSeries = _seriesService.GetAllSeriesPaths();
+                var allSeries = _seriesService.GetAllSeriesPaths().GetAwaiter().GetResult();
 
                 foreach (var series in message.Series)
                 {

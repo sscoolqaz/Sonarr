@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.MediaFiles.MediaInfo;
@@ -9,14 +10,14 @@ namespace NzbDrone.Core.Organizer
 {
     public interface IFilenameSampleService
     {
-        SampleResult GetStandardSample(NamingConfig nameSpec);
-        SampleResult GetMultiEpisodeSample(NamingConfig nameSpec);
-        SampleResult GetDailySample(NamingConfig nameSpec);
-        SampleResult GetAnimeSample(NamingConfig nameSpec);
-        SampleResult GetAnimeMultiEpisodeSample(NamingConfig nameSpec);
-        string GetSeriesFolderSample(NamingConfig nameSpec);
-        string GetSeasonFolderSample(NamingConfig nameSpec);
-        string GetSpecialsFolderSample(NamingConfig nameSpec);
+        Task<SampleResult> GetStandardSample(NamingConfig nameSpec);
+        Task<SampleResult> GetMultiEpisodeSample(NamingConfig nameSpec);
+        Task<SampleResult> GetDailySample(NamingConfig nameSpec);
+        Task<SampleResult> GetAnimeSample(NamingConfig nameSpec);
+        Task<SampleResult> GetAnimeMultiEpisodeSample(NamingConfig nameSpec);
+        Task<string> GetSeriesFolderSample(NamingConfig nameSpec);
+        Task<string> GetSeasonFolderSample(NamingConfig nameSpec);
+        Task<string> GetSpecialsFolderSample(NamingConfig nameSpec);
     }
 
     public class FileNameSampleService : IFilenameSampleService
@@ -208,11 +209,11 @@ namespace NzbDrone.Core.Organizer
             };
         }
 
-        public SampleResult GetStandardSample(NamingConfig nameSpec)
+        public async Task<SampleResult> GetStandardSample(NamingConfig nameSpec)
         {
             var result = new SampleResult
             {
-                FileName = BuildSample(_singleEpisode, _standardSeries, _singleEpisodeFile, nameSpec, _customFormats),
+                FileName = await BuildSample(_singleEpisode, _standardSeries, _singleEpisodeFile, nameSpec, _customFormats),
                 Series = _standardSeries,
                 Episodes = _singleEpisode,
                 EpisodeFile = _singleEpisodeFile
@@ -221,11 +222,11 @@ namespace NzbDrone.Core.Organizer
             return result;
         }
 
-        public SampleResult GetMultiEpisodeSample(NamingConfig nameSpec)
+        public async Task<SampleResult> GetMultiEpisodeSample(NamingConfig nameSpec)
         {
             var result = new SampleResult
             {
-                FileName = BuildSample(_multiEpisodes, _standardSeries, _multiEpisodeFile, nameSpec, _customFormats),
+                FileName = await BuildSample(_multiEpisodes, _standardSeries, _multiEpisodeFile, nameSpec, _customFormats),
                 Series = _standardSeries,
                 Episodes = _multiEpisodes,
                 EpisodeFile = _multiEpisodeFile
@@ -234,11 +235,11 @@ namespace NzbDrone.Core.Organizer
             return result;
         }
 
-        public SampleResult GetDailySample(NamingConfig nameSpec)
+        public async Task<SampleResult> GetDailySample(NamingConfig nameSpec)
         {
             var result = new SampleResult
             {
-                FileName = BuildSample(_singleEpisode, _dailySeries, _dailyEpisodeFile, nameSpec, _customFormats),
+                FileName = await BuildSample(_singleEpisode, _dailySeries, _dailyEpisodeFile, nameSpec, _customFormats),
                 Series = _dailySeries,
                 Episodes = _singleEpisode,
                 EpisodeFile = _dailyEpisodeFile
@@ -247,11 +248,11 @@ namespace NzbDrone.Core.Organizer
             return result;
         }
 
-        public SampleResult GetAnimeSample(NamingConfig nameSpec)
+        public async Task<SampleResult> GetAnimeSample(NamingConfig nameSpec)
         {
             var result = new SampleResult
             {
-                FileName = BuildSample(_singleEpisode, _animeSeries, _animeEpisodeFile, nameSpec, _customFormats),
+                FileName = await BuildSample(_singleEpisode, _animeSeries, _animeEpisodeFile, nameSpec, _customFormats),
                 Series = _animeSeries,
                 Episodes = _singleEpisode,
                 EpisodeFile = _animeEpisodeFile
@@ -260,11 +261,11 @@ namespace NzbDrone.Core.Organizer
             return result;
         }
 
-        public SampleResult GetAnimeMultiEpisodeSample(NamingConfig nameSpec)
+        public async Task<SampleResult> GetAnimeMultiEpisodeSample(NamingConfig nameSpec)
         {
             var result = new SampleResult
             {
-                FileName = BuildSample(_multiEpisodes, _animeSeries, _animeMultiEpisodeFile, nameSpec, _customFormats),
+                FileName = await BuildSample(_multiEpisodes, _animeSeries, _animeMultiEpisodeFile, nameSpec, _customFormats),
                 Series = _animeSeries,
                 Episodes = _multiEpisodes,
                 EpisodeFile = _animeMultiEpisodeFile
@@ -273,26 +274,26 @@ namespace NzbDrone.Core.Organizer
             return result;
         }
 
-        public string GetSeriesFolderSample(NamingConfig nameSpec)
+        public async Task<string> GetSeriesFolderSample(NamingConfig nameSpec)
         {
-            return _buildFileNames.GetSeriesFolder(_standardSeries, nameSpec);
+            return await _buildFileNames.GetSeriesFolder(_standardSeries, nameSpec);
         }
 
-        public string GetSeasonFolderSample(NamingConfig nameSpec)
+        public async Task<string> GetSeasonFolderSample(NamingConfig nameSpec)
         {
-            return _buildFileNames.GetSeasonFolder(_standardSeries, _episode1.SeasonNumber, nameSpec);
+            return await _buildFileNames.GetSeasonFolder(_standardSeries, _episode1.SeasonNumber, nameSpec);
         }
 
-        public string GetSpecialsFolderSample(NamingConfig nameSpec)
+        public async Task<string> GetSpecialsFolderSample(NamingConfig nameSpec)
         {
-            return _buildFileNames.GetSeasonFolder(_standardSeries, 0, nameSpec);
+            return await _buildFileNames.GetSeasonFolder(_standardSeries, 0, nameSpec);
         }
 
-        private string BuildSample(List<Episode> episodes, Series series, EpisodeFile episodeFile, NamingConfig nameSpec, List<CustomFormat> customFormats)
+        private async Task<string> BuildSample(List<Episode> episodes, Series series, EpisodeFile episodeFile, NamingConfig nameSpec, List<CustomFormat> customFormats)
         {
             try
             {
-                return _buildFileNames.BuildFileName(episodes, series, episodeFile, "", nameSpec, customFormats);
+                return await _buildFileNames.BuildFileName(episodes, series, episodeFile, "", nameSpec, customFormats);
             }
             catch (NamingFormatException)
             {

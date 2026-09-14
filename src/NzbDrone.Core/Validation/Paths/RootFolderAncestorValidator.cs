@@ -1,4 +1,7 @@
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using FluentValidation;
 using FluentValidation.Validators;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.RootFolders;
@@ -16,7 +19,15 @@ namespace NzbDrone.Core.Validation.Paths
 
         protected override string GetDefaultMessageTemplate() => "Path '{path}' is an ancestor of an existing root folder";
 
+        public override bool ShouldValidateAsynchronously(IValidationContext context) => true;
+
         protected override bool IsValid(PropertyValidatorContext context)
+        {
+            // Bridge for callers still on the synchronous FluentValidation path (see SeriesTitleSlugValidator).
+            return IsValidAsync(context, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        protected override async Task<bool> IsValidAsync(PropertyValidatorContext context, CancellationToken cancellation)
         {
             if (context.PropertyValue == null)
             {
@@ -25,7 +36,9 @@ namespace NzbDrone.Core.Validation.Paths
 
             context.MessageFormatter.AppendArgument("path", context.PropertyValue.ToString());
 
-            return !_rootFolderService.All().Any(s => context.PropertyValue.ToString().IsParentPath(s.Path));
+            var rootFolders = await _rootFolderService.All();
+
+            return !rootFolders.Any(s => context.PropertyValue.ToString().IsParentPath(s.Path));
         }
     }
 }

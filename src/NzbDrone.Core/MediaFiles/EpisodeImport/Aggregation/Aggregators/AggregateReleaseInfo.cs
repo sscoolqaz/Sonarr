@@ -17,6 +17,10 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Aggregation.Aggregators
             _historyService = historyService;
         }
 
+        // IAggregateLocalEpisode is a shared interface with 9 implementers app-wide (most out of scope this
+        // round) invoked synchronously from IAggregationService.Augment, which is also out of scope. Bridging
+        // with GetAwaiter().GetResult() is safe for the same reason as the IHandle bridges elsewhere this
+        // session.
         public LocalEpisode Aggregate(LocalEpisode localEpisode, DownloadClientItem downloadClientItem)
         {
             if (downloadClientItem == null)
@@ -24,7 +28,7 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Aggregation.Aggregators
                 return localEpisode;
             }
 
-            var grabbedHistories = _historyService.FindByDownloadId(downloadClientItem.DownloadId)
+            var grabbedHistories = _historyService.FindByDownloadId(downloadClientItem.DownloadId).GetAwaiter().GetResult()
                 .Where(h => h.EventType == EpisodeHistoryEventType.Grabbed)
                 .ToList();
 

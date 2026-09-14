@@ -1,8 +1,10 @@
+using System.Threading.Tasks;
+
 namespace NzbDrone.Core.Statistics;
 
 public interface IStatisticsService
 {
-    LibraryStatistics GetLibraryStatistics(StatisticsFilter filter = null);
+    Task<LibraryStatistics> GetLibraryStatistics(StatisticsFilter filter = null);
 }
 
 public class StatisticsService : IStatisticsService
@@ -14,8 +16,8 @@ public class StatisticsService : IStatisticsService
         _statisticsRepository = statisticsRepository;
     }
 
-    public LibraryStatistics GetLibraryStatistics(StatisticsFilter filter = null)
+    public async Task<LibraryStatistics> GetLibraryStatistics(StatisticsFilter filter = null)
     {
-        return _statisticsRepository.GetLibraryStatistics(filter);
+        return await _statisticsRepository.GetLibraryStatistics(filter);
     }
 }

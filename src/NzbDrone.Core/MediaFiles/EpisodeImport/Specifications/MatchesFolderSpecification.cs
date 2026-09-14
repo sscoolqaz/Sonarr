@@ -20,6 +20,9 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
             _parsingService = parsingService;
         }
 
+        // IImportDecisionEngineSpecification is a shared interface with 17 implementers app-wide (most out of
+        // scope this round) - its signature can't change here. Bridging with GetAwaiter().GetResult() is safe
+        // for the same reason as the IHandle bridges elsewhere this session.
         public ImportSpecDecision IsSatisfiedBy(LocalEpisode localEpisode, DownloadClientItem downloadClientItem)
         {
             if (localEpisode.ExistingFile)
@@ -32,12 +35,12 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
 
             if (fileInfo != null && fileInfo.IsPossibleSceneSeasonSpecial)
             {
-                fileInfo = _parsingService.ParseSpecialEpisodeTitle(fileInfo, fileInfo.ReleaseTitle, localEpisode.Series.TvdbId, 0, null);
+                fileInfo = _parsingService.ParseSpecialEpisodeTitle(fileInfo, fileInfo.ReleaseTitle, localEpisode.Series.TvdbId, 0, null).GetAwaiter().GetResult();
             }
 
             if (folderInfo != null && folderInfo.IsPossibleSceneSeasonSpecial)
             {
-                folderInfo = _parsingService.ParseSpecialEpisodeTitle(folderInfo, folderInfo.ReleaseTitle, localEpisode.Series.TvdbId, 0, null);
+                folderInfo = _parsingService.ParseSpecialEpisodeTitle(folderInfo, folderInfo.ReleaseTitle, localEpisode.Series.TvdbId, 0, null).GetAwaiter().GetResult();
             }
 
             if (folderInfo == null)
@@ -52,8 +55,8 @@ namespace NzbDrone.Core.MediaFiles.EpisodeImport.Specifications
                 return ImportSpecDecision.Accept();
             }
 
-            var folderEpisodes = _parsingService.GetEpisodes(folderInfo, localEpisode.Series, true);
-            var fileEpisodes = _parsingService.GetEpisodes(fileInfo, localEpisode.Series, true);
+            var folderEpisodes = _parsingService.GetEpisodes(folderInfo, localEpisode.Series, true).GetAwaiter().GetResult();
+            var fileEpisodes = _parsingService.GetEpisodes(fileInfo, localEpisode.Series, true).GetAwaiter().GetResult();
 
             if (folderEpisodes.Empty())
             {

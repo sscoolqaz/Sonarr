@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.Extensions;
@@ -37,34 +38,34 @@ namespace NzbDrone.Core.Extras.Others
 
         public override int Order => 2;
 
-        public override IEnumerable<ExtraFile> CreateAfterMediaCoverUpdate(Series series)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterMediaCoverUpdate(Series series)
         {
-            return Enumerable.Empty<ExtraFile>();
+            return Task.FromResult(Enumerable.Empty<ExtraFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterSeriesScan(Series series, List<EpisodeFile> episodeFiles)
         {
-            return Enumerable.Empty<ExtraFile>();
+            return Task.FromResult(Enumerable.Empty<ExtraFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodesImported(Series series)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterEpisodesImported(Series series)
         {
-            return Enumerable.Empty<ExtraFile>();
+            return Task.FromResult(Enumerable.Empty<ExtraFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterEpisodeImport(Series series, EpisodeFile episodeFile)
         {
-            return Enumerable.Empty<ExtraFile>();
+            return Task.FromResult(Enumerable.Empty<ExtraFile>());
         }
 
-        public override IEnumerable<ExtraFile> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder)
+        public override Task<IEnumerable<ExtraFile>> CreateAfterEpisodeFolder(Series series, string seriesFolder, string seasonFolder)
         {
-            return Enumerable.Empty<ExtraFile>();
+            return Task.FromResult(Enumerable.Empty<ExtraFile>());
         }
 
-        public override IEnumerable<ExtraFile> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles)
+        public override async Task<IEnumerable<ExtraFile>> MoveFilesAfterRename(Series series, List<EpisodeFile> episodeFiles)
         {
-            var extraFiles = _otherExtraFileService.GetFilesBySeries(series.Id);
+            var extraFiles = await _otherExtraFileService.GetFilesBySeries(series.Id);
             var movedFiles = new List<OtherExtraFile>();
 
             foreach (var episodeFile in episodeFiles)
@@ -77,7 +78,7 @@ namespace NzbDrone.Core.Extras.Others
                 }
             }
 
-            _otherExtraFileService.Upsert(movedFiles);
+            await _otherExtraFileService.Upsert(movedFiles);
 
             return movedFiles;
         }
@@ -87,7 +88,7 @@ namespace NzbDrone.Core.Extras.Others
             return true;
         }
 
-        public override IEnumerable<ExtraFile> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly)
+        public override async Task<IEnumerable<ExtraFile>> ImportFiles(LocalEpisode localEpisode, EpisodeFile episodeFile, List<string> files, bool isReadOnly)
         {
             var importedFiles = new List<ExtraFile>();
             var filteredFiles = files.Where(f => CanImportFile(localEpisode, episodeFile, f, Path.GetExtension(f), isReadOnly)).ToList();
@@ -148,7 +149,7 @@ namespace NzbDrone.Core.Extras.Others
                     var suffix = GetSuffix(copy, matchingFiles.Count > 1);
                     var extraFile = ImportFile(localEpisode.Series, episodeFile, file, isReadOnly, Path.GetExtension(file), suffix);
                     _mediaFileAttributeService.SetFilePermissions(file);
-                    _otherExtraFileService.Upsert(extraFile);
+                    await _otherExtraFileService.Upsert(extraFile);
                     importedFiles.Add(extraFile);
 
                     copy++;
