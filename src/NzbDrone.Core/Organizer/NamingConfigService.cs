@@ -1,44 +1,57 @@
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace NzbDrone.Core.Organizer
 {
     public interface INamingConfigService
     {
-        NamingConfig GetConfig();
-        void Save(NamingConfig namingConfig);
+        Task<NamingConfig> GetConfig();
+        Task Save(NamingConfig namingConfig);
     }
 
     public class NamingConfigService : INamingConfigService
     {
         private readonly INamingConfigRepository _repository;
 
+        // NOTE: was a plain `lock (_repository)`; converted to SemaphoreSlim since the critical
+        // section now needs to `await` repository calls, which C#'s `lock` forbids.
+        private readonly SemaphoreSlim _syncRoot = new SemaphoreSlim(1, 1);
+
         public NamingConfigService(INamingConfigRepository repository)
         {
             _repository = repository;
         }
 
-        public NamingConfig GetConfig()
+        public async Task<NamingConfig> GetConfig()
         {
-            var config = _repository.SingleOrDefault();
+            var config = await _repository.SingleOrDefault();
 
             if (config == null)
             {
-                lock (_repository)
+                await _syncRoot.WaitAsync();
+
+                try
                 {
-                    config = _repository.SingleOrDefault();
+                    config = await _repository.SingleOrDefault();
 
                     if (config == null)
                     {
-                        _repository.Insert(NamingConfig.Default);
-                        config = _repository.Single();
+                        await _repository.Insert(NamingConfig.Default);
+                        config = await _repository.Single();
                     }
+                }
+                finally
+                {
+                    _syncRoot.Release();
                 }
             }
 
             return config;
         }
 
-        public void Save(NamingConfig namingConfig)
+        public async Task Save(NamingConfig namingConfig)
         {
-            _repository.Upsert(namingConfig);
+            await _repository.Upsert(namingConfig);
         }
     }
 }

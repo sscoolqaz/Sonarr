@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common;
 using NzbDrone.Common.Composition;
@@ -16,23 +17,23 @@ namespace NzbDrone.Core.Messaging.Commands
 {
     public interface IManageCommandQueue
     {
-        List<CommandModel> PushMany<TCommand>(List<TCommand> commands)
+        Task<List<CommandModel>> PushMany<TCommand>(List<TCommand> commands)
             where TCommand : Command;
-        CommandModel Push<TCommand>(TCommand command, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified)
+        Task<CommandModel> Push<TCommand>(TCommand command, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified)
             where TCommand : Command;
-        CommandModel Push(string commandName, DateTime? lastExecutionTime, DateTime? lastStartTime, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified);
+        Task<CommandModel> Push(string commandName, DateTime? lastExecutionTime, DateTime? lastStartTime, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified);
         IEnumerable<CommandModel> Queue(CancellationToken cancellationToken);
         List<CommandModel> All();
-        CommandModel Get(int id);
+        Task<CommandModel> Get(int id);
         List<CommandModel> GetStarted();
         void SetMessage(CommandModel command, string message);
         void SetResult(CommandModel command, CommandResult result);
-        void Start(CommandModel command);
-        void Complete(CommandModel command, string message);
-        void Fail(CommandModel command, string message, Exception e);
-        void Requeue();
+        Task Start(CommandModel command);
+        Task Complete(CommandModel command, string message);
+        Task Fail(CommandModel command, string message, Exception e);
+        Task Requeue();
         void Cancel(int id);
-        void CleanCommands();
+        Task CleanCommands();
     }
 
     public class CommandQueueManager : IManageCommandQueue, IHandle<ApplicationStartedEvent>
@@ -42,6 +43,10 @@ namespace NzbDrone.Core.Messaging.Commands
         private readonly Logger _logger;
 
         private readonly CommandQueue _commandQueue;
+
+        // NOTE: was a plain `lock (_commandQueue)`; converted to SemaphoreSlim since the critical
+        // section now needs to `await` repository calls, which C#'s `lock` forbids.
+        private readonly SemaphoreSlim _syncRoot = new SemaphoreSlim(1, 1);
 
         public CommandQueueManager(ICommandRepository repo,
                                    IServiceFactory serviceFactory,
@@ -55,12 +60,14 @@ namespace NzbDrone.Core.Messaging.Commands
             _commandQueue = new CommandQueue();
         }
 
-        public List<CommandModel> PushMany<TCommand>(List<TCommand> commands)
+        public async Task<List<CommandModel>> PushMany<TCommand>(List<TCommand> commands)
             where TCommand : Command
         {
             _logger.Trace("Publishing {0} commands", commands.Count);
 
-            lock (_commandQueue)
+            await _syncRoot.WaitAsync();
+
+            try
             {
                 var commandModels = new List<CommandModel>();
                 var existingCommands = _commandQueue.QueuedOrStarted();
@@ -87,7 +94,7 @@ namespace NzbDrone.Core.Messaging.Commands
                     commandModels.Add(commandModel);
                 }
 
-                _repo.InsertMany(commandModels);
+                await _repo.InsertMany(commandModels);
 
                 foreach (var commandModel in commandModels)
                 {
@@ -96,9 +103,13 @@ namespace NzbDrone.Core.Messaging.Commands
 
                 return commandModels;
             }
+            finally
+            {
+                _syncRoot.Release();
+            }
         }
 
-        public CommandModel Push<TCommand>(TCommand command, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified)
+        public async Task<CommandModel> Push<TCommand>(TCommand command, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified)
             where TCommand : Command
         {
             Ensure.That(command, () => command).IsNotNull();
@@ -108,7 +119,9 @@ namespace NzbDrone.Core.Messaging.Commands
 
             command.Trigger = trigger;
 
-            lock (_commandQueue)
+            await _syncRoot.WaitAsync();
+
+            try
             {
                 var existingCommands = QueuedOrStarted(command.Name);
                 var existing = existingCommands.FirstOrDefault(c => CommandEqualityComparer.Instance.Equals(c.Body, command));
@@ -132,20 +145,24 @@ namespace NzbDrone.Core.Messaging.Commands
 
                 _logger.Trace("Inserting new command: {0}", commandModel.Name);
 
-                _repo.Insert(commandModel);
+                await _repo.Insert(commandModel);
                 _commandQueue.Add(commandModel);
 
                 return commandModel;
             }
+            finally
+            {
+                _syncRoot.Release();
+            }
         }
 
-        public CommandModel Push(string commandName, DateTime? lastExecutionTime, DateTime? lastStartTime, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified)
+        public async Task<CommandModel> Push(string commandName, DateTime? lastExecutionTime, DateTime? lastStartTime, CommandPriority priority = CommandPriority.Normal, CommandTrigger trigger = CommandTrigger.Unspecified)
         {
             var command = GetCommand(commandName);
             command.LastExecutionTime = lastExecutionTime;
             command.LastStartTime = lastStartTime;
 
-            return Push(command, priority, trigger);
+            return await Push(command, priority, trigger);
         }
 
         public IEnumerable<CommandModel> Queue(CancellationToken cancellationToken)
@@ -159,13 +176,13 @@ namespace NzbDrone.Core.Messaging.Commands
             return _commandQueue.All();
         }
 
-        public CommandModel Get(int id)
+        public async Task<CommandModel> Get(int id)
         {
             var command = _commandQueue.Find(id);
 
             if (command == null)
             {
-                command = _repo.Get(id);
+                command = await _repo.Get(id);
             }
 
             return command;
@@ -187,14 +204,14 @@ namespace NzbDrone.Core.Messaging.Commands
             command.Result = result;
         }
 
-        public void Start(CommandModel command)
+        public async Task Start(CommandModel command)
         {
             // Marks the command as started in the DB, the queue takes care of marking it as started on it's own
             _logger.Trace("Marking command as started: {0}", command.Name);
-            _repo.Start(command);
+            await _repo.Start(command);
         }
 
-        public void Complete(CommandModel command, string message)
+        public async Task Complete(CommandModel command, string message)
         {
             // If the result hasn't been set yet then set it to successful
             if (command.Result == CommandResult.Unknown)
@@ -202,23 +219,23 @@ namespace NzbDrone.Core.Messaging.Commands
                 command.Result = CommandResult.Successful;
             }
 
-            Update(command, CommandStatus.Completed, message);
+            await Update(command, CommandStatus.Completed, message);
 
             _commandQueue.PulseAllConsumers();
         }
 
-        public void Fail(CommandModel command, string message, Exception e)
+        public async Task Fail(CommandModel command, string message, Exception e)
         {
             command.Exception = e.ToString();
 
-            Update(command, CommandStatus.Failed, message);
+            await Update(command, CommandStatus.Failed, message);
 
             _commandQueue.PulseAllConsumers();
         }
 
-        public void Requeue()
+        public async Task Requeue()
         {
-            foreach (var command in _repo.Queued())
+            foreach (var command in await _repo.Queued())
             {
                 _commandQueue.Add(command);
             }
@@ -232,7 +249,7 @@ namespace NzbDrone.Core.Messaging.Commands
             }
         }
 
-        public void CleanCommands()
+        public async Task CleanCommands()
         {
             _logger.Trace("Cleaning up old commands");
 
@@ -242,7 +259,7 @@ namespace NzbDrone.Core.Messaging.Commands
 
             _commandQueue.RemoveMany(commands);
 
-            _repo.Trim();
+            await _repo.Trim();
         }
 
         private Command GetCommand(string commandName)
@@ -254,7 +271,7 @@ namespace NzbDrone.Core.Messaging.Commands
             return Json.Deserialize("{}", commandType) as Command;
         }
 
-        private void Update(CommandModel command, CommandStatus status, string message)
+        private async Task Update(CommandModel command, CommandStatus status, string message)
         {
             SetMessage(command, message);
 
@@ -263,7 +280,7 @@ namespace NzbDrone.Core.Messaging.Commands
             command.Status = status;
 
             _logger.Trace("Updating command status");
-            _repo.End(command);
+            await _repo.End(command);
         }
 
         private List<CommandModel> QueuedOrStarted(string name)
@@ -273,11 +290,15 @@ namespace NzbDrone.Core.Messaging.Commands
                                 .ToList();
         }
 
+        // NOTE: IHandle<TEvent> is a shared eventing interface (50+ implementers app-wide); its
+        // `void Handle(TEvent message)` signature is out of scope to convert (see architectural
+        // note in ProviderFactory.cs). Blocking here via GetAwaiter().GetResult() is the
+        // documented boundary.
         public void Handle(ApplicationStartedEvent message)
         {
             _logger.Trace("Orphaning incomplete commands");
-            _repo.OrphanStarted();
-            Requeue();
+            _repo.OrphanStarted().GetAwaiter().GetResult();
+            Requeue().GetAwaiter().GetResult();
         }
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.CustomFormats;
@@ -14,14 +15,14 @@ namespace NzbDrone.Core.Profiles.Qualities
 {
     public interface IQualityProfileService
     {
-        QualityProfile Add(QualityProfile profile);
-        void Update(QualityProfile profile);
-        void Delete(int id);
-        List<QualityProfile> All();
-        QualityProfile Get(int id);
-        bool Exists(int id);
-        QualityProfile GetDefaultProfile(string name, Quality cutoff = null, params Quality[] allowed);
-        void UpdateAllSizeLimits(params QualityProfileSizeLimit[] sizeLimits);
+        Task<QualityProfile> Add(QualityProfile profile);
+        Task Update(QualityProfile profile);
+        Task Delete(int id);
+        Task<List<QualityProfile>> All();
+        Task<QualityProfile> Get(int id);
+        Task<bool> Exists(int id);
+        Task<QualityProfile> GetDefaultProfile(string name, Quality cutoff = null, params Quality[] allowed);
+        Task UpdateAllSizeLimits(params QualityProfileSizeLimit[] sizeLimits);
     }
 
     public class QualityProfileService : IQualityProfileService,
@@ -54,61 +55,70 @@ namespace NzbDrone.Core.Profiles.Qualities
             _logger = logger;
         }
 
-        public QualityProfile Add(QualityProfile profile)
+        public async Task<QualityProfile> Add(QualityProfile profile)
         {
-            var saved = _qualityProfileRepository.Insert(profile);
-            _rankService.UpdateRanksForProfile(saved);
+            var saved = await _qualityProfileRepository.Insert(profile);
+            await _rankService.UpdateRanksForProfile(saved);
             return saved;
         }
 
-        public void Update(QualityProfile profile)
+        public async Task Update(QualityProfile profile)
         {
-            _qualityProfileRepository.Update(profile);
-            _rankService.UpdateRanksForProfile(profile);
+            await _qualityProfileRepository.Update(profile);
+            await _rankService.UpdateRanksForProfile(profile);
             _eventAggregator.PublishEvent(new QualityProfileUpdatedEvent(profile.Id));
         }
 
-        public void Delete(int id)
+        public async Task Delete(int id)
         {
-            if (_seriesService.GetAllSeries().Any(c => c.QualityProfileId == id) || _importListFactory.All().Any(c => c.QualityProfileId == id))
+            if ((await _seriesService.GetAllSeries()).Any(c => c.QualityProfileId == id) || (await _importListFactory.All()).Any(c => c.QualityProfileId == id))
             {
-                var profile = _qualityProfileRepository.Get(id);
+                var profile = await _qualityProfileRepository.Get(id);
                 throw new QualityProfileInUseException(profile.Name);
             }
 
-            _qualityProfileRepository.Delete(id);
-            _rankService.DeleteRanksForProfile(id);
+            await _qualityProfileRepository.Delete(id);
+            await _rankService.DeleteRanksForProfile(id);
         }
 
-        public List<QualityProfile> All()
+        public async Task<List<QualityProfile>> All()
         {
-            return _qualityProfileRepository.All().ToList();
+            return (await _qualityProfileRepository.All()).ToList();
         }
 
-        public QualityProfile Get(int id)
+        public async Task<QualityProfile> Get(int id)
         {
-            return _qualityProfileRepository.Get(id);
+            return await _qualityProfileRepository.Get(id);
         }
 
-        public bool Exists(int id)
+        public async Task<bool> Exists(int id)
         {
-            return _qualityProfileRepository.Exists(id);
+            return await _qualityProfileRepository.Exists(id);
         }
 
+        // NOTE: IHandle<TEvent> is a shared eventing interface (50+ implementers app-wide); its
+        // `void Handle(TEvent message)` signature is out of scope to convert (see architectural
+        // note in ProviderFactory.cs). Blocking here via GetAwaiter().GetResult() on the private
+        // async body is the documented boundary.
         public void Handle(ApplicationStartedEvent message)
         {
-            var profiles = All();
+            HandleApplicationStarted().GetAwaiter().GetResult();
+        }
+
+        private async Task HandleApplicationStarted()
+        {
+            var profiles = await All();
 
             if (profiles.Any())
             {
-                _rankService.SeedAll(profiles);
+                await _rankService.SeedAll(profiles);
 
                 return;
             }
 
             _logger.Info("Setting up default quality profiles");
 
-            AddDefaultProfile("Any",
+            await AddDefaultProfile("Any",
                 Quality.SDTV,
                 Quality.SDTV,
                 Quality.WEBRip480p,
@@ -125,7 +135,7 @@ namespace NzbDrone.Core.Profiles.Qualities
                 Quality.Bluray720p,
                 Quality.Bluray1080p);
 
-            AddDefaultProfile("SD",
+            await AddDefaultProfile("SD",
                 Quality.SDTV,
                 Quality.SDTV,
                 Quality.WEBRip480p,
@@ -134,28 +144,28 @@ namespace NzbDrone.Core.Profiles.Qualities
                 Quality.Bluray480p,
                 Quality.Bluray576p);
 
-            AddDefaultProfile("HD-720p",
+            await AddDefaultProfile("HD-720p",
                 Quality.HDTV720p,
                 Quality.HDTV720p,
                 Quality.WEBRip720p,
                 Quality.WEBDL720p,
                 Quality.Bluray720p);
 
-            AddDefaultProfile("HD-1080p",
+            await AddDefaultProfile("HD-1080p",
                 Quality.HDTV1080p,
                 Quality.HDTV1080p,
                 Quality.WEBRip1080p,
                 Quality.WEBDL1080p,
                 Quality.Bluray1080p);
 
-            AddDefaultProfile("Ultra-HD",
+            await AddDefaultProfile("Ultra-HD",
                 Quality.HDTV2160p,
                 Quality.HDTV2160p,
                 Quality.WEBRip2160p,
                 Quality.WEBDL2160p,
                 Quality.Bluray2160p);
 
-            AddDefaultProfile("HD - 720p/1080p",
+            await AddDefaultProfile("HD - 720p/1080p",
                 Quality.HDTV720p,
                 Quality.HDTV720p,
                 Quality.HDTV1080p,
@@ -169,7 +179,12 @@ namespace NzbDrone.Core.Profiles.Qualities
 
         public void Handle(CustomFormatAddedEvent message)
         {
-            var all = All();
+            HandleCustomFormatAdded(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleCustomFormatAdded(CustomFormatAddedEvent message)
+        {
+            var all = await All();
 
             foreach (var profile in all)
             {
@@ -179,13 +194,18 @@ namespace NzbDrone.Core.Profiles.Qualities
                     Format = message.CustomFormat
                 });
 
-                Update(profile);
+                await Update(profile);
             }
         }
 
         public void Handle(CustomFormatDeletedEvent message)
         {
-            var all = All();
+            HandleCustomFormatDeleted(message).GetAwaiter().GetResult();
+        }
+
+        private async Task HandleCustomFormatDeleted(CustomFormatDeletedEvent message)
+        {
+            var all = await All();
             foreach (var profile in all)
             {
                 profile.FormatItems = profile.FormatItems.Where(c => c.Format.Id != message.CustomFormat.Id).ToList();
@@ -197,11 +217,11 @@ namespace NzbDrone.Core.Profiles.Qualities
                     profile.MinUpgradeFormatScore = 1;
                 }
 
-                Update(profile);
+                await Update(profile);
             }
         }
 
-        public QualityProfile GetDefaultProfile(string name, Quality cutoff = null, params Quality[] allowed)
+        public async Task<QualityProfile> GetDefaultProfile(string name, Quality cutoff = null, params Quality[] allowed)
         {
             var groupedQualites = Quality.DefaultQualityDefinitions.GroupBy(q => q.Weight);
             var items = new List<QualityProfileQualityItem>();
@@ -250,7 +270,7 @@ namespace NzbDrone.Core.Profiles.Qualities
                 groupId++;
             }
 
-            var formatItems = _formatService.All().Select(format => new ProfileFormatItem
+            var formatItems = (await _formatService.All()).Select(format => new ProfileFormatItem
             {
                 Score = 0,
                 Format = format
@@ -270,9 +290,9 @@ namespace NzbDrone.Core.Profiles.Qualities
             return qualityProfile;
         }
 
-        public void UpdateAllSizeLimits(params QualityProfileSizeLimit[] sizeLimits)
+        public async Task UpdateAllSizeLimits(params QualityProfileSizeLimit[] sizeLimits)
         {
-            var all = All();
+            var all = await All();
 
             foreach (var qualityProfile in all)
             {
@@ -288,14 +308,14 @@ namespace NzbDrone.Core.Profiles.Qualities
                 }
             }
 
-            _qualityProfileRepository.UpdateMany(all);
+            await _qualityProfileRepository.UpdateMany(all);
         }
 
-        private QualityProfile AddDefaultProfile(string name, Quality cutoff, params Quality[] allowed)
+        private async Task<QualityProfile> AddDefaultProfile(string name, Quality cutoff, params Quality[] allowed)
         {
-            var profile = GetDefaultProfile(name, cutoff, allowed);
+            var profile = await GetDefaultProfile(name, cutoff, allowed);
 
-            return Add(profile);
+            return await Add(profile);
         }
     }
 }

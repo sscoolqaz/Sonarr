@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.AutoTagging;
 using NzbDrone.Core.AutoTagging.Specifications;
 using NzbDrone.Core.Datastore;
@@ -16,15 +17,15 @@ namespace NzbDrone.Core.Tags
 {
     public interface ITagService
     {
-        Tag GetTag(int tagId);
-        Tag GetTag(string tag);
-        List<Tag> GetTags(IEnumerable<int> ids);
-        TagDetails Details(int tagId);
-        List<TagDetails> Details();
-        List<Tag> All();
-        Tag Add(Tag tag);
-        Tag Update(Tag tag);
-        void Delete(int tagId);
+        Task<Tag> GetTag(int tagId);
+        Task<Tag> GetTag(string tag);
+        Task<List<Tag>> GetTags(IEnumerable<int> ids);
+        Task<TagDetails> Details(int tagId);
+        Task<List<TagDetails>> Details();
+        Task<List<Tag>> All();
+        Task<Tag> Add(Tag tag);
+        Task<Tag> Update(Tag tag);
+        Task Delete(int tagId);
     }
 
     public class TagService : ITagService
@@ -63,40 +64,40 @@ namespace NzbDrone.Core.Tags
             _downloadClientFactory = downloadClientFactory;
         }
 
-        public Tag GetTag(int tagId)
+        public async Task<Tag> GetTag(int tagId)
         {
-            return _repo.Get(tagId);
+            return await _repo.Get(tagId);
         }
 
-        public Tag GetTag(string tag)
+        public async Task<Tag> GetTag(string tag)
         {
             if (tag.All(char.IsDigit))
             {
-                return _repo.Get(int.Parse(tag));
+                return await _repo.Get(int.Parse(tag));
             }
             else
             {
-                return _repo.GetByLabel(tag);
+                return await _repo.GetByLabel(tag);
             }
         }
 
-        public List<Tag> GetTags(IEnumerable<int> ids)
+        public async Task<List<Tag>> GetTags(IEnumerable<int> ids)
         {
-            return _repo.Get(ids).ToList();
+            return (await _repo.Get(ids)).ToList();
         }
 
-        public TagDetails Details(int tagId)
+        public async Task<TagDetails> Details(int tagId)
         {
-            var tag = GetTag(tagId);
-            var delayProfiles = _delayProfileService.AllForTag(tagId);
-            var importLists = _importListFactory.AllForTag(tagId);
-            var notifications = _notificationFactory.AllForTag(tagId);
-            var releaseProfiles = _releaseProfileService.AllForTag(tagId);
-            var excludedReleaseProfiles = _releaseProfileService.AllExcludedForTag(tagId);
-            var series = _seriesService.AllForTag(tagId);
-            var indexers = _indexerService.AllForTag(tagId);
-            var autoTags = _autoTaggingService.AllForTag(tagId);
-            var downloadClients = _downloadClientFactory.AllForTag(tagId);
+            var tag = await GetTag(tagId);
+            var delayProfiles = await _delayProfileService.AllForTag(tagId);
+            var importLists = await _importListFactory.AllForTag(tagId);
+            var notifications = await _notificationFactory.AllForTag(tagId);
+            var releaseProfiles = await _releaseProfileService.AllForTag(tagId);
+            var excludedReleaseProfiles = await _releaseProfileService.AllExcludedForTag(tagId);
+            var series = await _seriesService.AllForTag(tagId);
+            var indexers = await _indexerService.AllForTag(tagId);
+            var autoTags = await _autoTaggingService.AllForTag(tagId);
+            var downloadClients = await _downloadClientFactory.AllForTag(tagId);
 
             return new TagDetails
             {
@@ -114,18 +115,18 @@ namespace NzbDrone.Core.Tags
             };
         }
 
-        public List<TagDetails> Details()
+        public async Task<List<TagDetails>> Details()
         {
-            var tags = All();
-            var delayProfiles = _delayProfileService.All();
-            var importLists = _importListFactory.All();
-            var notifications = _notificationFactory.All();
-            var releaseProfiles = _releaseProfileService.All();
-            var excludedReleaseProfiles = _releaseProfileService.All();
-            var series = _seriesService.GetAllSeriesTags();
-            var indexers = _indexerService.All();
-            var autoTags = _autoTaggingService.All();
-            var downloadClients = _downloadClientFactory.All();
+            var tags = await All();
+            var delayProfiles = await _delayProfileService.All();
+            var importLists = await _importListFactory.All();
+            var notifications = await _notificationFactory.All();
+            var releaseProfiles = await _releaseProfileService.All();
+            var excludedReleaseProfiles = await _releaseProfileService.All();
+            var series = await _seriesService.GetAllSeriesTags();
+            var indexers = await _indexerService.All();
+            var autoTags = await _autoTaggingService.All();
+            var downloadClients = await _downloadClientFactory.All();
 
             var details = new List<TagDetails>();
 
@@ -150,14 +151,14 @@ namespace NzbDrone.Core.Tags
             return details;
         }
 
-        public List<Tag> All()
+        public async Task<List<Tag>> All()
         {
-            return _repo.All().OrderBy(t => t.Label).ToList();
+            return (await _repo.All()).OrderBy(t => t.Label).ToList();
         }
 
-        public Tag Add(Tag tag)
+        public async Task<Tag> Add(Tag tag)
         {
-            var existingTag = _repo.FindByLabel(tag.Label);
+            var existingTag = await _repo.FindByLabel(tag.Label);
 
             if (existingTag != null)
             {
@@ -166,31 +167,31 @@ namespace NzbDrone.Core.Tags
 
             tag.Label = tag.Label.ToLowerInvariant();
 
-            _repo.Insert(tag);
+            await _repo.Insert(tag);
             _eventAggregator.PublishEvent(new TagsUpdatedEvent());
 
             return tag;
         }
 
-        public Tag Update(Tag tag)
+        public async Task<Tag> Update(Tag tag)
         {
             tag.Label = tag.Label.ToLowerInvariant();
 
-            _repo.Update(tag);
+            await _repo.Update(tag);
             _eventAggregator.PublishEvent(new TagsUpdatedEvent());
 
             return tag;
         }
 
-        public void Delete(int tagId)
+        public async Task Delete(int tagId)
         {
-            var details = Details(tagId);
+            var details = await Details(tagId);
             if (details.InUse)
             {
                 throw new ModelConflictException(typeof(Tag), tagId, $"'{details.Label}' cannot be deleted since it's still in use");
             }
 
-            _repo.Delete(tagId);
+            await _repo.Delete(tagId);
             _eventAggregator.PublishEvent(new TagsUpdatedEvent());
         }
 

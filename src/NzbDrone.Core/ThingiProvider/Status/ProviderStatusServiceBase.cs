@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Messaging.Events;
@@ -11,17 +13,19 @@ namespace NzbDrone.Core.ThingiProvider.Status
     public interface IProviderStatusServiceBase<TModel>
         where TModel : ProviderStatusBase, new()
     {
-        List<TModel> GetBlockedProviders();
-        void RecordSuccess(int providerId);
-        void RecordFailure(int providerId, TimeSpan minimumBackOff = default(TimeSpan));
-        void RecordConnectionFailure(int providerId);
+        Task<List<TModel>> GetBlockedProviders();
+        Task RecordSuccess(int providerId);
+        Task RecordFailure(int providerId, TimeSpan minimumBackOff = default(TimeSpan));
+        Task RecordConnectionFailure(int providerId);
     }
 
     public abstract class ProviderStatusServiceBase<TProvider, TModel> : IProviderStatusServiceBase<TModel>, IHandleAsync<ProviderDeletedEvent<TProvider>>
         where TProvider : IProvider
         where TModel : ProviderStatusBase, new()
     {
-        protected readonly object _syncRoot = new object();
+        // NOTE: was a plain `lock (object)`; converted to SemaphoreSlim because the critical
+        // section now needs to `await` repository calls, and C# forbids awaiting inside `lock`.
+        protected readonly SemaphoreSlim _syncRoot = new SemaphoreSlim(1, 1);
 
         protected readonly IProviderStatusRepository<TModel> _providerStatusRepository;
         protected readonly IEventAggregator _eventAggregator;
@@ -40,14 +44,14 @@ namespace NzbDrone.Core.ThingiProvider.Status
             _logger = logger;
         }
 
-        public virtual List<TModel> GetBlockedProviders()
+        public virtual async Task<List<TModel>> GetBlockedProviders()
         {
-            return _providerStatusRepository.All().Where(v => v.IsDisabled()).ToList();
+            return (await _providerStatusRepository.All()).Where(v => v.IsDisabled()).ToList();
         }
 
-        protected virtual TModel GetProviderStatus(int providerId)
+        protected virtual async Task<TModel> GetProviderStatus(int providerId)
         {
-            return _providerStatusRepository.FindByProviderId(providerId) ?? new TModel { ProviderId = providerId };
+            return await _providerStatusRepository.FindByProviderId(providerId) ?? new TModel { ProviderId = providerId };
         }
 
         protected virtual TimeSpan CalculateBackOffPeriod(TModel status)
@@ -57,16 +61,18 @@ namespace NzbDrone.Core.ThingiProvider.Status
             return TimeSpan.FromSeconds(EscalationBackOff.Periods[level]);
         }
 
-        public virtual void RecordSuccess(int providerId)
+        public virtual async Task RecordSuccess(int providerId)
         {
             if (providerId <= 0)
             {
                 return;
             }
 
-            lock (_syncRoot)
+            await _syncRoot.WaitAsync();
+
+            try
             {
-                var status = GetProviderStatus(providerId);
+                var status = await GetProviderStatus(providerId);
 
                 if (status.EscalationLevel == 0)
                 {
@@ -76,22 +82,28 @@ namespace NzbDrone.Core.ThingiProvider.Status
                 status.EscalationLevel--;
                 status.DisabledTill = null;
 
-                _providerStatusRepository.Upsert(status);
+                await _providerStatusRepository.Upsert(status);
 
                 _eventAggregator.PublishEvent(new ProviderStatusChangedEvent<TProvider>(providerId, status));
             }
+            finally
+            {
+                _syncRoot.Release();
+            }
         }
 
-        protected virtual void RecordFailure(int providerId, TimeSpan minimumBackOff, bool escalate)
+        protected virtual async Task RecordFailure(int providerId, TimeSpan minimumBackOff, bool escalate)
         {
             if (providerId <= 0)
             {
                 return;
             }
 
-            lock (_syncRoot)
+            await _syncRoot.WaitAsync();
+
+            try
             {
-                var status = GetProviderStatus(providerId);
+                var status = await GetProviderStatus(providerId);
 
                 var now = DateTime.UtcNow;
                 status.MostRecentFailure = now;
@@ -133,25 +145,34 @@ namespace NzbDrone.Core.ThingiProvider.Status
                     }
                 }
 
-                _providerStatusRepository.Upsert(status);
+                await _providerStatusRepository.Upsert(status);
 
                 _eventAggregator.PublishEvent(new ProviderStatusChangedEvent<TProvider>(providerId, status));
             }
+            finally
+            {
+                _syncRoot.Release();
+            }
         }
 
-        public virtual void RecordFailure(int providerId, TimeSpan minimumBackOff = default(TimeSpan))
+        public virtual async Task RecordFailure(int providerId, TimeSpan minimumBackOff = default(TimeSpan))
         {
-            RecordFailure(providerId, minimumBackOff, true);
+            await RecordFailure(providerId, minimumBackOff, true);
         }
 
-        public virtual void RecordConnectionFailure(int providerId)
+        public virtual async Task RecordConnectionFailure(int providerId)
         {
-            RecordFailure(providerId, default(TimeSpan), false);
+            await RecordFailure(providerId, default(TimeSpan), false);
         }
 
+        // NOTE: IHandleAsync<TEvent> is a shared eventing interface (18 implementers app-wide);
+        // its `void HandleAsync(TEvent message)` signature is out of scope to convert. The event
+        // aggregator already dispatches IHandleAsync handlers via Task.Factory.StartNew on a
+        // thread-pool thread (see EventAggregator.cs), not an ASP.NET Core request thread, so
+        // blocking here via GetAwaiter().GetResult() does not risk a sync-context deadlock.
         public virtual void HandleAsync(ProviderDeletedEvent<TProvider> message)
         {
-            _providerStatusRepository.DeleteByProviderId(message.ProviderId);
+            _providerStatusRepository.DeleteByProviderId(message.ProviderId).GetAwaiter().GetResult();
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
 using NLog;
@@ -16,8 +17,8 @@ namespace NzbDrone.Core.Tv
 {
     public interface IAddSeriesService
     {
-        Series AddSeries(Series newSeries);
-        List<Series> AddSeries(List<Series> newSeries, bool ignoreErrors = false);
+        Task<Series> AddSeries(Series newSeries);
+        Task<List<Series>> AddSeries(List<Series> newSeries, bool ignoreErrors = false);
     }
 
     public class AddSeriesService : IAddSeriesService
@@ -41,7 +42,7 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        public Series AddSeries(Series newSeries)
+        public async Task<Series> AddSeries(Series newSeries)
         {
             Ensure.That(newSeries, () => newSeries).IsNotNull();
 
@@ -49,16 +50,16 @@ namespace NzbDrone.Core.Tv
             newSeries = SetPropertiesAndValidate(newSeries);
 
             _logger.Info("Adding Series {0} Path: [{1}]", newSeries, newSeries.Path);
-            _seriesService.AddSeries(newSeries);
+            await _seriesService.AddSeries(newSeries);
 
             return newSeries;
         }
 
-        public List<Series> AddSeries(List<Series> newSeries, bool ignoreErrors = false)
+        public async Task<List<Series>> AddSeries(List<Series> newSeries, bool ignoreErrors = false)
         {
             var added = DateTime.UtcNow;
             var seriesToAdd = new List<Series>();
-            var existingSeriesTvdbIds = _seriesService.AllSeriesTvdbIds();
+            var existingSeriesTvdbIds = await _seriesService.AllSeriesTvdbIds();
 
             foreach (var s in newSeries)
             {
@@ -108,7 +109,7 @@ namespace NzbDrone.Core.Tv
                 }
             }
 
-            return _seriesService.AddSeries(seriesToAdd);
+            return await _seriesService.AddSeries(seriesToAdd);
         }
 
         private Series AddSkyhookData(Series newSeries)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation.Results;
 using NLog;
 using NzbDrone.Core.Messaging.Events;
@@ -10,19 +11,19 @@ namespace NzbDrone.Core.Notifications
 {
     public interface INotificationFactory : IProviderFactory<INotification, NotificationDefinition>
     {
-        List<INotification> OnGrabEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnDownloadEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnUpgradeEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnImportCompleteEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnRenameEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnSeriesAddEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnSeriesDeleteEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnEpisodeFileDeleteEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnEpisodeFileDeleteForUpgradeEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnHealthIssueEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnHealthRestoredEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnApplicationUpdateEnabled(bool filterBlockedNotifications = true);
-        List<INotification> OnManualInteractionEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnGrabEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnDownloadEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnUpgradeEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnImportCompleteEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnRenameEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnSeriesAddEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnSeriesDeleteEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnEpisodeFileDeleteEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnEpisodeFileDeleteForUpgradeEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnHealthIssueEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnHealthRestoredEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnApplicationUpdateEnabled(bool filterBlockedNotifications = true);
+        Task<List<INotification>> OnManualInteractionEnabled(bool filterBlockedNotifications = true);
     }
 
     public class NotificationFactory : ProviderFactory<INotification, NotificationDefinition>, INotificationFactory
@@ -37,144 +38,171 @@ namespace NzbDrone.Core.Notifications
             _logger = logger;
         }
 
-        protected override List<NotificationDefinition> Active()
+        protected override async Task<List<NotificationDefinition>> Active()
         {
-            return base.Active().Where(c => c.Enable).ToList();
+            return (await base.Active()).Where(c => c.Enable).ToList();
         }
 
-        public List<INotification> OnGrabEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnGrabEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnGrab);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnGrab)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnGrab).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnDownloadEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnDownloadEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnDownload);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnDownload)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnDownload).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnUpgradeEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnUpgradeEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnUpgrade);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnUpgrade)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnUpgrade).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnImportCompleteEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnImportCompleteEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnImportComplete);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnImportComplete)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnImportComplete).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnRenameEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnRenameEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnRename);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnRename)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnRename).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnSeriesAddEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnSeriesAddEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnSeriesAdd);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnSeriesAdd)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnSeriesAdd).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnSeriesDeleteEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnSeriesDeleteEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnSeriesDelete);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnSeriesDelete)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnSeriesDelete).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnEpisodeFileDeleteEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnEpisodeFileDeleteEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnEpisodeFileDelete);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnEpisodeFileDelete)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnEpisodeFileDelete).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnEpisodeFileDeleteForUpgradeEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnEpisodeFileDeleteForUpgradeEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnEpisodeFileDeleteForUpgrade);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnEpisodeFileDeleteForUpgrade)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnEpisodeFileDeleteForUpgrade).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnHealthIssueEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnHealthIssueEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnHealthIssue);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnHealthIssue)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnHealthIssue).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnHealthRestoredEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnHealthRestoredEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnHealthRestored);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnHealthRestored)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnHealthRestored).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnApplicationUpdateEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnApplicationUpdateEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnApplicationUpdate);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnApplicationUpdate)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnApplicationUpdate).ToList();
+            return enabled.ToList();
         }
 
-        public List<INotification> OnManualInteractionEnabled(bool filterBlockedNotifications = true)
+        public async Task<List<INotification>> OnManualInteractionEnabled(bool filterBlockedNotifications = true)
         {
+            var enabled = (await GetAvailableProviders()).Where(n => ((NotificationDefinition)n.Definition).OnManualInteractionRequired);
+
             if (filterBlockedNotifications)
             {
-                return FilterBlockedNotifications(GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnManualInteractionRequired)).ToList();
+                return await FilterBlockedNotifications(enabled);
             }
 
-            return GetAvailableProviders().Where(n => ((NotificationDefinition)n.Definition).OnManualInteractionRequired).ToList();
+            return enabled.ToList();
         }
 
-        private IEnumerable<INotification> FilterBlockedNotifications(IEnumerable<INotification> notifications)
+        private async Task<List<INotification>> FilterBlockedNotifications(IEnumerable<INotification> notifications)
         {
-            var blockedNotifications = _notificationStatusService.GetBlockedProviders().ToDictionary(v => v.ProviderId, v => v);
+            var blockedNotifications = (await _notificationStatusService.GetBlockedProviders()).ToDictionary(v => v.ProviderId, v => v);
+            var result = new List<INotification>();
 
             foreach (var notification in notifications)
             {
@@ -184,8 +212,10 @@ namespace NzbDrone.Core.Notifications
                     continue;
                 }
 
-                yield return notification;
+                result.Add(notification);
             }
+
+            return result;
         }
 
         public override void SetProviderCharacteristics(INotification provider, NotificationDefinition definition)
@@ -207,9 +237,9 @@ namespace NzbDrone.Core.Notifications
             definition.SupportsOnManualInteractionRequired = provider.SupportsOnManualInteractionRequired;
         }
 
-        public override ValidationResult Test(NotificationDefinition definition)
+        public override async Task<ValidationResult> Test(NotificationDefinition definition)
         {
-            var result = base.Test(definition);
+            var result = await base.Test(definition);
 
             if (definition.Id == 0)
             {
@@ -218,11 +248,11 @@ namespace NzbDrone.Core.Notifications
 
             if (result == null || result.IsValid)
             {
-                _notificationStatusService.RecordSuccess(definition.Id);
+                await _notificationStatusService.RecordSuccess(definition.Id);
             }
             else
             {
-                _notificationStatusService.RecordFailure(definition.Id);
+                await _notificationStatusService.RecordFailure(definition.Id);
             }
 
             return result;

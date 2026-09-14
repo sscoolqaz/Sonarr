@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Notifications;
 using NzbDrone.SignalR;
@@ -18,13 +19,13 @@ namespace Sonarr.Api.V3.Notifications
         }
 
         [NonAction]
-        public override ActionResult<NotificationResource> UpdateProvider([FromBody] NotificationBulkResource providerResource)
+        public override Task<ActionResult<NotificationResource>> UpdateProvider([FromBody] NotificationBulkResource providerResource)
         {
             throw new NotImplementedException();
         }
 
         [NonAction]
-        public override object DeleteProviders([FromBody] NotificationBulkResource resource)
+        public override Task<object> DeleteProviders([FromBody] NotificationBulkResource resource)
         {
             throw new NotImplementedException();
         }

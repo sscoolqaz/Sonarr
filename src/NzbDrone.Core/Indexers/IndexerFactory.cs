@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation.Results;
 using NLog;
 using NzbDrone.Common.Extensions;
@@ -11,11 +12,11 @@ namespace NzbDrone.Core.Indexers
 {
     public interface IIndexerFactory : IProviderFactory<IIndexer, IndexerDefinition>
     {
-        List<IIndexer> RssEnabled(bool filterBlockedIndexers = true);
-        List<IIndexer> AutomaticSearchEnabled(bool filterBlockedIndexers = true);
-        List<IIndexer> InteractiveSearchEnabled(bool filterBlockedIndexers = true);
-        IndexerDefinition FindByName(string name);
-        IndexerDefinition ResolveIndexer(int? id, string name);
+        Task<List<IIndexer>> RssEnabled(bool filterBlockedIndexers = true);
+        Task<List<IIndexer>> AutomaticSearchEnabled(bool filterBlockedIndexers = true);
+        Task<List<IIndexer>> InteractiveSearchEnabled(bool filterBlockedIndexers = true);
+        Task<IndexerDefinition> FindByName(string name);
+        Task<IndexerDefinition> ResolveIndexer(int? id, string name);
     }
 
     public class IndexerFactory : ProviderFactory<IIndexer, IndexerDefinition>, IIndexerFactory
@@ -37,9 +38,9 @@ namespace NzbDrone.Core.Indexers
             _logger = logger;
         }
 
-        protected override List<IndexerDefinition> Active()
+        protected override async Task<List<IndexerDefinition>> Active()
         {
-            return base.Active().Where(c => c.Enable).ToList();
+            return (await base.Active()).Where(c => c.Enable).ToList();
         }
 
         public override void SetProviderCharacteristics(IIndexer provider, IndexerDefinition definition)
@@ -51,50 +52,50 @@ namespace NzbDrone.Core.Indexers
             definition.SupportsSearch = provider.SupportsSearch;
         }
 
-        public List<IIndexer> RssEnabled(bool filterBlockedIndexers = true)
+        public async Task<List<IIndexer>> RssEnabled(bool filterBlockedIndexers = true)
         {
-            var enabledIndexers = GetAvailableProviders().Where(n => ((IndexerDefinition)n.Definition).EnableRss);
+            var enabledIndexers = (await GetAvailableProviders()).Where(n => ((IndexerDefinition)n.Definition).EnableRss);
 
             if (filterBlockedIndexers)
             {
-                return FilterBlockedIndexers(enabledIndexers).ToList();
+                return await FilterBlockedIndexers(enabledIndexers);
             }
 
             return enabledIndexers.ToList();
         }
 
-        public List<IIndexer> AutomaticSearchEnabled(bool filterBlockedIndexers = true)
+        public async Task<List<IIndexer>> AutomaticSearchEnabled(bool filterBlockedIndexers = true)
         {
-            var enabledIndexers = GetAvailableProviders().Where(n => ((IndexerDefinition)n.Definition).EnableAutomaticSearch);
+            var enabledIndexers = (await GetAvailableProviders()).Where(n => ((IndexerDefinition)n.Definition).EnableAutomaticSearch);
 
             if (filterBlockedIndexers)
             {
-                return FilterBlockedIndexers(enabledIndexers).ToList();
+                return await FilterBlockedIndexers(enabledIndexers);
             }
 
             return enabledIndexers.ToList();
         }
 
-        public List<IIndexer> InteractiveSearchEnabled(bool filterBlockedIndexers = true)
+        public async Task<List<IIndexer>> InteractiveSearchEnabled(bool filterBlockedIndexers = true)
         {
-            var enabledIndexers = GetAvailableProviders().Where(n => ((IndexerDefinition)n.Definition).EnableInteractiveSearch);
+            var enabledIndexers = (await GetAvailableProviders()).Where(n => ((IndexerDefinition)n.Definition).EnableInteractiveSearch);
 
             if (filterBlockedIndexers)
             {
-                return FilterBlockedIndexers(enabledIndexers).ToList();
+                return await FilterBlockedIndexers(enabledIndexers);
             }
 
             return enabledIndexers.ToList();
         }
 
-        public IndexerDefinition FindByName(string name)
+        public async Task<IndexerDefinition> FindByName(string name)
         {
-            return _indexerRepository.FindByName(name);
+            return await _indexerRepository.FindByName(name);
         }
 
-        public IndexerDefinition ResolveIndexer(int? id, string name)
+        public async Task<IndexerDefinition> ResolveIndexer(int? id, string name)
         {
-            var all = All();
+            var all = await All();
             var clientByName = name.IsNullOrWhiteSpace() ? null : all.FirstOrDefault(c => c.Name.EqualsIgnoreCase(name));
             var clientById = id is > 0 ? all.FirstOrDefault(c => c.Id == id.Value) : null;
 
@@ -121,9 +122,10 @@ namespace NzbDrone.Core.Indexers
             return clientById ?? clientByName;
         }
 
-        private IEnumerable<IIndexer> FilterBlockedIndexers(IEnumerable<IIndexer> indexers)
+        private async Task<List<IIndexer>> FilterBlockedIndexers(IEnumerable<IIndexer> indexers)
         {
-            var blockedIndexers = _indexerStatusService.GetBlockedProviders().ToDictionary(v => v.ProviderId, v => v);
+            var blockedIndexers = (await _indexerStatusService.GetBlockedProviders()).ToDictionary(v => v.ProviderId, v => v);
+            var result = new List<IIndexer>();
 
             foreach (var indexer in indexers)
             {
@@ -133,13 +135,15 @@ namespace NzbDrone.Core.Indexers
                     continue;
                 }
 
-                yield return indexer;
+                result.Add(indexer);
             }
+
+            return result;
         }
 
-        public override ValidationResult Test(IndexerDefinition definition)
+        public override async Task<ValidationResult> Test(IndexerDefinition definition)
         {
-            var result = base.Test(definition);
+            var result = await base.Test(definition);
 
             if (definition.Id == 0)
             {
@@ -148,11 +152,11 @@ namespace NzbDrone.Core.Indexers
 
             if (result == null || result.IsValid)
             {
-                _indexerStatusService.RecordSuccess(definition.Id);
+                await _indexerStatusService.RecordSuccess(definition.Id);
             }
             else
             {
-                _indexerStatusService.RecordFailure(definition.Id);
+                await _indexerStatusService.RecordFailure(definition.Id);
             }
 
             return result;

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Profiles.Qualities;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.Tv;
@@ -8,8 +9,8 @@ namespace NzbDrone.Core.SeriesStats
 {
     public interface ISeriesStatisticsService
     {
-        List<SeriesStatistics> SeriesStatistics();
-        SeriesStatistics SeriesStatistics(int seriesId, int qualityProfileId);
+        Task<List<SeriesStatistics>> SeriesStatistics();
+        Task<SeriesStatistics> SeriesStatistics(int seriesId, int qualityProfileId);
     }
 
     public class SeriesStatisticsService : ISeriesStatisticsService
@@ -27,11 +28,11 @@ namespace NzbDrone.Core.SeriesStats
             _qualityProfileService = qualityProfileService;
         }
 
-        public List<SeriesStatistics> SeriesStatistics()
+        public async Task<List<SeriesStatistics>> SeriesStatistics()
         {
-            var seasonStatistics = _seriesStatisticsRepository.SeriesStatistics();
-            var seriesProfiles = _seriesService.GetAllSeriesQualityProfiles();
-            var profiles = _qualityProfileService.All().ToDictionary(p => p.Id);
+            var seasonStatistics = await _seriesStatisticsRepository.SeriesStatistics();
+            var seriesProfiles = await _seriesService.GetAllSeriesQualityProfiles();
+            var profiles = (await _qualityProfileService.All()).ToDictionary(p => p.Id);
 
             return seasonStatistics
                 .GroupBy(s => s.SeriesId)
@@ -44,16 +45,16 @@ namespace NzbDrone.Core.SeriesStats
                 .ToList();
         }
 
-        public SeriesStatistics SeriesStatistics(int seriesId, int qualityProfileId)
+        public async Task<SeriesStatistics> SeriesStatistics(int seriesId, int qualityProfileId)
         {
-            var stats = _seriesStatisticsRepository.SeriesStatistics(seriesId);
+            var stats = await _seriesStatisticsRepository.SeriesStatistics(seriesId);
 
             if (stats == null || stats.Count == 0)
             {
                 return new SeriesStatistics();
             }
 
-            var profile = _qualityProfileService.Get(qualityProfileId);
+            var profile = await _qualityProfileService.Get(qualityProfileId);
 
             return MapSeriesStatistics(stats, profile);
         }

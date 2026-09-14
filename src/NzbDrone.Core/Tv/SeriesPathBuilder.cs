@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Organizer;
@@ -9,7 +10,7 @@ namespace NzbDrone.Core.Tv
 {
     public interface IBuildSeriesPaths
     {
-        string BuildPath(Series series, bool useExistingRelativeFolder);
+        Task<string> BuildPath(Series series, bool useExistingRelativeFolder);
     }
 
     public class SeriesPathBuilder : IBuildSeriesPaths
@@ -25,7 +26,7 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        public string BuildPath(Series series, bool useExistingRelativeFolder)
+        public async Task<string> BuildPath(Series series, bool useExistingRelativeFolder)
         {
             if (series.RootFolderPath.IsNullOrWhiteSpace())
             {
@@ -34,16 +35,16 @@ namespace NzbDrone.Core.Tv
 
             if (useExistingRelativeFolder && series.Path.IsNotNullOrWhiteSpace())
             {
-                var relativePath = GetExistingRelativePath(series);
+                var relativePath = await GetExistingRelativePath(series);
                 return Path.Combine(series.RootFolderPath, relativePath);
             }
 
             return Path.Combine(series.RootFolderPath, _fileNameBuilder.GetSeriesFolder(series));
         }
 
-        private string GetExistingRelativePath(Series series)
+        private async Task<string> GetExistingRelativePath(Series series)
         {
-            var rootFolderPath = _rootFolderService.GetBestRootFolderPath(series.Path);
+            var rootFolderPath = await _rootFolderService.GetBestRootFolderPath(series.Path);
 
             if (rootFolderPath.IsParentPath(series.Path))
             {

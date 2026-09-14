@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.ThingiProvider;
@@ -9,7 +10,7 @@ namespace NzbDrone.Core.Extras.Metadata
 {
     public interface IMetadataFactory : IProviderFactory<IMetadata, MetadataDefinition>
     {
-        List<IMetadata> Enabled();
+        Task<List<IMetadata>> Enabled();
     }
 
     public class MetadataFactory : ProviderFactory<IMetadata, MetadataDefinition>, IMetadataFactory
@@ -22,7 +23,7 @@ namespace NzbDrone.Core.Extras.Metadata
             _providerRepository = providerRepository;
         }
 
-        protected override void InitializeProviders()
+        protected override async Task InitializeProviders()
         {
             var definitions = new List<MetadataDefinition>();
 
@@ -37,19 +38,19 @@ namespace NzbDrone.Core.Extras.Metadata
                 });
             }
 
-            var currentProviders = All();
+            var currentProviders = await All();
 
             var newProviders = definitions.Where(def => currentProviders.All(c => c.Implementation != def.Implementation)).ToList();
 
             if (newProviders.Any())
             {
-                _providerRepository.InsertMany(newProviders.Cast<MetadataDefinition>().ToList());
+                await _providerRepository.InsertMany(newProviders.Cast<MetadataDefinition>().ToList());
             }
         }
 
-        public List<IMetadata> Enabled()
+        public async Task<List<IMetadata>> Enabled()
         {
-            return GetAvailableProviders().Where(n => ((MetadataDefinition)n.Definition).Enable).ToList();
+            return (await GetAvailableProviders()).Where(n => ((MetadataDefinition)n.Definition).Enable).ToList();
         }
     }
 }

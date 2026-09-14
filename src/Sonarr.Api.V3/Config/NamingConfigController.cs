@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -39,37 +40,40 @@ namespace Sonarr.Api.V3.Config
             SharedValidator.RuleFor(c => c.CustomColonReplacementFormat).ValidCustomColonReplacement().When(c => c.ColonReplacementFormat == (int)ColonReplacementFormat.Custom);
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // ProviderControllerBase.cs for the full rationale).
         protected override NamingConfigResource GetResourceById(int id)
         {
-            return GetNamingConfig();
+            return GetNamingConfig().GetAwaiter().GetResult();
         }
 
         [HttpGet]
-        public NamingConfigResource GetNamingConfig()
+        public async Task<NamingConfigResource> GetNamingConfig()
         {
-            var nameSpec = _namingConfigService.GetConfig();
+            var nameSpec = await _namingConfigService.GetConfig();
             var resource = nameSpec.ToResource();
 
             return resource;
         }
 
         [RestPutById]
-        public ActionResult<NamingConfigResource> UpdateNamingConfig([FromBody] NamingConfigResource resource)
+        public async Task<ActionResult<NamingConfigResource>> UpdateNamingConfig([FromBody] NamingConfigResource resource)
         {
             var nameSpec = resource.ToModel();
             ValidateFormatResult(nameSpec);
 
-            _namingConfigService.Save(nameSpec);
+            await _namingConfigService.Save(nameSpec);
 
             return Accepted(resource.Id);
         }
 
         [HttpGet("examples")]
-        public object GetExamples([FromQuery]NamingConfigResource settings)
+        public async Task<object> GetExamples([FromQuery]NamingConfigResource settings)
         {
             if (settings.Id == 0)
             {
-                settings = GetNamingConfig();
+                settings = await GetNamingConfig();
             }
 
             var nameSpec = settings.ToModel();

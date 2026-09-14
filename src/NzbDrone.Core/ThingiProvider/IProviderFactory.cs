@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FluentValidation.Results;
 
 namespace NzbDrone.Core.ThingiProvider
@@ -7,24 +8,24 @@ namespace NzbDrone.Core.ThingiProvider
         where TProviderDefinition : ProviderDefinition, new()
         where TProvider : IProvider
     {
-        List<TProviderDefinition> All();
-        List<TProvider> GetAvailableProviders();
-        bool Exists(int id);
-        TProviderDefinition Find(int id);
-        TProviderDefinition Get(int id);
-        IEnumerable<TProviderDefinition> Get(IEnumerable<int> ids);
-        TProviderDefinition Create(TProviderDefinition definition);
-        void Update(TProviderDefinition definition);
-        IEnumerable<TProviderDefinition> Update(IEnumerable<TProviderDefinition> definitions);
-        void Delete(int id);
-        void Delete(IEnumerable<int> ids);
+        Task<List<TProviderDefinition>> All();
+        Task<List<TProvider>> GetAvailableProviders();
+        Task<bool> Exists(int id);
+        Task<TProviderDefinition> Find(int id);
+        Task<TProviderDefinition> Get(int id);
+        Task<IEnumerable<TProviderDefinition>> Get(IEnumerable<int> ids);
+        Task<TProviderDefinition> Create(TProviderDefinition definition);
+        Task Update(TProviderDefinition definition);
+        Task<IEnumerable<TProviderDefinition>> Update(IEnumerable<TProviderDefinition> definitions);
+        Task Delete(int id);
+        Task Delete(IEnumerable<int> ids);
         IEnumerable<TProviderDefinition> GetDefaultDefinitions();
         IEnumerable<TProviderDefinition> GetPresetDefinitions(TProviderDefinition providerDefinition);
         void SetProviderCharacteristics(TProviderDefinition definition);
         void SetProviderCharacteristics(TProvider provider, TProviderDefinition definition);
         TProvider GetInstance(TProviderDefinition definition);
-        ValidationResult Test(TProviderDefinition definition);
+        Task<ValidationResult> Test(TProviderDefinition definition);
         object RequestAction(TProviderDefinition definition, string action, IDictionary<string, string> query);
-        List<TProviderDefinition> AllForTag(int tagId);
+        Task<List<TProviderDefinition>> AllForTag(int tagId);
     }
 }

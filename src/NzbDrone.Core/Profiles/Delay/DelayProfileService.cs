@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Common.Cache;
 using NzbDrone.Common.Extensions;
 
@@ -8,15 +9,15 @@ namespace NzbDrone.Core.Profiles.Delay
 {
     public interface IDelayProfileService
     {
-        DelayProfile Add(DelayProfile profile);
-        DelayProfile Update(DelayProfile profile);
-        void Delete(int id);
-        List<DelayProfile> All();
-        DelayProfile Get(int id);
-        List<DelayProfile> AllForTag(int tagId);
-        List<DelayProfile> AllForTags(HashSet<int> tagIds);
-        DelayProfile BestForTags(HashSet<int> tagIds);
-        List<DelayProfile> Reorder(int id, int? afterId);
+        Task<DelayProfile> Add(DelayProfile profile);
+        Task<DelayProfile> Update(DelayProfile profile);
+        Task Delete(int id);
+        Task<List<DelayProfile>> All();
+        Task<DelayProfile> Get(int id);
+        Task<List<DelayProfile>> AllForTag(int tagId);
+        Task<List<DelayProfile>> AllForTags(HashSet<int> tagIds);
+        Task<DelayProfile> BestForTags(HashSet<int> tagIds);
+        Task<List<DelayProfile>> Reorder(int id, int? afterId);
     }
 
     public class DelayProfileService : IDelayProfileService
@@ -30,28 +31,28 @@ namespace NzbDrone.Core.Profiles.Delay
             _bestForTagsCache = cacheManager.GetCache<DelayProfile>(GetType(), "best");
         }
 
-        public DelayProfile Add(DelayProfile profile)
+        public async Task<DelayProfile> Add(DelayProfile profile)
         {
-            profile.Order = _repo.Count();
+            profile.Order = await _repo.Count();
 
-            var result = _repo.Insert(profile);
+            var result = await _repo.Insert(profile);
             _bestForTagsCache.Clear();
 
             return result;
         }
 
-        public DelayProfile Update(DelayProfile profile)
+        public async Task<DelayProfile> Update(DelayProfile profile)
         {
-            var result = _repo.Update(profile);
+            var result = await _repo.Update(profile);
             _bestForTagsCache.Clear();
             return result;
         }
 
-        public void Delete(int id)
+        public async Task Delete(int id)
         {
-            _repo.Delete(id);
+            await _repo.Delete(id);
 
-            var all = All().OrderBy(d => d.Order).ToList();
+            var all = (await All()).OrderBy(d => d.Order).ToList();
 
             for (var i = 0; i < all.Count; i++)
             {
@@ -63,47 +64,58 @@ namespace NzbDrone.Core.Profiles.Delay
                 all[i].Order = i + 1;
             }
 
-            _repo.UpdateMany(all);
+            await _repo.UpdateMany(all);
             _bestForTagsCache.Clear();
         }
 
-        public List<DelayProfile> All()
+        public async Task<List<DelayProfile>> All()
         {
-            return _repo.All().ToList();
+            return (await _repo.All()).ToList();
         }
 
-        public DelayProfile Get(int id)
+        public async Task<DelayProfile> Get(int id)
         {
-            return _repo.Get(id);
+            return await _repo.Get(id);
         }
 
-        public List<DelayProfile> AllForTag(int tagId)
+        public async Task<List<DelayProfile>> AllForTag(int tagId)
         {
-            return All().Where(r => r.Tags.Contains(tagId))
+            return (await All()).Where(r => r.Tags.Contains(tagId))
                         .ToList();
         }
 
-        public List<DelayProfile> AllForTags(HashSet<int> tagIds)
+        public async Task<List<DelayProfile>> AllForTags(HashSet<int> tagIds)
         {
-            return All().Where(r => r.Tags.Intersect(tagIds).Any() || r.Tags.Empty()).ToList();
+            return (await All()).Where(r => r.Tags.Intersect(tagIds).Any() || r.Tags.Empty()).ToList();
         }
 
-        public DelayProfile BestForTags(HashSet<int> tagIds)
+        public async Task<DelayProfile> BestForTags(HashSet<int> tagIds)
         {
             var key = "-" + tagIds.Select(v => v.ToString()).Join(",");
-            return _bestForTagsCache.Get(key, () => FetchBestForTags(tagIds), TimeSpan.FromSeconds(30));
+
+            var cached = _bestForTagsCache.Find(key);
+
+            if (cached != null)
+            {
+                return cached;
+            }
+
+            var result = await FetchBestForTags(tagIds);
+            _bestForTagsCache.Set(key, result, TimeSpan.FromSeconds(30));
+
+            return result;
         }
 
-        private DelayProfile FetchBestForTags(HashSet<int> tagIds)
+        private async Task<DelayProfile> FetchBestForTags(HashSet<int> tagIds)
         {
-            return _repo.All()
+            return (await _repo.All())
                         .Where(r => r.Tags.Intersect(tagIds).Any() || r.Tags.Empty())
                         .OrderBy(d => d.Order).First();
         }
 
-        public List<DelayProfile> Reorder(int id, int? afterId)
+        public async Task<List<DelayProfile>> Reorder(int id, int? afterId)
         {
-            var all = All().OrderBy(d => d.Order)
+            var all = (await All()).OrderBy(d => d.Order)
                            .ToList();
 
             var moving = all.SingleOrDefault(d => d.Id == id);
@@ -145,9 +157,9 @@ namespace NzbDrone.Core.Profiles.Delay
                 }
             }
 
-            _repo.UpdateMany(all);
+            await _repo.UpdateMany(all);
 
-            return All();
+            return await All();
         }
 
         private int GetAfterOrder(DelayProfile moving, DelayProfile after)

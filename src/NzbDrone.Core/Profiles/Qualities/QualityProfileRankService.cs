@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Common.Cache;
 using NzbDrone.Core.Qualities;
 
@@ -8,11 +9,11 @@ namespace NzbDrone.Core.Profiles.Qualities
 {
     public interface IQualityProfileRankService
     {
-        double GetRank(int? profileId, int? qualityId);
+        Task<double> GetRank(int? profileId, int? qualityId);
         IEnumerable<QualityProfileQualityRank> ComputeRanks(QualityProfile profile);
-        void UpdateRanksForProfile(QualityProfile profile);
-        void DeleteRanksForProfile(int profileId);
-        void SeedAll(IEnumerable<QualityProfile> profiles);
+        Task UpdateRanksForProfile(QualityProfile profile);
+        Task DeleteRanksForProfile(int profileId);
+        Task SeedAll(IEnumerable<QualityProfile> profiles);
     }
 
     public class QualityProfileRankService : IQualityProfileRankService
@@ -29,7 +30,7 @@ namespace NzbDrone.Core.Profiles.Qualities
             _cache = cacheManager.GetCache<Dictionary<(int ProfileId, int QualityId), double>>(typeof(QualityProfileQualityRank), "ranks");
         }
 
-        public double GetRank(int? profileId, int? qualityId)
+        public async Task<double> GetRank(int? profileId, int? qualityId)
         {
             if (!qualityId.HasValue)
             {
@@ -38,7 +39,7 @@ namespace NzbDrone.Core.Profiles.Qualities
 
             if (profileId.HasValue)
             {
-                return AllRanks().TryGetValue((profileId.Value, qualityId.Value), out var rank) ? rank : -1.0;
+                return (await AllRanks()).TryGetValue((profileId.Value, qualityId.Value), out var rank) ? rank : -1.0;
             }
 
             return _defaultRanks.TryGetValue(qualityId.Value, out var defaultRank) ? defaultRank : -1.0;
@@ -83,21 +84,21 @@ namespace NzbDrone.Core.Profiles.Qualities
             }
         }
 
-        public void UpdateRanksForProfile(QualityProfile profile)
+        public async Task UpdateRanksForProfile(QualityProfile profile)
         {
-            _repository.ReplaceForProfile(profile.Id, ComputeRanks(profile));
+            await _repository.ReplaceForProfile(profile.Id, ComputeRanks(profile));
             _cache.Clear();
         }
 
-        public void DeleteRanksForProfile(int profileId)
+        public async Task DeleteRanksForProfile(int profileId)
         {
-            _repository.DeleteForProfile(profileId);
+            await _repository.DeleteForProfile(profileId);
             _cache.Clear();
         }
 
-        public void SeedAll(IEnumerable<QualityProfile> profiles)
+        public async Task SeedAll(IEnumerable<QualityProfile> profiles)
         {
-            var existingProfileIds = AllRanks().Keys.Select(k => k.ProfileId).ToHashSet();
+            var existingProfileIds = (await AllRanks()).Keys.Select(k => k.ProfileId).ToHashSet();
             var seeded = false;
 
             foreach (var profile in profiles)
@@ -107,7 +108,7 @@ namespace NzbDrone.Core.Profiles.Qualities
                     continue;
                 }
 
-                _repository.ReplaceForProfile(profile.Id, ComputeRanks(profile));
+                await _repository.ReplaceForProfile(profile.Id, ComputeRanks(profile));
                 seeded = true;
             }
 
@@ -117,10 +118,20 @@ namespace NzbDrone.Core.Profiles.Qualities
             }
         }
 
-        private Dictionary<(int ProfileId, int QualityId), double> AllRanks()
+        private async Task<Dictionary<(int ProfileId, int QualityId), double>> AllRanks()
         {
-            return _cache.Get("all", () => _repository.All()
-                .ToDictionary(r => (r.ProfileId, r.QualityId), r => r.Score));
+            var cached = _cache.Find("all");
+
+            if (cached != null)
+            {
+                return cached;
+            }
+
+            var result = (await _repository.All())
+                .ToDictionary(r => (r.ProfileId, r.QualityId), r => r.Score);
+            _cache.Set("all", result);
+
+            return result;
         }
 
         private static QualityProfile BuildDefaultProfile()

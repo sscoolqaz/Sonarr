@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation.Results;
 using NLog;
 using NzbDrone.Core.Messaging.Events;
@@ -10,7 +11,7 @@ namespace NzbDrone.Core.ImportLists
 {
     public interface IImportListFactory : IProviderFactory<IImportList, ImportListDefinition>
     {
-        List<IImportList> AutomaticAddEnabled(bool filterBlockedImportLists = true);
+        Task<List<IImportList>> AutomaticAddEnabled(bool filterBlockedImportLists = true);
     }
 
     public class ImportListFactory : ProviderFactory<IImportList, ImportListDefinition>, IImportListFactory
@@ -30,9 +31,9 @@ namespace NzbDrone.Core.ImportLists
             _logger = logger;
         }
 
-        protected override List<ImportListDefinition> Active()
+        protected override async Task<List<ImportListDefinition>> Active()
         {
-            return base.Active().Where(c => c.Enable).ToList();
+            return (await base.Active()).Where(c => c.Enable).ToList();
         }
 
         public override void SetProviderCharacteristics(IImportList provider, ImportListDefinition definition)
@@ -43,21 +44,22 @@ namespace NzbDrone.Core.ImportLists
             definition.MinRefreshInterval = provider.MinRefreshInterval;
         }
 
-        public List<IImportList> AutomaticAddEnabled(bool filterBlockedImportLists = true)
+        public async Task<List<IImportList>> AutomaticAddEnabled(bool filterBlockedImportLists = true)
         {
-            var enabledImportLists = GetAvailableProviders().Where(n => ((ImportListDefinition)n.Definition).EnableAutomaticAdd);
+            var enabledImportLists = (await GetAvailableProviders()).Where(n => ((ImportListDefinition)n.Definition).EnableAutomaticAdd);
 
             if (filterBlockedImportLists)
             {
-                return FilterBlockedImportLists(enabledImportLists).ToList();
+                return await FilterBlockedImportLists(enabledImportLists);
             }
 
             return enabledImportLists.ToList();
         }
 
-        private IEnumerable<IImportList> FilterBlockedImportLists(IEnumerable<IImportList> importLists)
+        private async Task<List<IImportList>> FilterBlockedImportLists(IEnumerable<IImportList> importLists)
         {
-            var blockedImportLists = _importListStatusService.GetBlockedProviders().ToDictionary(v => v.ProviderId, v => v);
+            var blockedImportLists = (await _importListStatusService.GetBlockedProviders()).ToDictionary(v => v.ProviderId, v => v);
+            var result = new List<IImportList>();
 
             foreach (var importList in importLists)
             {
@@ -67,13 +69,15 @@ namespace NzbDrone.Core.ImportLists
                     continue;
                 }
 
-                yield return importList;
+                result.Add(importList);
             }
+
+            return result;
         }
 
-        public override ValidationResult Test(ImportListDefinition definition)
+        public override async Task<ValidationResult> Test(ImportListDefinition definition)
         {
-            var result = base.Test(definition);
+            var result = await base.Test(definition);
 
             if (definition.Id == 0)
             {
@@ -82,11 +86,11 @@ namespace NzbDrone.Core.ImportLists
 
             if (result == null || result.IsValid)
             {
-                _importListStatusService.RecordSuccess(definition.Id);
+                await _importListStatusService.RecordSuccess(definition.Id);
             }
             else
             {
-                _importListStatusService.RecordFailure(definition.Id);
+                await _importListStatusService.RecordFailure(definition.Id);
             }
 
             return result;

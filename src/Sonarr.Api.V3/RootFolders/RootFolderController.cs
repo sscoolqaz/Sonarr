@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.RootFolders;
@@ -41,33 +42,36 @@ namespace Sonarr.Api.V3.RootFolders
                            .SetValidator(folderWritableValidator);
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // ProviderControllerBase.cs for the full rationale).
         protected override RootFolderResource GetResourceById(int id)
         {
             var timeout = Request?.GetBooleanQueryParameter("timeout", true) ?? true;
 
-            return _rootFolderService.Get(id, timeout).ToResource();
+            return _rootFolderService.Get(id, timeout).GetAwaiter().GetResult().ToResource();
         }
 
         [RestPostById]
         [Consumes("application/json")]
-        public ActionResult<RootFolderResource> CreateRootFolder([FromBody] RootFolderResource rootFolderResource)
+        public async Task<ActionResult<RootFolderResource>> CreateRootFolder([FromBody] RootFolderResource rootFolderResource)
         {
             var model = rootFolderResource.ToModel();
 
-            return Created(_rootFolderService.Add(model).Id);
+            return Created((await _rootFolderService.Add(model)).Id);
         }
 
         [HttpGet]
         [Produces("application/json")]
-        public List<RootFolderResource> GetRootFolders()
+        public async Task<List<RootFolderResource>> GetRootFolders()
         {
-            return _rootFolderService.AllWithUnmappedFolders().ToResource();
+            return (await _rootFolderService.AllWithUnmappedFolders()).ToResource();
         }
 
         [RestDeleteById]
-        public void DeleteFolder(int id)
+        public async Task DeleteFolder(int id)
         {
-            _rootFolderService.Remove(id);
+            await _rootFolderService.Remove(id);
         }
     }
 }

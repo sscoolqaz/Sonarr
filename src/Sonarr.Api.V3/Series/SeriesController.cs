@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -108,24 +109,30 @@ namespace Sonarr.Api.V3.Series
 
         [HttpGet]
         [Produces("application/json")]
-        public List<SeriesResource> AllSeries(int? tvdbId, bool includeSeasonImages = false)
+        public async Task<List<SeriesResource>> AllSeries(int? tvdbId, bool includeSeasonImages = false)
         {
-            var seriesStats = _seriesStatisticsService.SeriesStatistics();
+            var seriesStats = await _seriesStatisticsService.SeriesStatistics();
             var seriesResources = new List<SeriesResource>();
 
             if (tvdbId.HasValue)
             {
-                seriesResources.AddIfNotNull(_seriesService.FindByTvdbId(tvdbId.Value).ToResource(includeSeasonImages));
+                var series = await _seriesService.FindByTvdbId(tvdbId.Value);
+                seriesResources.AddIfNotNull(series.ToResource(includeSeasonImages));
             }
             else
             {
-                seriesResources.AddRange(_seriesService.GetAllSeries().Select(s => s.ToResource(includeSeasonImages)));
+                var allSeries = await _seriesService.GetAllSeries();
+                seriesResources.AddRange(allSeries.Select(s => s.ToResource(includeSeasonImages)));
             }
 
             MapCoversToLocal(seriesResources.ToArray());
             LinkSeriesStatistics(seriesResources, seriesStats.ToDictionary(x => x.SeriesId));
-            PopulateAlternateTitles(seriesResources);
-            seriesResources.ForEach(LinkRootFolderPath);
+            await PopulateAlternateTitles(seriesResources);
+
+            foreach (var resource in seriesResources)
+            {
+                await LinkRootFolderPath(resource);
+            }
 
             return seriesResources;
         }
@@ -138,11 +145,11 @@ namespace Sonarr.Api.V3.Series
 
         [RestGetById]
         [Produces("application/json")]
-        public ActionResult<SeriesResource> GetResourceByIdWithErrorHandler(int id, [FromQuery] bool includeSeasonImages = false)
+        public async Task<ActionResult<SeriesResource>> GetResourceByIdWithErrorHandler(int id, [FromQuery] bool includeSeasonImages = false)
         {
             try
             {
-                return GetSeriesResourceById(id, includeSeasonImages);
+                return await GetSeriesResourceById(id, includeSeasonImages);
             }
             catch (ModelNotFoundException)
             {
@@ -150,28 +157,31 @@ namespace Sonarr.Api.V3.Series
             }
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used
+        // app-wide; blocking here via GetAwaiter().GetResult() is the documented boundary (see
+        // ProviderControllerBase.cs for the full rationale).
         protected override SeriesResource GetResourceById(int id)
         {
             var includeSeasonImages = Request?.GetBooleanQueryParameter("includeSeasonImages", false) ?? false;
 
             // Parse IncludeImages and use it
-            return GetSeriesResourceById(id, includeSeasonImages);
+            return GetSeriesResourceById(id, includeSeasonImages).GetAwaiter().GetResult();
         }
 
-        private SeriesResource GetSeriesResourceById(int id, bool includeSeasonImages = false)
+        private async Task<SeriesResource> GetSeriesResourceById(int id, bool includeSeasonImages = false)
         {
-            var series = _seriesService.GetSeries(id);
+            var series = await _seriesService.GetSeries(id);
 
             // Parse IncludeImages and use it
-            return GetSeriesResource(series, includeSeasonImages);
+            return await GetSeriesResource(series, includeSeasonImages);
         }
 
         [RestPostById]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public ActionResult<SeriesResource> AddSeries([FromBody] SeriesResource seriesResource)
+        public async Task<ActionResult<SeriesResource>> AddSeries([FromBody] SeriesResource seriesResource)
         {
-            var series = _addSeriesService.AddSeries(seriesResource.ToModel());
+            var series = await _addSeriesService.AddSeries(seriesResource.ToModel());
 
             return Created(series.Id);
         }
@@ -179,16 +189,16 @@ namespace Sonarr.Api.V3.Series
         [RestPutById]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public ActionResult<SeriesResource> UpdateSeries([FromBody] SeriesResource seriesResource, [FromQuery] bool moveFiles = false)
+        public async Task<ActionResult<SeriesResource>> UpdateSeries([FromBody] SeriesResource seriesResource, [FromQuery] bool moveFiles = false)
         {
-            var series = _seriesService.GetSeries(seriesResource.Id);
+            var series = await _seriesService.GetSeries(seriesResource.Id);
 
             if (moveFiles)
             {
                 var sourcePath = series.Path;
                 var destinationPath = seriesResource.Path;
 
-                _commandQueueManager.Push(new MoveSeriesCommand
+                await _commandQueueManager.Push(new MoveSeriesCommand
                 {
                     SeriesId = series.Id,
                     SourcePath = sourcePath,
@@ -199,7 +209,7 @@ namespace Sonarr.Api.V3.Series
 
             var model = seriesResource.ToModel(series);
 
-            _seriesService.UpdateSeries(model);
+            await _seriesService.UpdateSeries(model);
 
             BroadcastResourceChange(ModelAction.Updated, seriesResource);
 
@@ -207,12 +217,12 @@ namespace Sonarr.Api.V3.Series
         }
 
         [RestDeleteById]
-        public void DeleteSeries(int id, bool deleteFiles = false, bool addImportListExclusion = false)
+        public async Task DeleteSeries(int id, bool deleteFiles = false, bool addImportListExclusion = false)
         {
-            _seriesService.DeleteSeries(new List<int> { id }, deleteFiles, addImportListExclusion);
+            await _seriesService.DeleteSeries(new List<int> { id }, deleteFiles, addImportListExclusion);
         }
 
-        private SeriesResource GetSeriesResource(NzbDrone.Core.Tv.Series series, bool includeSeasonImages)
+        private async Task<SeriesResource> GetSeriesResource(NzbDrone.Core.Tv.Series series, bool includeSeasonImages)
         {
             if (series == null)
             {
@@ -221,9 +231,9 @@ namespace Sonarr.Api.V3.Series
 
             var resource = series.ToResource(includeSeasonImages);
             MapCoversToLocal(resource);
-            FetchAndLinkSeriesStatistics(resource);
-            PopulateAlternateTitles(resource);
-            LinkRootFolderPath(resource);
+            await FetchAndLinkSeriesStatistics(resource);
+            await PopulateAlternateTitles(resource);
+            await LinkRootFolderPath(resource);
 
             return resource;
         }
@@ -236,9 +246,9 @@ namespace Sonarr.Api.V3.Series
             }
         }
 
-        private void FetchAndLinkSeriesStatistics(SeriesResource resource)
+        private async Task FetchAndLinkSeriesStatistics(SeriesResource resource)
         {
-            LinkSeriesStatistics(resource, _seriesStatisticsService.SeriesStatistics(resource.Id, resource.QualityProfileId));
+            LinkSeriesStatistics(resource, await _seriesStatisticsService.SeriesStatistics(resource.Id, resource.QualityProfileId));
         }
 
         private void LinkSeriesStatistics(List<SeriesResource> resources, Dictionary<int, SeriesStatistics> seriesStatistics)
@@ -270,17 +280,17 @@ namespace Sonarr.Api.V3.Series
             }
         }
 
-        private void PopulateAlternateTitles(List<SeriesResource> resources)
+        private async Task PopulateAlternateTitles(List<SeriesResource> resources)
         {
             foreach (var resource in resources)
             {
-                PopulateAlternateTitles(resource);
+                await PopulateAlternateTitles(resource);
             }
         }
 
-        private void PopulateAlternateTitles(SeriesResource resource)
+        private async Task PopulateAlternateTitles(SeriesResource resource)
         {
-            var mappings = _sceneMappingService.FindByTvdbId(resource.TvdbId);
+            var mappings = await _sceneMappingService.FindByTvdbId(resource.TvdbId);
 
             if (mappings == null)
             {
@@ -290,9 +300,9 @@ namespace Sonarr.Api.V3.Series
             resource.AlternateTitles = mappings.ConvertAll(AlternateTitleResourceMapper.ToResource);
         }
 
-        private void LinkRootFolderPath(SeriesResource resource)
+        private async Task LinkRootFolderPath(SeriesResource resource)
         {
-            resource.RootFolderPath = _rootFolderService.GetBestRootFolderPath(resource.Path);
+            resource.RootFolderPath = await _rootFolderService.GetBestRootFolderPath(resource.Path);
         }
 
         [NonAction]
@@ -318,10 +328,14 @@ namespace Sonarr.Api.V3.Series
             BroadcastResourceChange(ModelAction.Updated, message.Series.Id);
         }
 
+        // NOTE: IHandle<TEvent> is a shared eventing interface (50+ implementers app-wide); its
+        // `void Handle(TEvent message)` signature is out of scope to convert (see architectural
+        // note in ProviderFactory.cs / ProviderControllerBase.cs). Blocking here via
+        // GetAwaiter().GetResult() is the documented boundary.
         [NonAction]
         public void Handle(SeriesEditedEvent message)
         {
-            var resource = GetSeriesResource(message.Series, false);
+            var resource = GetSeriesResource(message.Series, false).GetAwaiter().GetResult();
             resource.EpisodesChanged = message.EpisodesChanged;
             BroadcastResourceChange(ModelAction.Updated, resource);
         }
@@ -331,7 +345,7 @@ namespace Sonarr.Api.V3.Series
         {
             foreach (var series in message.Series)
             {
-                BroadcastResourceChange(ModelAction.Deleted, GetSeriesResource(series, false));
+                BroadcastResourceChange(ModelAction.Deleted, GetSeriesResource(series, false).GetAwaiter().GetResult());
             }
         }
 
@@ -346,7 +360,7 @@ namespace Sonarr.Api.V3.Series
         {
             foreach (var series in message.Series)
             {
-                BroadcastResourceChange(ModelAction.Updated, GetSeriesResource(series, false));
+                BroadcastResourceChange(ModelAction.Updated, GetSeriesResource(series, false).GetAwaiter().GetResult());
             }
         }
 

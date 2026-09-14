@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.AutoTagging;
@@ -11,30 +12,30 @@ namespace NzbDrone.Core.Tv
 {
     public interface ISeriesService
     {
-        Series GetSeries(int seriesId);
-        List<Series> GetSeries(IEnumerable<int> seriesIds);
-        Series AddSeries(Series newSeries);
-        List<Series> AddSeries(List<Series> newSeries);
-        Series FindByTvdbId(int tvdbId);
-        Series FindByTvRageId(int tvRageId);
-        Series FindByImdbId(string imdbId);
-        Series FindByTitle(string title);
-        Series FindByTitle(string title, int year);
-        Series FindByTitleInexact(string title);
-        Series FindByPath(string path);
-        void DeleteSeries(List<int> seriesIds, bool deleteFiles, bool addImportListExclusion);
-        List<Series> GetAllSeries();
-        Dictionary<int, int> AllSeriesTvdbIds();
-        Dictionary<int, string> GetAllSeriesPaths();
-        Dictionary<int, List<int>> GetAllSeriesTags();
-        List<Series> AllForTag(int tagId);
-        Dictionary<int, int> GetAllSeriesQualityProfiles();
-        Series UpdateSeries(Series series, bool updateEpisodesToMatchSeason = true, bool publishUpdatedEvent = true);
-        List<Series> UpdateSeries(List<Series> series, bool useExistingRelativeFolder);
-        bool SeriesPathExists(string folder);
-        void RemoveAddOptions(Series series);
-        bool UpdateAutoTaggingTags(Series series);
-        void UpdateTags(List<Series> series);
+        Task<Series> GetSeries(int seriesId);
+        Task<List<Series>> GetSeries(IEnumerable<int> seriesIds);
+        Task<Series> AddSeries(Series newSeries);
+        Task<List<Series>> AddSeries(List<Series> newSeries);
+        Task<Series> FindByTvdbId(int tvdbId);
+        Task<Series> FindByTvRageId(int tvRageId);
+        Task<Series> FindByImdbId(string imdbId);
+        Task<Series> FindByTitle(string title);
+        Task<Series> FindByTitle(string title, int year);
+        Task<Series> FindByTitleInexact(string title);
+        Task<Series> FindByPath(string path);
+        Task DeleteSeries(List<int> seriesIds, bool deleteFiles, bool addImportListExclusion);
+        Task<List<Series>> GetAllSeries();
+        Task<Dictionary<int, int>> AllSeriesTvdbIds();
+        Task<Dictionary<int, string>> GetAllSeriesPaths();
+        Task<Dictionary<int, List<int>>> GetAllSeriesTags();
+        Task<List<Series>> AllForTag(int tagId);
+        Task<Dictionary<int, int>> GetAllSeriesQualityProfiles();
+        Task<Series> UpdateSeries(Series series, bool updateEpisodesToMatchSeason = true, bool publishUpdatedEvent = true);
+        Task<List<Series>> UpdateSeries(List<Series> series, bool useExistingRelativeFolder);
+        Task<bool> SeriesPathExists(string folder);
+        Task RemoveAddOptions(Series series);
+        Task<bool> UpdateAutoTaggingTags(Series series);
+        Task UpdateTags(List<Series> series);
     }
 
     public class SeriesService : ISeriesService
@@ -61,57 +62,57 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        public Series GetSeries(int seriesId)
+        public async Task<Series> GetSeries(int seriesId)
         {
-            return _seriesRepository.Get(seriesId);
+            return await _seriesRepository.Get(seriesId);
         }
 
-        public List<Series> GetSeries(IEnumerable<int> seriesIds)
+        public async Task<List<Series>> GetSeries(IEnumerable<int> seriesIds)
         {
-            return _seriesRepository.Get(seriesIds).ToList();
+            return (await _seriesRepository.Get(seriesIds)).ToList();
         }
 
-        public Series AddSeries(Series newSeries)
+        public async Task<Series> AddSeries(Series newSeries)
         {
-            _seriesRepository.Insert(newSeries);
-            _eventAggregator.PublishEvent(new SeriesAddedEvent(GetSeries(newSeries.Id)));
+            await _seriesRepository.Insert(newSeries);
+            _eventAggregator.PublishEvent(new SeriesAddedEvent(await GetSeries(newSeries.Id)));
 
             return newSeries;
         }
 
-        public List<Series> AddSeries(List<Series> newSeries)
+        public async Task<List<Series>> AddSeries(List<Series> newSeries)
         {
-            _seriesRepository.InsertMany(newSeries);
+            await _seriesRepository.InsertMany(newSeries);
             _eventAggregator.PublishEvent(new SeriesImportedEvent(newSeries.Select(s => s.Id).ToList()));
 
             return newSeries;
         }
 
-        public Series FindByTvdbId(int tvRageId)
+        public async Task<Series> FindByTvdbId(int tvRageId)
         {
-            return _seriesRepository.FindByTvdbId(tvRageId);
+            return await _seriesRepository.FindByTvdbId(tvRageId);
         }
 
-        public Series FindByTvRageId(int tvRageId)
+        public async Task<Series> FindByTvRageId(int tvRageId)
         {
-            return _seriesRepository.FindByTvRageId(tvRageId);
+            return await _seriesRepository.FindByTvRageId(tvRageId);
         }
 
-        public Series FindByImdbId(string imdbId)
+        public async Task<Series> FindByImdbId(string imdbId)
         {
-            return _seriesRepository.FindByImdbId(imdbId);
+            return await _seriesRepository.FindByImdbId(imdbId);
         }
 
-        public Series FindByTitle(string title)
+        public async Task<Series> FindByTitle(string title)
         {
-            return _seriesRepository.FindByTitle(title.CleanSeriesTitle());
+            return await _seriesRepository.FindByTitle(title.CleanSeriesTitle());
         }
 
-        public Series FindByTitleInexact(string title)
+        public async Task<Series> FindByTitleInexact(string title)
         {
             // find any series clean title within the provided release title
             var cleanTitle = title.CleanSeriesTitle();
-            var list = _seriesRepository.FindByTitleInexact(cleanTitle);
+            var list = await _seriesRepository.FindByTitleInexact(cleanTitle);
             if (!list.Any())
             {
                 // no series matched
@@ -151,59 +152,59 @@ namespace NzbDrone.Core.Tv
             return match;
         }
 
-        public Series FindByPath(string path)
+        public async Task<Series> FindByPath(string path)
         {
-            return _seriesRepository.FindByPath(path);
+            return await _seriesRepository.FindByPath(path);
         }
 
-        public Series FindByTitle(string title, int year)
+        public async Task<Series> FindByTitle(string title, int year)
         {
-            return _seriesRepository.FindByTitle(title.CleanSeriesTitle(), year);
+            return await _seriesRepository.FindByTitle(title.CleanSeriesTitle(), year);
         }
 
-        public void DeleteSeries(List<int> seriesIds, bool deleteFiles, bool addImportListExclusion)
+        public async Task DeleteSeries(List<int> seriesIds, bool deleteFiles, bool addImportListExclusion)
         {
-            var series = _seriesRepository.Get(seriesIds).ToList();
-            _seriesRepository.DeleteMany(seriesIds);
+            var series = (await _seriesRepository.Get(seriesIds)).ToList();
+            await _seriesRepository.DeleteMany(seriesIds);
             _eventAggregator.PublishEvent(new SeriesDeletedEvent(series, deleteFiles, addImportListExclusion));
         }
 
-        public List<Series> GetAllSeries()
+        public async Task<List<Series>> GetAllSeries()
         {
-            return _seriesRepository.All().ToList();
+            return (await _seriesRepository.All()).ToList();
         }
 
-        public Dictionary<int, int> AllSeriesTvdbIds()
+        public async Task<Dictionary<int, int>> AllSeriesTvdbIds()
         {
-            return _seriesRepository.AllSeriesTvdbIds();
+            return await _seriesRepository.AllSeriesTvdbIds();
         }
 
-        public Dictionary<int, string> GetAllSeriesPaths()
+        public async Task<Dictionary<int, string>> GetAllSeriesPaths()
         {
-            return _seriesRepository.AllSeriesPaths();
+            return await _seriesRepository.AllSeriesPaths();
         }
 
-        public Dictionary<int, List<int>> GetAllSeriesTags()
+        public async Task<Dictionary<int, List<int>>> GetAllSeriesTags()
         {
-            return _seriesRepository.AllSeriesTags();
+            return await _seriesRepository.AllSeriesTags();
         }
 
-        public Dictionary<int, int> GetAllSeriesQualityProfiles()
+        public async Task<Dictionary<int, int>> GetAllSeriesQualityProfiles()
         {
-            return _seriesRepository.AllSeriesQualityProfiles();
+            return await _seriesRepository.AllSeriesQualityProfiles();
         }
 
-        public List<Series> AllForTag(int tagId)
+        public async Task<List<Series>> AllForTag(int tagId)
         {
-            return GetAllSeries().Where(s => s.Tags.Contains(tagId))
+            return (await GetAllSeries()).Where(s => s.Tags.Contains(tagId))
                                  .ToList();
         }
 
         // updateEpisodesToMatchSeason is an override for EpisodeMonitoredService to use so a change via Season pass doesn't get nuked by the seasons loop.
         // TODO: Remove when seasons are split from series (or we come up with a better way to address this)
-        public Series UpdateSeries(Series series, bool updateEpisodesToMatchSeason = true, bool publishUpdatedEvent = true)
+        public async Task<Series> UpdateSeries(Series series, bool updateEpisodesToMatchSeason = true, bool publishUpdatedEvent = true)
         {
-            var storedSeries = GetSeries(series.Id);
+            var storedSeries = await GetSeries(series.Id);
 
             var episodeMonitoredChanged = false;
 
@@ -215,7 +216,7 @@ namespace NzbDrone.Core.Tv
 
                     if (storedSeason != null && season.Monitored != storedSeason.Monitored)
                     {
-                        _episodeService.SetEpisodeMonitoredBySeason(series.Id, season.SeasonNumber, season.Monitored);
+                        await _episodeService.SetEpisodeMonitoredBySeason(series.Id, season.SeasonNumber, season.Monitored);
                         episodeMonitoredChanged = true;
                     }
                 }
@@ -223,9 +224,9 @@ namespace NzbDrone.Core.Tv
 
             // Never update AddOptions when updating a series, keep it the same as the existing stored series.
             series.AddOptions = storedSeries.AddOptions;
-            UpdateAutoTaggingTags(series);
+            await UpdateAutoTaggingTags(series);
 
-            var updatedSeries = _seriesRepository.Update(series);
+            var updatedSeries = await _seriesRepository.Update(series);
             if (publishUpdatedEvent)
             {
                 _eventAggregator.PublishEvent(new SeriesEditedEvent(updatedSeries, storedSeries, episodeMonitoredChanged));
@@ -234,7 +235,7 @@ namespace NzbDrone.Core.Tv
             return updatedSeries;
         }
 
-        public List<Series> UpdateSeries(List<Series> series, bool useExistingRelativeFolder)
+        public async Task<List<Series>> UpdateSeries(List<Series> series, bool useExistingRelativeFolder)
         {
             _logger.Debug("Updating {0} series", series.Count);
 
@@ -244,7 +245,7 @@ namespace NzbDrone.Core.Tv
 
                 if (!s.RootFolderPath.IsNullOrWhiteSpace())
                 {
-                    s.Path = _seriesPathBuilder.BuildPath(s, useExistingRelativeFolder);
+                    s.Path = await _seriesPathBuilder.BuildPath(s, useExistingRelativeFolder);
 
                     _logger.Trace("Changing path for {0} to {1}", s.Title, s.Path);
                 }
@@ -253,33 +254,33 @@ namespace NzbDrone.Core.Tv
                     _logger.Trace("Not changing path for: {0}", s.Title);
                 }
 
-                UpdateAutoTaggingTags(s);
+                await UpdateAutoTaggingTags(s);
             }
 
-            _seriesRepository.UpdateMany(series);
+            await _seriesRepository.UpdateMany(series);
             _logger.Debug("{0} series updated", series.Count);
             _eventAggregator.PublishEvent(new SeriesBulkEditedEvent(series));
 
             return series;
         }
 
-        public bool SeriesPathExists(string folder)
+        public async Task<bool> SeriesPathExists(string folder)
         {
-            return _seriesRepository.SeriesPathExists(folder);
+            return await _seriesRepository.SeriesPathExists(folder);
         }
 
-        public void RemoveAddOptions(Series series)
+        public async Task RemoveAddOptions(Series series)
         {
-            _seriesRepository.SetFields(series, s => s.AddOptions);
+            await _seriesRepository.SetFields(series, s => s.AddOptions);
         }
 
-        public bool UpdateAutoTaggingTags(Series series)
+        public async Task<bool> UpdateAutoTaggingTags(Series series)
         {
             _logger.Trace("Updating tags for {0}", series);
 
             var tagsAdded = new HashSet<int>();
             var tagsRemoved = new HashSet<int>();
-            var changes = _autoTaggingService.GetTagChanges(series);
+            var changes = await _autoTaggingService.GetTagChanges(series);
 
             foreach (var tag in changes.TagsToRemove)
             {
@@ -311,14 +312,14 @@ namespace NzbDrone.Core.Tv
             return false;
         }
 
-        public void UpdateTags(List<Series> series)
+        public async Task UpdateTags(List<Series> series)
         {
             if (series.Count == 0)
             {
                 return;
             }
 
-            _seriesRepository.SetFields(series, s => s.Tags);
+            await _seriesRepository.SetFields(series, s => s.Tags);
             _eventAggregator.PublishEvent(new SeriesBulkEditedEvent(series));
         }
     }

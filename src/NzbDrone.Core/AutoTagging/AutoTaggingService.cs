@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Common.Cache;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Messaging.Events;
@@ -10,13 +11,13 @@ namespace NzbDrone.Core.AutoTagging
 {
     public interface IAutoTaggingService
     {
-        void Update(AutoTag autoTag);
-        AutoTag Insert(AutoTag autoTag);
-        List<AutoTag> All();
-        AutoTag GetById(int id);
-        void Delete(int id);
-        List<AutoTag> AllForTag(int tagId);
-        AutoTaggingChanges GetTagChanges(Series series);
+        Task Update(AutoTag autoTag);
+        Task<AutoTag> Insert(AutoTag autoTag);
+        Task<List<AutoTag>> All();
+        Task<AutoTag> GetById(int id);
+        Task Delete(int id);
+        Task<List<AutoTag>> AllForTag(int tagId);
+        Task<AutoTaggingChanges> GetTagChanges(Series series);
     }
 
     public class AutoTaggingService : IAutoTaggingService
@@ -38,32 +39,42 @@ namespace NzbDrone.Core.AutoTagging
             _cache = cacheManager.GetCache<Dictionary<int, AutoTag>>(typeof(AutoTag), "autoTags");
         }
 
-        private Dictionary<int, AutoTag> AllDictionary()
+        private async Task<Dictionary<int, AutoTag>> AllDictionary()
         {
-            return _cache.Get("all", () => _repository.All().ToDictionary(m => m.Id));
+            var cached = _cache.Find("all");
+
+            if (cached != null)
+            {
+                return cached;
+            }
+
+            var all = (await _repository.All()).ToDictionary(m => m.Id);
+            _cache.Set("all", all);
+
+            return all;
         }
 
-        public List<AutoTag> All()
+        public async Task<List<AutoTag>> All()
         {
-            return AllDictionary().Values.ToList();
+            return (await AllDictionary()).Values.ToList();
         }
 
-        public AutoTag GetById(int id)
+        public async Task<AutoTag> GetById(int id)
         {
-            return AllDictionary()[id];
+            return (await AllDictionary())[id];
         }
 
-        public void Update(AutoTag autoTag)
+        public async Task Update(AutoTag autoTag)
         {
-            _repository.Update(autoTag);
+            await _repository.Update(autoTag);
 
             _cache.Clear();
             _eventAggregator.PublishEvent(new AutoTagsUpdatedEvent());
         }
 
-        public AutoTag Insert(AutoTag autoTag)
+        public async Task<AutoTag> Insert(AutoTag autoTag)
         {
-            var result = _repository.Insert(autoTag);
+            var result = await _repository.Insert(autoTag);
 
             _cache.Clear();
             _eventAggregator.PublishEvent(new AutoTagsUpdatedEvent());
@@ -71,23 +82,23 @@ namespace NzbDrone.Core.AutoTagging
             return result;
         }
 
-        public void Delete(int id)
+        public async Task Delete(int id)
         {
-            _repository.Delete(id);
+            await _repository.Delete(id);
 
             _cache.Clear();
             _eventAggregator.PublishEvent(new AutoTagsUpdatedEvent());
         }
 
-        public List<AutoTag> AllForTag(int tagId)
+        public async Task<List<AutoTag>> AllForTag(int tagId)
         {
-            return All().Where(p => p.Tags.Contains(tagId))
+            return (await All()).Where(p => p.Tags.Contains(tagId))
                 .ToList();
         }
 
-        public AutoTaggingChanges GetTagChanges(Series series)
+        public async Task<AutoTaggingChanges> GetTagChanges(Series series)
         {
-            var autoTags = All();
+            var autoTags = await All();
             var changes = new AutoTaggingChanges();
 
             if (autoTags.Empty())
@@ -96,7 +107,7 @@ namespace NzbDrone.Core.AutoTagging
             }
 
             // Set the root folder path on the series
-            series.RootFolderPath = _rootFolderService.GetBestRootFolderPath(series.Path);
+            series.RootFolderPath = await _rootFolderService.GetBestRootFolderPath(series.Path);
 
             foreach (var autoTag in autoTags)
             {

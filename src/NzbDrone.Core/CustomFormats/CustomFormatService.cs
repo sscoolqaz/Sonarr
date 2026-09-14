@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Common.Cache;
 using NzbDrone.Core.CustomFormats.Events;
 using NzbDrone.Core.Messaging.Events;
@@ -8,13 +9,13 @@ namespace NzbDrone.Core.CustomFormats
 {
     public interface ICustomFormatService
     {
-        void Update(CustomFormat customFormat);
-        void Update(List<CustomFormat> customFormat);
-        CustomFormat Insert(CustomFormat customFormat);
-        List<CustomFormat> All();
-        CustomFormat GetById(int id);
-        void Delete(int id);
-        void Delete(List<int> ids);
+        Task Update(CustomFormat customFormat);
+        Task Update(List<CustomFormat> customFormat);
+        Task<CustomFormat> Insert(CustomFormat customFormat);
+        Task<List<CustomFormat>> All();
+        Task<CustomFormat> GetById(int id);
+        Task Delete(int id);
+        Task Delete(List<int> ids);
     }
 
     public class CustomFormatService : ICustomFormatService
@@ -32,37 +33,47 @@ namespace NzbDrone.Core.CustomFormats
             _cache = cacheManager.GetCache<Dictionary<int, CustomFormat>>(typeof(CustomFormat), "formats");
         }
 
-        private Dictionary<int, CustomFormat> AllDictionary()
+        private async Task<Dictionary<int, CustomFormat>> AllDictionary()
         {
-            return _cache.Get("all", () => _formatRepository.All().ToDictionary(m => m.Id));
+            var cached = _cache.Find("all");
+
+            if (cached != null)
+            {
+                return cached;
+            }
+
+            var all = (await _formatRepository.All()).ToDictionary(m => m.Id);
+            _cache.Set("all", all);
+
+            return all;
         }
 
-        public List<CustomFormat> All()
+        public async Task<List<CustomFormat>> All()
         {
-            return AllDictionary().Values.ToList();
+            return (await AllDictionary()).Values.ToList();
         }
 
-        public CustomFormat GetById(int id)
+        public async Task<CustomFormat> GetById(int id)
         {
-            return AllDictionary()[id];
+            return (await AllDictionary())[id];
         }
 
-        public void Update(CustomFormat customFormat)
+        public async Task Update(CustomFormat customFormat)
         {
-            _formatRepository.Update(customFormat);
+            await _formatRepository.Update(customFormat);
             _cache.Clear();
         }
 
-        public void Update(List<CustomFormat> customFormat)
+        public async Task Update(List<CustomFormat> customFormat)
         {
-            _formatRepository.UpdateMany(customFormat);
+            await _formatRepository.UpdateMany(customFormat);
             _cache.Clear();
         }
 
-        public CustomFormat Insert(CustomFormat customFormat)
+        public async Task<CustomFormat> Insert(CustomFormat customFormat)
         {
             // Add to DB then insert into profiles
-            var result = _formatRepository.Insert(customFormat);
+            var result = await _formatRepository.Insert(customFormat);
             _cache.Clear();
 
             _eventAggregator.PublishEvent(new CustomFormatAddedEvent(result));
@@ -70,27 +81,27 @@ namespace NzbDrone.Core.CustomFormats
             return result;
         }
 
-        public void Delete(int id)
+        public async Task Delete(int id)
         {
-            var format = _formatRepository.Get(id);
+            var format = await _formatRepository.Get(id);
 
             // Remove from profiles before removing from DB
             _eventAggregator.PublishEvent(new CustomFormatDeletedEvent(format));
 
-            _formatRepository.Delete(id);
+            await _formatRepository.Delete(id);
             _cache.Clear();
         }
 
-        public void Delete(List<int> ids)
+        public async Task Delete(List<int> ids)
         {
             foreach (var id in ids)
             {
-                var format = _formatRepository.Get(id);
+                var format = await _formatRepository.Get(id);
 
                 // Remove from profiles before removing from DB
                 _eventAggregator.PublishEvent(new CustomFormatDeletedEvent(format));
 
-                _formatRepository.Delete(id);
+                await _formatRepository.Delete(id);
             }
 
             _cache.Clear();

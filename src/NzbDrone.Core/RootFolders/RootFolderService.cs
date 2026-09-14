@@ -15,12 +15,12 @@ namespace NzbDrone.Core.RootFolders
 {
     public interface IRootFolderService
     {
-        List<RootFolder> All();
-        List<RootFolder> AllWithUnmappedFolders();
-        RootFolder Add(RootFolder rootDir);
-        void Remove(int id);
-        RootFolder Get(int id, bool timeout);
-        string GetBestRootFolderPath(string path);
+        Task<List<RootFolder>> All();
+        Task<List<RootFolder>> AllWithUnmappedFolders();
+        Task<RootFolder> Add(RootFolder rootDir);
+        Task Remove(int id);
+        Task<RootFolder> Get(int id, bool timeout);
+        Task<string> GetBestRootFolderPath(string path);
     }
 
     public class RootFolderService : IRootFolderService
@@ -62,17 +62,18 @@ namespace NzbDrone.Core.RootFolders
             _cache = cacheManager.GetCache<string>(GetType());
         }
 
-        public List<RootFolder> All()
+        public async Task<List<RootFolder>> All()
         {
-            var rootFolders = _rootFolderRepository.All().ToList();
+            var rootFolders = (await _rootFolderRepository.All()).ToList();
 
             return rootFolders;
         }
 
-        public List<RootFolder> AllWithUnmappedFolders()
+        public async Task<List<RootFolder>> AllWithUnmappedFolders()
         {
-            var rootFolders = _rootFolderRepository.All().ToList();
-            var seriesPaths = _seriesRepository.AllSeriesPaths();
+            var rootFolders = (await _rootFolderRepository.All()).ToList();
+            var seriesPaths = await _seriesRepository.AllSeriesPaths();
+            var namingConfig = await _namingConfigService.GetConfig();
 
             rootFolders.ForEach(folder =>
             {
@@ -80,7 +81,7 @@ namespace NzbDrone.Core.RootFolders
                 {
                     if (folder.Path.IsPathValid(PathValidationType.CurrentOs))
                     {
-                        GetDetails(folder, seriesPaths, true);
+                        GetDetails(folder, seriesPaths, namingConfig, true);
                     }
                 }
 
@@ -95,9 +96,9 @@ namespace NzbDrone.Core.RootFolders
             return rootFolders;
         }
 
-        public RootFolder Add(RootFolder rootFolder)
+        public async Task<RootFolder> Add(RootFolder rootFolder)
         {
-            var all = All();
+            var all = await All();
 
             if (string.IsNullOrWhiteSpace(rootFolder.Path) || !Path.IsPathRooted(rootFolder.Path))
             {
@@ -119,22 +120,23 @@ namespace NzbDrone.Core.RootFolders
                 throw new UnauthorizedAccessException($"Root folder path '{rootFolder.Path}' is not writable by user '{Environment.UserName}'");
             }
 
-            _rootFolderRepository.Insert(rootFolder);
-            var seriesPaths = _seriesRepository.AllSeriesPaths();
+            await _rootFolderRepository.Insert(rootFolder);
+            var seriesPaths = await _seriesRepository.AllSeriesPaths();
+            var namingConfig = await _namingConfigService.GetConfig();
 
-            GetDetails(rootFolder, seriesPaths, true);
+            GetDetails(rootFolder, seriesPaths, namingConfig, true);
             _cache.Clear();
 
             return rootFolder;
         }
 
-        public void Remove(int id)
+        public async Task Remove(int id)
         {
-            _rootFolderRepository.Delete(id);
+            await _rootFolderRepository.Delete(id);
             _cache.Clear();
         }
 
-        private List<UnmappedFolder> GetUnmappedFolders(string path, Dictionary<int, string> seriesPaths)
+        private List<UnmappedFolder> GetUnmappedFolders(string path, Dictionary<int, string> seriesPaths, NamingConfig namingConfig)
         {
             _logger.Debug("Generating list of unmapped folders");
 
@@ -151,7 +153,7 @@ namespace NzbDrone.Core.RootFolders
                 return results;
             }
 
-            var subFolderDepth = _namingConfigService.GetConfig().SeriesFolderFormat.Count(f => f == Path.DirectorySeparatorChar);
+            var subFolderDepth = namingConfig.SeriesFolderFormat.Count(f => f == Path.DirectorySeparatorChar);
             var possibleSeriesFolders = _diskProvider.GetDirectories(path).ToList();
 
             if (subFolderDepth > 0)
@@ -182,22 +184,37 @@ namespace NzbDrone.Core.RootFolders
             return results.OrderBy(u => u.Name, StringComparer.InvariantCultureIgnoreCase).ToList();
         }
 
-        public RootFolder Get(int id, bool timeout)
+        public async Task<RootFolder> Get(int id, bool timeout)
         {
-            var rootFolder = _rootFolderRepository.Get(id);
-            var seriesPaths = _seriesRepository.AllSeriesPaths();
+            var rootFolder = await _rootFolderRepository.Get(id);
+            var seriesPaths = await _seriesRepository.AllSeriesPaths();
+            var namingConfig = await _namingConfigService.GetConfig();
 
-            GetDetails(rootFolder, seriesPaths, timeout);
+            GetDetails(rootFolder, seriesPaths, namingConfig, timeout);
 
             return rootFolder;
         }
 
-        public string GetBestRootFolderPath(string path)
+        public async Task<string> GetBestRootFolderPath(string path)
         {
-            return _cache.Get(path, () => GetBestRootFolderPathInternal(path), TimeSpan.FromDays(1));
+            var cached = _cache.Find(path);
+
+            if (cached != null)
+            {
+                return cached;
+            }
+
+            var result = await GetBestRootFolderPathInternal(path);
+            _cache.Set(path, result, TimeSpan.FromDays(1));
+
+            return result;
         }
 
-        private void GetDetails(RootFolder rootFolder, Dictionary<int, string> seriesPaths, bool timeout)
+        // NOTE: this already wraps disk I/O in Task.Run(...).Wait(timeout) as a deliberate
+        // hard-timeout mechanism for slow/hung network mounts, unrelated to the repository async
+        // conversion; naming config and series paths are now fetched by the callers beforehand
+        // (rather than awaited from inside this timed block) to keep that timeout semantics intact.
+        private void GetDetails(RootFolder rootFolder, Dictionary<int, string> seriesPaths, NamingConfig namingConfig, bool timeout)
         {
             Task.Run(() =>
             {
@@ -207,14 +224,14 @@ namespace NzbDrone.Core.RootFolders
                     rootFolder.IsEmpty = _diskProvider.FolderEmpty(rootFolder.Path);
                     rootFolder.FreeSpace = _diskProvider.GetAvailableSpace(rootFolder.Path);
                     rootFolder.TotalSpace = _diskProvider.GetTotalSize(rootFolder.Path);
-                    rootFolder.UnmappedFolders = GetUnmappedFolders(rootFolder.Path, seriesPaths);
+                    rootFolder.UnmappedFolders = GetUnmappedFolders(rootFolder.Path, seriesPaths, namingConfig);
                 }
             }).Wait(timeout ? 5000 : -1);
         }
 
-        private string GetBestRootFolderPathInternal(string path)
+        private async Task<string> GetBestRootFolderPathInternal(string path)
         {
-            var possibleRootFolder = All().Where(r => r.Path.IsParentPath(path)).MaxBy(r => r.Path.Length);
+            var possibleRootFolder = (await All()).Where(r => r.Path.IsParentPath(path)).MaxBy(r => r.Path.Length);
 
             if (possibleRootFolder == null)
             {

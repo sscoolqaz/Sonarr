@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation.Results;
 using NLog;
 using NzbDrone.Common.Extensions;
@@ -11,8 +12,8 @@ namespace NzbDrone.Core.Download
 {
     public interface IDownloadClientFactory : IProviderFactory<IDownloadClient, DownloadClientDefinition>
     {
-        List<IDownloadClient> DownloadHandlingEnabled(bool filterBlockedClients = true);
-        DownloadClientDefinition ResolveDownloadClient(int? id, string name);
+        Task<List<IDownloadClient>> DownloadHandlingEnabled(bool filterBlockedClients = true);
+        Task<DownloadClientDefinition> ResolveDownloadClient(int? id, string name);
     }
 
     public class DownloadClientFactory : ProviderFactory<IDownloadClient, DownloadClientDefinition>, IDownloadClientFactory
@@ -32,9 +33,9 @@ namespace NzbDrone.Core.Download
             _logger = logger;
         }
 
-        protected override List<DownloadClientDefinition> Active()
+        protected override async Task<List<DownloadClientDefinition>> Active()
         {
-            return base.Active().Where(c => c.Enable).ToList();
+            return (await base.Active()).Where(c => c.Enable).ToList();
         }
 
         public override void SetProviderCharacteristics(IDownloadClient provider, DownloadClientDefinition definition)
@@ -44,21 +45,21 @@ namespace NzbDrone.Core.Download
             definition.Protocol = provider.Protocol;
         }
 
-        public List<IDownloadClient> DownloadHandlingEnabled(bool filterBlockedClients = true)
+        public async Task<List<IDownloadClient>> DownloadHandlingEnabled(bool filterBlockedClients = true)
         {
-            var enabledClients = GetAvailableProviders();
+            var enabledClients = await GetAvailableProviders();
 
             if (filterBlockedClients)
             {
-                return FilterBlockedClients(enabledClients).ToList();
+                return await FilterBlockedClients(enabledClients);
             }
 
             return enabledClients.ToList();
         }
 
-        public DownloadClientDefinition ResolveDownloadClient(int? id, string name)
+        public async Task<DownloadClientDefinition> ResolveDownloadClient(int? id, string name)
         {
-            var all = All();
+            var all = await All();
             var clientByName = name.IsNullOrWhiteSpace() ? null : all.FirstOrDefault(c => c.Name.EqualsIgnoreCase(name));
             var clientById = id is > 0 ? all.FirstOrDefault(c => c.Id == id.Value) : null;
 
@@ -92,9 +93,10 @@ namespace NzbDrone.Core.Download
             return client;
         }
 
-        private IEnumerable<IDownloadClient> FilterBlockedClients(IEnumerable<IDownloadClient> clients)
+        private async Task<List<IDownloadClient>> FilterBlockedClients(IEnumerable<IDownloadClient> clients)
         {
-            var blockedClients = _downloadClientStatusService.GetBlockedProviders().ToDictionary(v => v.ProviderId, v => v);
+            var blockedClients = (await _downloadClientStatusService.GetBlockedProviders()).ToDictionary(v => v.ProviderId, v => v);
+            var result = new List<IDownloadClient>();
 
             foreach (var client in clients)
             {
@@ -104,13 +106,15 @@ namespace NzbDrone.Core.Download
                     continue;
                 }
 
-                yield return client;
+                result.Add(client);
             }
+
+            return result;
         }
 
-        public override ValidationResult Test(DownloadClientDefinition definition)
+        public override async Task<ValidationResult> Test(DownloadClientDefinition definition)
         {
-            var result = base.Test(definition);
+            var result = await base.Test(definition);
 
             if (definition.Id == 0)
             {
@@ -119,11 +123,11 @@ namespace NzbDrone.Core.Download
 
             if (result == null || result.IsValid)
             {
-                _downloadClientStatusService.RecordSuccess(definition.Id);
+                await _downloadClientStatusService.RecordSuccess(definition.Id);
             }
             else
             {
-                _downloadClientStatusService.RecordFailure(definition.Id);
+                await _downloadClientStatusService.RecordFailure(definition.Id);
             }
 
             return result;

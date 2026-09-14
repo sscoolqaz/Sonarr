@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Messaging.Events;
@@ -8,9 +9,9 @@ namespace NzbDrone.Core.Indexers
 {
     public interface IIndexerStatusService : IProviderStatusServiceBase<IndexerStatus>
     {
-        ReleaseInfo GetLastRssSyncReleaseInfo(int indexerId);
+        Task<ReleaseInfo> GetLastRssSyncReleaseInfo(int indexerId);
 
-        void UpdateRssSyncStatus(int indexerId, ReleaseInfo releaseInfo);
+        Task UpdateRssSyncStatus(int indexerId, ReleaseInfo releaseInfo);
     }
 
     public class IndexerStatusService : ProviderStatusServiceBase<IIndexer, IndexerStatus>, IIndexerStatusService
@@ -20,20 +21,26 @@ namespace NzbDrone.Core.Indexers
         {
         }
 
-        public ReleaseInfo GetLastRssSyncReleaseInfo(int indexerId)
+        public async Task<ReleaseInfo> GetLastRssSyncReleaseInfo(int indexerId)
         {
-            return GetProviderStatus(indexerId).LastRssSyncReleaseInfo;
+            return (await GetProviderStatus(indexerId)).LastRssSyncReleaseInfo;
         }
 
-        public void UpdateRssSyncStatus(int indexerId, ReleaseInfo releaseInfo)
+        public async Task UpdateRssSyncStatus(int indexerId, ReleaseInfo releaseInfo)
         {
-            lock (_syncRoot)
+            await _syncRoot.WaitAsync();
+
+            try
             {
-                var status = GetProviderStatus(indexerId);
+                var status = await GetProviderStatus(indexerId);
 
                 status.LastRssSyncReleaseInfo = releaseInfo;
 
-                _providerStatusRepository.Upsert(status);
+                await _providerStatusRepository.Upsert(status);
+            }
+            finally
+            {
+                _syncRoot.Release();
             }
         }
     }

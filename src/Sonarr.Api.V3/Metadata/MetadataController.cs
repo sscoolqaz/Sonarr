@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Extras.Metadata;
 using NzbDrone.SignalR;
@@ -18,13 +19,13 @@ namespace Sonarr.Api.V3.Metadata
         }
 
         [NonAction]
-        public override ActionResult<MetadataResource> UpdateProvider([FromBody] MetadataBulkResource providerResource)
+        public override Task<ActionResult<MetadataResource>> UpdateProvider([FromBody] MetadataBulkResource providerResource)
         {
             throw new NotImplementedException();
         }
 
         [NonAction]
-        public override object DeleteProviders([FromBody] MetadataBulkResource resource)
+        public override Task<object> DeleteProviders([FromBody] MetadataBulkResource resource)
         {
             throw new NotImplementedException();
         }

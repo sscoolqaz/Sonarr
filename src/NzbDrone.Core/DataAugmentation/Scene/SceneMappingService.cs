@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Common.Extensions;
@@ -14,11 +15,11 @@ namespace NzbDrone.Core.DataAugmentation.Scene
 {
     public interface ISceneMappingService
     {
-        List<string> GetSceneNames(int tvdbId, List<int> seasonNumbers, List<int> sceneSeasonNumbers);
-        int? FindTvdbId(string sceneTitle, string releaseTitle, int sceneSeasonNumber);
-        List<SceneMapping> FindByTvdbId(int tvdbId);
-        SceneMapping FindSceneMapping(string sceneTitle, string releaseTitle, int sceneSeasonNumber);
-        int? GetSceneSeasonNumber(string seriesTitle, string releaseTitle);
+        Task<List<string>> GetSceneNames(int tvdbId, List<int> seasonNumbers, List<int> sceneSeasonNumbers);
+        Task<int?> FindTvdbId(string sceneTitle, string releaseTitle, int sceneSeasonNumber);
+        Task<List<SceneMapping>> FindByTvdbId(int tvdbId);
+        Task<SceneMapping> FindSceneMapping(string sceneTitle, string releaseTitle, int sceneSeasonNumber);
+        Task<int?> GetSceneSeasonNumber(string seriesTitle, string releaseTitle);
     }
 
     public class SceneMappingService : ISceneMappingService,
@@ -50,9 +51,9 @@ namespace NzbDrone.Core.DataAugmentation.Scene
             _findByTvdbIdCache = cacheManager.GetCacheDictionary<List<SceneMapping>>(GetType(), "find_tvdb_id");
         }
 
-        public List<string> GetSceneNames(int tvdbId, List<int> seasonNumbers, List<int> sceneSeasonNumbers)
+        public async Task<List<string>> GetSceneNames(int tvdbId, List<int> seasonNumbers, List<int> sceneSeasonNumbers)
         {
-            var mappings = FindByTvdbId(tvdbId);
+            var mappings = await FindByTvdbId(tvdbId);
 
             if (mappings == null)
             {
@@ -69,16 +70,16 @@ namespace NzbDrone.Core.DataAugmentation.Scene
             return names;
         }
 
-        public int? FindTvdbId(string seriesTitle, string releaseTitle, int sceneSeasonNumber)
+        public async Task<int?> FindTvdbId(string seriesTitle, string releaseTitle, int sceneSeasonNumber)
         {
-            return FindSceneMapping(seriesTitle, releaseTitle, sceneSeasonNumber)?.TvdbId;
+            return (await FindSceneMapping(seriesTitle, releaseTitle, sceneSeasonNumber))?.TvdbId;
         }
 
-        public List<SceneMapping> FindByTvdbId(int tvdbId)
+        public async Task<List<SceneMapping>> FindByTvdbId(int tvdbId)
         {
             if (_findByTvdbIdCache.Count == 0)
             {
-                RefreshCache();
+                await RefreshCache();
             }
 
             var mappings = _findByTvdbIdCache.Find(tvdbId.ToString());
@@ -91,14 +92,14 @@ namespace NzbDrone.Core.DataAugmentation.Scene
             return mappings;
         }
 
-        public SceneMapping FindSceneMapping(string seriesTitle, string releaseTitle, int sceneSeasonNumber)
+        public async Task<SceneMapping> FindSceneMapping(string seriesTitle, string releaseTitle, int sceneSeasonNumber)
         {
             if (seriesTitle.IsNullOrWhiteSpace())
             {
                 return null;
             }
 
-            var mappings = FindMappings(seriesTitle, releaseTitle);
+            var mappings = await FindMappings(seriesTitle, releaseTitle);
 
             if (mappings == null)
             {
@@ -124,12 +125,12 @@ namespace NzbDrone.Core.DataAugmentation.Scene
             throw new InvalidSceneMappingException(mappings, releaseTitle);
         }
 
-        public int? GetSceneSeasonNumber(string seriesTitle, string releaseTitle)
+        public async Task<int?> GetSceneSeasonNumber(string seriesTitle, string releaseTitle)
         {
-            return FindSceneMapping(seriesTitle, releaseTitle, -1)?.SceneSeasonNumber;
+            return (await FindSceneMapping(seriesTitle, releaseTitle, -1))?.SceneSeasonNumber;
         }
 
-        private void UpdateMappings()
+        private async Task UpdateMappings()
         {
             _logger.Info("Updating Scene mappings");
 
@@ -163,7 +164,7 @@ namespace NzbDrone.Core.DataAugmentation.Scene
                             sceneMapping.Type = providerType;
                         }
 
-                        var existing = _repository.GetAllByType(providerType);
+                        var existing = await _repository.GetAllByType(providerType);
                         var existingByMappingId = new Dictionary<string, SceneMapping>();
 
                         foreach (var e in existing)
@@ -196,9 +197,9 @@ namespace NzbDrone.Core.DataAugmentation.Scene
 
                         var toDelete = existingByMappingId.Values.ToList();
 
-                        _repository.DeleteMany(toDelete);
-                        _repository.UpdateMany(toUpdate);
-                        _repository.InsertMany(toInsert);
+                        await _repository.DeleteMany(toDelete);
+                        await _repository.UpdateMany(toUpdate);
+                        await _repository.InsertMany(toInsert);
                     }
                     else
                     {
@@ -211,16 +212,16 @@ namespace NzbDrone.Core.DataAugmentation.Scene
                 }
             }
 
-            RefreshCache();
+            await RefreshCache();
 
             _eventAggregator.PublishEvent(new SceneMappingsUpdatedEvent());
         }
 
-        private List<SceneMapping> FindMappings(string seriesTitle, string releaseTitle)
+        private async Task<List<SceneMapping>> FindMappings(string seriesTitle, string releaseTitle)
         {
             if (_getTvdbIdCache.Count == 0)
             {
-                RefreshCache();
+                await RefreshCache();
             }
 
             var candidates = _getTvdbIdCache.Find(seriesTitle.CleanSeriesTitle());
@@ -253,9 +254,9 @@ namespace NzbDrone.Core.DataAugmentation.Scene
             return candidates.Where(v => v.Title == closestMatch.Title).ToList();
         }
 
-        private void RefreshCache()
+        private async Task RefreshCache()
         {
-            var mappings = _repository.All().ToList();
+            var mappings = (await _repository.All()).ToList();
 
             _getTvdbIdCache.Update(mappings.GroupBy(v => v.ParseTerm).ToDictionary(v => v.Key, v => v.ToList()));
             _findByTvdbIdCache.Update(mappings.GroupBy(v => v.TvdbId).ToDictionary(v => v.Key.ToString(), v => v.ToList()));
@@ -308,11 +309,15 @@ namespace NzbDrone.Core.DataAugmentation.Scene
             return normalCandidates;
         }
 
+        // NOTE: IHandle<TEvent> is a shared eventing interface (50+ implementers app-wide); its
+        // `void Handle(TEvent message)` signature is out of scope to convert (see architectural
+        // note in ProviderFactory.cs). Blocking here via GetAwaiter().GetResult() is the
+        // documented boundary.
         public void Handle(SeriesRefreshStartingEvent message)
         {
             if (message.ManualTrigger && (_findByTvdbIdCache.IsExpired(TimeSpan.FromMinutes(1)) || !_updatedAfterStartup))
             {
-                UpdateMappings();
+                UpdateMappings().GetAwaiter().GetResult();
             }
         }
 
@@ -320,7 +325,7 @@ namespace NzbDrone.Core.DataAugmentation.Scene
         {
             if (!_updatedAfterStartup)
             {
-                UpdateMappings();
+                UpdateMappings().GetAwaiter().GetResult();
             }
         }
 
@@ -328,13 +333,17 @@ namespace NzbDrone.Core.DataAugmentation.Scene
         {
             if (!_updatedAfterStartup)
             {
-                UpdateMappings();
+                UpdateMappings().GetAwaiter().GetResult();
             }
         }
 
+        // NOTE: IExecute<TCommand> is the shared command-execution interface (31 implementers);
+        // its `void Execute(TCommand message)` signature is out of scope to convert. Commands are
+        // already run off the request thread by the command queue's background processing loop,
+        // so blocking here via GetAwaiter().GetResult() does not risk a sync-context deadlock.
         public void Execute(UpdateSceneMappingCommand message)
         {
-            UpdateMappings();
+            UpdateMappings().GetAwaiter().GetResult();
         }
     }
 }

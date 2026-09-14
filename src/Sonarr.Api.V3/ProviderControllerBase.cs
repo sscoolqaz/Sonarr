@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -42,16 +43,26 @@ namespace Sonarr.Api.V3
             _bulkResourceMapper = bulkResourceMapper;
 
             SharedValidator.RuleFor(c => c.Name).NotEmpty();
-            SharedValidator.RuleFor(c => c.Name).Must((v, c) => !_providerFactory.All().Any(p => p.Name.EqualsIgnoreCase(c) && p.Id != v.Id)).WithMessage("Should be unique");
+
+            // NOTE: FluentValidation's synchronous `Must()` predicate can't await; the request
+            // validation pipeline (RestController.ValidateResource) is itself synchronous
+            // framework code out of scope for this pass, so we bridge here as the documented
+            // boundary rather than converting FluentValidation's Must to MustAsync app-wide.
+            SharedValidator.RuleFor(c => c.Name).Must((v, c) => !_providerFactory.All().GetAwaiter().GetResult().Any(p => p.Name.EqualsIgnoreCase(c) && p.Id != v.Id)).WithMessage("Should be unique");
             SharedValidator.RuleFor(c => c.Implementation).NotEmpty();
             SharedValidator.RuleFor(c => c.ConfigContract).NotEmpty();
 
             PostValidator.RuleFor(c => c.Fields).NotNull();
         }
 
+        // NOTE: RestController<TResource>.GetResourceById is a synchronous framework hook used by
+        // every controller in the app (Accepted/Created/BroadcastResourceChange helpers all call it
+        // synchronously); converting it to Task-returning is out of scope for this pass (see task
+        // instructions re: framework seams). Blocking here via GetAwaiter().GetResult() is the
+        // documented boundary.
         protected override TProviderResource GetResourceById(int id)
         {
-            var definition = _providerFactory.Get(id);
+            var definition = _providerFactory.Get(id).GetAwaiter().GetResult();
             _providerFactory.SetProviderCharacteristics(definition);
 
             return _resourceMapper.ToResource(definition);
@@ -59,9 +70,9 @@ namespace Sonarr.Api.V3
 
         [HttpGet]
         [Produces("application/json")]
-        public List<TProviderResource> GetAll()
+        public async Task<List<TProviderResource>> GetAll()
         {
-            var providerDefinitions = _providerFactory.All();
+            var providerDefinitions = await _providerFactory.All();
 
             var result = new List<TProviderResource>(providerDefinitions.Count);
 
@@ -78,16 +89,16 @@ namespace Sonarr.Api.V3
         [RestPostById]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public ActionResult<TProviderResource> CreateProvider([FromBody] TProviderResource providerResource, [FromQuery] bool forceSave = false)
+        public async Task<ActionResult<TProviderResource>> CreateProvider([FromBody] TProviderResource providerResource, [FromQuery] bool forceSave = false)
         {
             var providerDefinition = GetDefinition(providerResource, null, true, !forceSave, false);
 
             if (providerDefinition.Enable)
             {
-                Test(providerDefinition, !forceSave);
+                await Test(providerDefinition, !forceSave);
             }
 
-            providerDefinition = _providerFactory.Create(providerDefinition);
+            providerDefinition = await _providerFactory.Create(providerDefinition);
 
             return Created(providerDefinition.Id);
         }
@@ -95,10 +106,10 @@ namespace Sonarr.Api.V3
         [RestPutById]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public ActionResult<TProviderResource> UpdateProvider([FromRoute] int id, [FromBody] TProviderResource providerResource, [FromQuery] bool forceSave = false)
+        public async Task<ActionResult<TProviderResource>> UpdateProvider([FromRoute] int id, [FromBody] TProviderResource providerResource, [FromQuery] bool forceSave = false)
         {
             // TODO: Remove fallback to Id from body in next API version bump
-            var existingDefinition = _providerFactory.Find(id) ?? _providerFactory.Find(providerResource.Id);
+            var existingDefinition = await _providerFactory.Find(id) ?? await _providerFactory.Find(providerResource.Id);
 
             if (existingDefinition == null)
             {
@@ -113,12 +124,12 @@ namespace Sonarr.Api.V3
             // Only test existing definitions if it is enabled and forceSave isn't set and the definition has changed.
             if (providerDefinition.Enable && !forceSave && hasDefinitionChanged)
             {
-                Test(providerDefinition, true);
+                await Test(providerDefinition, true);
             }
 
             if (hasDefinitionChanged)
             {
-                _providerFactory.Update(providerDefinition);
+                await _providerFactory.Update(providerDefinition);
             }
 
             return Accepted(existingDefinition.Id);
@@ -127,14 +138,14 @@ namespace Sonarr.Api.V3
         [HttpPut("bulk")]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public virtual ActionResult<TProviderResource> UpdateProvider([FromBody] TBulkProviderResource providerResource)
+        public virtual async Task<ActionResult<TProviderResource>> UpdateProvider([FromBody] TBulkProviderResource providerResource)
         {
             if (!providerResource.Ids.Any())
             {
                 throw new BadRequestException("ids must be provided");
             }
 
-            var definitionsToUpdate = _providerFactory.Get(providerResource.Ids).ToList();
+            var definitionsToUpdate = (await _providerFactory.Get(providerResource.Ids)).ToList();
 
             foreach (var definition in definitionsToUpdate)
             {
@@ -162,7 +173,9 @@ namespace Sonarr.Api.V3
 
             _bulkResourceMapper.UpdateModel(providerResource, definitionsToUpdate);
 
-            return Accepted(_providerFactory.Update(definitionsToUpdate).Select(x => _resourceMapper.ToResource(x)));
+            var updated = await _providerFactory.Update(definitionsToUpdate);
+
+            return Accepted(updated.Select(x => _resourceMapper.ToResource(x)));
         }
 
         private TProviderDefinition GetDefinition(TProviderResource providerResource, TProviderDefinition existingDefinition, bool validate, bool includeWarnings, bool forceValidate)
@@ -178,18 +191,18 @@ namespace Sonarr.Api.V3
         }
 
         [RestDeleteById]
-        public object DeleteProvider(int id)
+        public async Task<object> DeleteProvider(int id)
         {
-            _providerFactory.Delete(id);
+            await _providerFactory.Delete(id);
 
             return new { };
         }
 
         [HttpDelete("bulk")]
         [Consumes("application/json")]
-        public virtual object DeleteProviders([FromBody] TBulkProviderResource resource)
+        public virtual async Task<object> DeleteProviders([FromBody] TBulkProviderResource resource)
         {
-            _providerFactory.Delete(resource.Ids);
+            await _providerFactory.Delete(resource.Ids);
 
             return new { };
         }
@@ -220,21 +233,21 @@ namespace Sonarr.Api.V3
         [SkipValidation(true, false)]
         [HttpPost("test")]
         [Consumes("application/json")]
-        public object Test([FromBody] TProviderResource providerResource, [FromQuery] bool forceTest = false)
+        public async Task<object> Test([FromBody] TProviderResource providerResource, [FromQuery] bool forceTest = false)
         {
-            var existingDefinition = providerResource.Id > 0 ? _providerFactory.Find(providerResource.Id) : null;
+            var existingDefinition = providerResource.Id > 0 ? await _providerFactory.Find(providerResource.Id) : null;
             var providerDefinition = GetDefinition(providerResource, existingDefinition, true, !forceTest, true);
 
-            Test(providerDefinition, true);
+            await Test(providerDefinition, true);
 
             return "{}";
         }
 
         [HttpPost("testall")]
         [Produces("application/json")]
-        public IActionResult TestAll()
+        public async Task<IActionResult> TestAll()
         {
-            var providerDefinitions = _providerFactory.All()
+            var providerDefinitions = (await _providerFactory.All())
                                                       .Where(c => c.Settings.Validate().IsValid && c.Enable)
                                                       .ToList();
             var result = new List<ProviderTestAllResult>();
@@ -244,7 +257,7 @@ namespace Sonarr.Api.V3
                 var validationFailures = new List<ValidationFailure>();
 
                 validationFailures.AddRange(definition.Settings.Validate().Errors);
-                validationFailures.AddRange(_providerFactory.Test(definition).Errors);
+                validationFailures.AddRange((await _providerFactory.Test(definition)).Errors);
 
                 result.Add(new ProviderTestAllResult
                 {
@@ -260,9 +273,9 @@ namespace Sonarr.Api.V3
         [HttpPost("action/{name}")]
         [Consumes("application/json")]
         [Produces("application/json")]
-        public IActionResult RequestAction([FromRoute] string name, [FromBody] TProviderResource providerResource)
+        public async Task<IActionResult> RequestAction([FromRoute] string name, [FromBody] TProviderResource providerResource)
         {
-            var existingDefinition = providerResource.Id > 0 ? _providerFactory.Find(providerResource.Id) : null;
+            var existingDefinition = providerResource.Id > 0 ? await _providerFactory.Find(providerResource.Id) : null;
             var providerDefinition = GetDefinition(providerResource, existingDefinition, false, false, false);
 
             var query = Request.Query.ToDictionary(x => x.Key, x => x.Value.ToString());
@@ -297,9 +310,9 @@ namespace Sonarr.Api.V3
             VerifyValidationResult(validationResult, includeWarnings);
         }
 
-        protected virtual void Test(TProviderDefinition definition, bool includeWarnings)
+        protected virtual async Task Test(TProviderDefinition definition, bool includeWarnings)
         {
-            var validationResult = _providerFactory.Test(definition);
+            var validationResult = await _providerFactory.Test(definition);
 
             VerifyValidationResult(validationResult, includeWarnings);
         }

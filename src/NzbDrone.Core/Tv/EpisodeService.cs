@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Cache;
 using NzbDrone.Core.Configuration;
@@ -14,32 +15,32 @@ namespace NzbDrone.Core.Tv
 {
     public interface IEpisodeService
     {
-        Episode GetEpisode(int id);
-        List<Episode> GetEpisodes(IEnumerable<int> ids);
-        Episode FindEpisode(int seriesId, int seasonNumber, int episodeNumber);
-        Episode FindEpisode(int seriesId, int absoluteEpisodeNumber);
-        Episode FindEpisodeByTitle(int seriesId, int seasonNumber, string releaseTitle);
-        List<Episode> FindEpisodesBySceneNumbering(int seriesId, int seasonNumber, int episodeNumber);
-        List<Episode> FindEpisodesBySceneNumbering(int seriesId, int sceneAbsoluteEpisodeNumber);
-        Episode FindEpisode(int seriesId, string date, int? part);
-        List<Episode> GetEpisodeBySeries(int seriesId);
-        List<Episode> GetEpisodesBySeries(List<int> seriesIds);
-        List<Episode> GetEpisodesBySeason(int seriesId, int seasonNumber);
-        List<Episode> GetEpisodesBySceneSeason(int seriesId, int sceneSeasonNumber);
-        List<Episode> EpisodesWithFiles(int seriesId);
-        PagingSpec<Episode> EpisodesWithoutFiles(PagingSpec<Episode> pagingSpec, bool includeSpecials, HashSet<int> seriesTags = null);
-        List<Episode> GetEpisodesByFileId(int episodeFileId);
-        void UpdateEpisode(Episode episode);
-        void SetEpisodeMonitored(int episodeId, bool monitored);
-        void SetMonitored(IEnumerable<int> ids, bool monitored);
-        void UpdateEpisodes(List<Episode> episodes);
-        void UpdateLastSearchTime(List<Episode> episodes);
-        List<Episode> EpisodesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored, bool includeSpecials);
-        void InsertMany(List<Episode> episodes);
-        void UpdateMany(List<Episode> episodes);
-        void DeleteMany(List<Episode> episodes);
-        void SetEpisodeMonitoredBySeason(int seriesId, int seasonNumber, bool monitored);
-        List<int> SetEpisodeMonitoredBySeries(int seriesId, MonitorTypes monitor, int firstSeason, int lastSeason);
+        Task<Episode> GetEpisode(int id);
+        Task<List<Episode>> GetEpisodes(IEnumerable<int> ids);
+        Task<Episode> FindEpisode(int seriesId, int seasonNumber, int episodeNumber);
+        Task<Episode> FindEpisode(int seriesId, int absoluteEpisodeNumber);
+        Task<Episode> FindEpisodeByTitle(int seriesId, int seasonNumber, string releaseTitle);
+        Task<List<Episode>> FindEpisodesBySceneNumbering(int seriesId, int seasonNumber, int episodeNumber);
+        Task<List<Episode>> FindEpisodesBySceneNumbering(int seriesId, int sceneAbsoluteEpisodeNumber);
+        Task<Episode> FindEpisode(int seriesId, string date, int? part);
+        Task<List<Episode>> GetEpisodeBySeries(int seriesId);
+        Task<List<Episode>> GetEpisodesBySeries(List<int> seriesIds);
+        Task<List<Episode>> GetEpisodesBySeason(int seriesId, int seasonNumber);
+        Task<List<Episode>> GetEpisodesBySceneSeason(int seriesId, int sceneSeasonNumber);
+        Task<List<Episode>> EpisodesWithFiles(int seriesId);
+        Task<PagingSpec<Episode>> EpisodesWithoutFiles(PagingSpec<Episode> pagingSpec, bool includeSpecials, HashSet<int> seriesTags = null);
+        Task<List<Episode>> GetEpisodesByFileId(int episodeFileId);
+        Task UpdateEpisode(Episode episode);
+        Task SetEpisodeMonitored(int episodeId, bool monitored);
+        Task SetMonitored(IEnumerable<int> ids, bool monitored);
+        Task UpdateEpisodes(List<Episode> episodes);
+        Task UpdateLastSearchTime(List<Episode> episodes);
+        Task<List<Episode>> EpisodesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored, bool includeSpecials);
+        Task InsertMany(List<Episode> episodes);
+        Task UpdateMany(List<Episode> episodes);
+        Task DeleteMany(List<Episode> episodes);
+        Task SetEpisodeMonitoredBySeason(int seriesId, int seasonNumber, bool monitored);
+        Task<List<int>> SetEpisodeMonitoredBySeries(int seriesId, MonitorTypes monitor, int firstSeason, int lastSeason);
     }
 
     public class EpisodeService : IEpisodeService,
@@ -61,67 +62,67 @@ namespace NzbDrone.Core.Tv
             _logger = logger;
         }
 
-        public Episode GetEpisode(int id)
+        public async Task<Episode> GetEpisode(int id)
         {
-            return _episodeRepository.Get(id);
+            return await _episodeRepository.Get(id);
         }
 
-        public List<Episode> GetEpisodes(IEnumerable<int> ids)
+        public async Task<List<Episode>> GetEpisodes(IEnumerable<int> ids)
         {
-            return _episodeRepository.Get(ids).ToList();
+            return (await _episodeRepository.Get(ids)).ToList();
         }
 
-        public Episode FindEpisode(int seriesId, int seasonNumber, int episodeNumber)
+        public async Task<Episode> FindEpisode(int seriesId, int seasonNumber, int episodeNumber)
         {
-            return _episodeRepository.Find(seriesId, seasonNumber, episodeNumber);
+            return await _episodeRepository.Find(seriesId, seasonNumber, episodeNumber);
         }
 
-        public Episode FindEpisode(int seriesId, int absoluteEpisodeNumber)
+        public async Task<Episode> FindEpisode(int seriesId, int absoluteEpisodeNumber)
         {
-            return _episodeRepository.Find(seriesId, absoluteEpisodeNumber);
+            return await _episodeRepository.Find(seriesId, absoluteEpisodeNumber);
         }
 
-        public List<Episode> FindEpisodesBySceneNumbering(int seriesId, int seasonNumber, int episodeNumber)
+        public async Task<List<Episode>> FindEpisodesBySceneNumbering(int seriesId, int seasonNumber, int episodeNumber)
         {
-            return _episodeRepository.FindEpisodesBySceneNumbering(seriesId, seasonNumber, episodeNumber);
+            return await _episodeRepository.FindEpisodesBySceneNumbering(seriesId, seasonNumber, episodeNumber);
         }
 
-        public List<Episode> FindEpisodesBySceneNumbering(int seriesId, int sceneAbsoluteEpisodeNumber)
+        public async Task<List<Episode>> FindEpisodesBySceneNumbering(int seriesId, int sceneAbsoluteEpisodeNumber)
         {
-            return _episodeRepository.FindEpisodesBySceneNumbering(seriesId, sceneAbsoluteEpisodeNumber);
+            return await _episodeRepository.FindEpisodesBySceneNumbering(seriesId, sceneAbsoluteEpisodeNumber);
         }
 
-        public Episode FindEpisode(int seriesId, string date, int? part)
+        public async Task<Episode> FindEpisode(int seriesId, string date, int? part)
         {
-            return FindOneByAirDate(seriesId, date, part);
+            return await FindOneByAirDate(seriesId, date, part);
         }
 
-        public List<Episode> GetEpisodeBySeries(int seriesId)
+        public async Task<List<Episode>> GetEpisodeBySeries(int seriesId)
         {
-            return _episodeRepository.GetEpisodes(seriesId).ToList();
+            return (await _episodeRepository.GetEpisodes(seriesId)).ToList();
         }
 
-        public List<Episode> GetEpisodesBySeries(List<int> seriesIds)
+        public async Task<List<Episode>> GetEpisodesBySeries(List<int> seriesIds)
         {
-            return _episodeRepository.GetEpisodesBySeriesIds(seriesIds).ToList();
+            return (await _episodeRepository.GetEpisodesBySeriesIds(seriesIds)).ToList();
         }
 
-        public List<Episode> GetEpisodesBySeason(int seriesId, int seasonNumber)
+        public async Task<List<Episode>> GetEpisodesBySeason(int seriesId, int seasonNumber)
         {
-            return _episodeRepository.GetEpisodes(seriesId, seasonNumber);
+            return await _episodeRepository.GetEpisodes(seriesId, seasonNumber);
         }
 
-        public List<Episode> GetEpisodesBySceneSeason(int seriesId, int sceneSeasonNumber)
+        public async Task<List<Episode>> GetEpisodesBySceneSeason(int seriesId, int sceneSeasonNumber)
         {
-            return _episodeRepository.GetEpisodesBySceneSeason(seriesId, sceneSeasonNumber);
+            return await _episodeRepository.GetEpisodesBySceneSeason(seriesId, sceneSeasonNumber);
         }
 
-        public Episode FindEpisodeByTitle(int seriesId, int seasonNumber, string releaseTitle)
+        public async Task<Episode> FindEpisodeByTitle(int seriesId, int seasonNumber, string releaseTitle)
         {
             // TODO: can replace this search mechanism with something smarter/faster/better
             var normalizedReleaseTitle = Parser.Parser.NormalizeEpisodeTitle(releaseTitle);
             var cleanNormalizedReleaseTitle = Parser.Parser.CleanSeriesTitle(normalizedReleaseTitle);
-            var episodes = _episodeRepository.GetEpisodes(seriesId, seasonNumber);
+            var episodes = await _episodeRepository.GetEpisodes(seriesId, seasonNumber);
 
             var possibleMatches = episodes.SelectMany(
                 episode => new[]
@@ -154,84 +155,84 @@ namespace NzbDrone.Core.Tv
             return null;
         }
 
-        public List<Episode> EpisodesWithFiles(int seriesId)
+        public async Task<List<Episode>> EpisodesWithFiles(int seriesId)
         {
-            return _episodeRepository.EpisodesWithFiles(seriesId);
+            return await _episodeRepository.EpisodesWithFiles(seriesId);
         }
 
-        public PagingSpec<Episode> EpisodesWithoutFiles(PagingSpec<Episode> pagingSpec, bool includeSpecials, HashSet<int> seriesTags = null)
+        public async Task<PagingSpec<Episode>> EpisodesWithoutFiles(PagingSpec<Episode> pagingSpec, bool includeSpecials, HashSet<int> seriesTags = null)
         {
-            return _episodeRepository.EpisodesWithoutFiles(pagingSpec, includeSpecials, seriesTags);
+            return await _episodeRepository.EpisodesWithoutFiles(pagingSpec, includeSpecials, seriesTags);
         }
 
-        public List<Episode> GetEpisodesByFileId(int episodeFileId)
+        public async Task<List<Episode>> GetEpisodesByFileId(int episodeFileId)
         {
-            return _episodeRepository.GetEpisodeByFileId(episodeFileId);
+            return await _episodeRepository.GetEpisodeByFileId(episodeFileId);
         }
 
-        public void UpdateEpisode(Episode episode)
+        public async Task UpdateEpisode(Episode episode)
         {
-            _episodeRepository.Update(episode);
+            await _episodeRepository.Update(episode);
         }
 
-        public void SetEpisodeMonitored(int episodeId, bool monitored)
+        public async Task SetEpisodeMonitored(int episodeId, bool monitored)
         {
-            var episode = _episodeRepository.Get(episodeId);
-            _episodeRepository.SetMonitoredFlat(episode, monitored);
+            var episode = await _episodeRepository.Get(episodeId);
+            await _episodeRepository.SetMonitoredFlat(episode, monitored);
 
             _logger.Debug("Monitored flag for Episode:{0} was set to {1}", episodeId, monitored);
         }
 
-        public void SetMonitored(IEnumerable<int> ids, bool monitored)
+        public async Task SetMonitored(IEnumerable<int> ids, bool monitored)
         {
-            _episodeRepository.SetMonitored(ids, monitored);
+            await _episodeRepository.SetMonitored(ids, monitored);
         }
 
-        public void SetEpisodeMonitoredBySeason(int seriesId, int seasonNumber, bool monitored)
+        public async Task SetEpisodeMonitoredBySeason(int seriesId, int seasonNumber, bool monitored)
         {
-            _episodeRepository.SetMonitoredBySeason(seriesId, seasonNumber, monitored);
+            await _episodeRepository.SetMonitoredBySeason(seriesId, seasonNumber, monitored);
         }
 
-        public List<int> SetEpisodeMonitoredBySeries(int seriesId, MonitorTypes monitor, int firstSeason, int lastSeason)
+        public async Task<List<int>> SetEpisodeMonitoredBySeries(int seriesId, MonitorTypes monitor, int firstSeason, int lastSeason)
         {
-            return _episodeRepository.SetMonitored(seriesId, monitor, firstSeason, lastSeason);
+            return await _episodeRepository.SetMonitored(seriesId, monitor, firstSeason, lastSeason);
         }
 
-        public void UpdateEpisodes(List<Episode> episodes)
+        public async Task UpdateEpisodes(List<Episode> episodes)
         {
-            _episodeRepository.UpdateMany(episodes);
+            await _episodeRepository.UpdateMany(episodes);
         }
 
-        public void UpdateLastSearchTime(List<Episode> episodes)
+        public async Task UpdateLastSearchTime(List<Episode> episodes)
         {
-            _episodeRepository.SetFields(episodes, e => e.LastSearchTime);
+            await _episodeRepository.SetFields(episodes, e => e.LastSearchTime);
         }
 
-        public List<Episode> EpisodesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored, bool includeSpecials)
+        public async Task<List<Episode>> EpisodesBetweenDates(DateTime start, DateTime end, bool includeUnmonitored, bool includeSpecials)
         {
-            var episodes = _episodeRepository.EpisodesBetweenDates(start.ToUniversalTime(), end.ToUniversalTime(), includeUnmonitored, includeSpecials);
+            var episodes = await _episodeRepository.EpisodesBetweenDates(start.ToUniversalTime(), end.ToUniversalTime(), includeUnmonitored, includeSpecials);
 
             return episodes;
         }
 
-        public void InsertMany(List<Episode> episodes)
+        public async Task InsertMany(List<Episode> episodes)
         {
-            _episodeRepository.InsertMany(episodes);
+            await _episodeRepository.InsertMany(episodes);
         }
 
-        public void UpdateMany(List<Episode> episodes)
+        public async Task UpdateMany(List<Episode> episodes)
         {
-            _episodeRepository.UpdateMany(episodes);
+            await _episodeRepository.UpdateMany(episodes);
         }
 
-        public void DeleteMany(List<Episode> episodes)
+        public async Task DeleteMany(List<Episode> episodes)
         {
-            _episodeRepository.DeleteMany(episodes);
+            await _episodeRepository.DeleteMany(episodes);
         }
 
-        private Episode FindOneByAirDate(int seriesId, string date, int? part)
+        private async Task<Episode> FindOneByAirDate(int seriesId, string date, int? part)
         {
-            var episodes = _episodeRepository.Find(seriesId, date);
+            var episodes = await _episodeRepository.Find(seriesId, date);
 
             if (!episodes.Any())
             {
@@ -264,9 +265,14 @@ namespace NzbDrone.Core.Tv
             throw new InvalidOperationException($"Multiple episodes with the same air date found. Date: {date}");
         }
 
+        // NOTE: IHandle<TEvent> is a shared eventing interface (50+ implementers app-wide); its
+        // `void Handle(TEvent message)` signature is out of scope to convert (see architectural
+        // note in ProviderFactory.cs). EventAggregator dispatches sync handlers inline, but not on
+        // an ASP.NET Core request thread (no captured SynchronizationContext), so blocking via
+        // GetAwaiter().GetResult() is the documented boundary here rather than a silent scatter.
         public void Handle(EpisodeFileDeletedEvent message)
         {
-            foreach (var episode in GetEpisodesByFileId(message.EpisodeFile.Id))
+            foreach (var episode in GetEpisodesByFileId(message.EpisodeFile.Id).GetAwaiter().GetResult())
             {
                 _logger.Debug("Detaching episode {0} from file.", episode.Id);
 
@@ -287,7 +293,7 @@ namespace NzbDrone.Core.Tv
                     }
                 }
 
-                _episodeRepository.ClearFileId(episode, unmonitorForReason && unmonitorEpisodes);
+                _episodeRepository.ClearFileId(episode, unmonitorForReason && unmonitorEpisodes).GetAwaiter().GetResult();
             }
         }
 
@@ -295,7 +301,7 @@ namespace NzbDrone.Core.Tv
         {
             foreach (var episode in message.EpisodeFile.Episodes.Value)
             {
-                _episodeRepository.SetFileId(episode, message.EpisodeFile.Id);
+                _episodeRepository.SetFileId(episode, message.EpisodeFile.Id).GetAwaiter().GetResult();
 
                 lock (_cache)
                 {
@@ -311,10 +317,14 @@ namespace NzbDrone.Core.Tv
             }
         }
 
+        // NOTE: IHandleAsync<TEvent> handlers are dispatched by EventAggregator via
+        // Task.Factory.StartNew on a thread-pool thread (see EventAggregator.cs), not a request
+        // thread, so blocking here is safe from a sync-context deadlock. Converting the shared
+        // `void HandleAsync(TEvent message)` interface itself is out of scope (18 implementers).
         public void HandleAsync(SeriesDeletedEvent message)
         {
-            var episodes = _episodeRepository.GetEpisodesBySeriesIds(message.Series.Select(s => s.Id).ToList());
-            _episodeRepository.DeleteMany(episodes);
+            var episodes = _episodeRepository.GetEpisodesBySeriesIds(message.Series.Select(s => s.Id).ToList()).GetAwaiter().GetResult();
+            _episodeRepository.DeleteMany(episodes).GetAwaiter().GetResult();
         }
 
         public void HandleAsync(SeriesScannedEvent message)
@@ -325,7 +335,7 @@ namespace NzbDrone.Core.Tv
 
                 if (ids?.Any() == true)
                 {
-                    _episodeRepository.SetMonitored(ids, false);
+                    _episodeRepository.SetMonitored(ids, false).GetAwaiter().GetResult();
                 }
 
                 _cache.Remove(message.Series.Id.ToString());

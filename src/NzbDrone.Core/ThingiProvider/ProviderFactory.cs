@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentValidation.Results;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
@@ -34,9 +35,9 @@ namespace NzbDrone.Core.ThingiProvider
             _logger = logger;
         }
 
-        public List<TProviderDefinition> All()
+        public async Task<List<TProviderDefinition>> All()
         {
-            return _providerRepository.All().ToList();
+            return (await _providerRepository.All()).ToList();
         }
 
         public IEnumerable<TProviderDefinition> GetDefaultDefinitions()
@@ -76,9 +77,9 @@ namespace NzbDrone.Core.ThingiProvider
             return definitions;
         }
 
-        public virtual ValidationResult Test(TProviderDefinition definition)
+        public virtual Task<ValidationResult> Test(TProviderDefinition definition)
         {
-            return GetInstance(definition).Test();
+            return Task.FromResult(GetInstance(definition).Test());
         }
 
         public object RequestAction(TProviderDefinition definition, string action, IDictionary<string, string> query)
@@ -86,68 +87,72 @@ namespace NzbDrone.Core.ThingiProvider
             return GetInstance(definition).RequestAction(action, query);
         }
 
-        public List<TProvider> GetAvailableProviders()
+        public async Task<List<TProvider>> GetAvailableProviders()
         {
-            return Active().Select(GetInstance).ToList();
+            return (await Active()).Select(GetInstance).ToList();
         }
 
-        public bool Exists(int id)
+        public async Task<bool> Exists(int id)
         {
-            return _providerRepository.Find(id) != null;
+            return await _providerRepository.Find(id) != null;
         }
 
-        public TProviderDefinition Get(int id)
+        public async Task<TProviderDefinition> Get(int id)
         {
-            return _providerRepository.Get(id);
+            return await _providerRepository.Get(id);
         }
 
-        public IEnumerable<TProviderDefinition> Get(IEnumerable<int> ids)
+        public async Task<IEnumerable<TProviderDefinition>> Get(IEnumerable<int> ids)
         {
-            return _providerRepository.Get(ids);
+            return await _providerRepository.Get(ids);
         }
 
-        public TProviderDefinition Find(int id)
+        public async Task<TProviderDefinition> Find(int id)
         {
-            return _providerRepository.Find(id);
+            return await _providerRepository.Find(id);
         }
 
-        public virtual TProviderDefinition Create(TProviderDefinition definition)
+        public virtual async Task<TProviderDefinition> Create(TProviderDefinition definition)
         {
-            var result = _providerRepository.Insert(definition);
+            var result = await _providerRepository.Insert(definition);
             _eventAggregator.PublishEvent(new ProviderAddedEvent<TProvider>(result));
 
             return result;
         }
 
-        public virtual void Update(TProviderDefinition definition)
+        public virtual async Task Update(TProviderDefinition definition)
         {
-            _providerRepository.Update(definition);
+            await _providerRepository.Update(definition);
             _eventAggregator.PublishEvent(new ProviderUpdatedEvent<TProvider>(definition));
         }
 
-        public virtual IEnumerable<TProviderDefinition> Update(IEnumerable<TProviderDefinition> definitions)
+        public virtual async Task<IEnumerable<TProviderDefinition>> Update(IEnumerable<TProviderDefinition> definitions)
         {
-            _providerRepository.UpdateMany(definitions.ToList());
+            var definitionsList = definitions.ToList();
 
-            foreach (var definition in definitions)
+            await _providerRepository.UpdateMany(definitionsList);
+
+            foreach (var definition in definitionsList)
             {
                 _eventAggregator.PublishEvent(new ProviderUpdatedEvent<TProvider>(definition));
             }
 
-            return definitions;
+            return definitionsList;
         }
 
-        public void Delete(int id)
+        public async Task Delete(int id)
         {
-            _providerRepository.Delete(id);
+            await _providerRepository.Delete(id);
             _eventAggregator.PublishEvent(new ProviderDeletedEvent<TProvider>(id));
         }
 
-        public void Delete(IEnumerable<int> ids)
+        public async Task Delete(IEnumerable<int> ids)
         {
-            _providerRepository.DeleteMany(ids);
+            var idsList = ids.ToList();
 
-            foreach (var id in ids)
+            await _providerRepository.DeleteMany(idsList);
+
+            foreach (var id in idsList)
             {
                 _eventAggregator.PublishEvent(new ProviderDeletedEvent<TProvider>(id));
             }
@@ -167,22 +172,29 @@ namespace NzbDrone.Core.ThingiProvider
             return _providers.Select(c => c.GetType()).SingleOrDefault(c => c.Name.Equals(definition.Implementation, StringComparison.InvariantCultureIgnoreCase));
         }
 
+        // NOTE: IHandle<TEvent> is a shared eventing interface implemented by 50+ handlers across
+        // the app; changing its `void Handle(TEvent message)` signature to Task is out of scope for
+        // this pass (see task instructions). ApplicationStartedEvent fires once at startup (not on
+        // an ASP.NET Core request thread, which has no SynchronizationContext by default), so
+        // blocking here via GetAwaiter().GetResult() is a documented, deliberate boundary rather
+        // than a silently-scattered blocking call.
         public void Handle(ApplicationStartedEvent message)
         {
             _logger.Debug("Initializing Providers. Count {0}", _providers.Count);
 
-            RemoveMissingImplementations();
+            RemoveMissingImplementations().GetAwaiter().GetResult();
 
-            InitializeProviders();
+            InitializeProviders().GetAwaiter().GetResult();
         }
 
-        protected virtual void InitializeProviders()
+        protected virtual Task InitializeProviders()
         {
+            return Task.CompletedTask;
         }
 
-        protected virtual List<TProviderDefinition> Active()
+        protected virtual async Task<List<TProviderDefinition>> Active()
         {
-            return All().Where(c => c.Settings.Validate().IsValid).ToList();
+            return (await All()).Where(c => c.Settings.Validate().IsValid).ToList();
         }
 
         public void SetProviderCharacteristics(TProviderDefinition definition)
@@ -196,20 +208,20 @@ namespace NzbDrone.Core.ThingiProvider
             definition.Message = provider.Message;
         }
 
-        private void RemoveMissingImplementations()
+        private async Task RemoveMissingImplementations()
         {
-            var storedProvider = _providerRepository.All();
+            var storedProvider = await _providerRepository.All();
 
             foreach (var invalidDefinition in storedProvider.Where(def => GetImplementation(def) == null))
             {
                 _logger.Warn("Removing {0}", invalidDefinition.Name);
-                _providerRepository.Delete(invalidDefinition);
+                await _providerRepository.Delete(invalidDefinition);
             }
         }
 
-        public List<TProviderDefinition> AllForTag(int tagId)
+        public async Task<List<TProviderDefinition>> AllForTag(int tagId)
         {
-            return All().Where(p => p.Tags.Contains(tagId))
+            return (await All()).Where(p => p.Tags.Contains(tagId))
                         .ToList();
         }
     }
