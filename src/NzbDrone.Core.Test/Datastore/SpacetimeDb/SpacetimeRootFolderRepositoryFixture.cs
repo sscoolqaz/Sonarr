@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
@@ -33,8 +34,8 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
             _repo = new SpacetimeRootFolderRepository(_connection, Mocker.GetMock<IEventAggregator>().Object);
             Mocker.SetConstant<IRootFolderRepository>(_repo);
 
-            Mocker.GetMock<ISeriesRepository>().Setup(s => s.AllSeriesPaths()).Returns(new Dictionary<int, string>());
-            Mocker.GetMock<INamingConfigService>().Setup(s => s.GetConfig()).Returns(NamingConfig.Default);
+            Mocker.GetMock<ISeriesRepository>().Setup(s => s.AllSeriesPaths()).ReturnsAsync(new Dictionary<int, string>());
+            Mocker.GetMock<INamingConfigService>().Setup(s => s.GetConfig()).ReturnsAsync(NamingConfig.Default);
 
             Mocker.GetMock<IDiskProvider>().Setup(d => d.FolderExists(It.IsAny<string>())).Returns(true);
             Mocker.GetMock<IDiskProvider>().Setup(d => d.FolderWritable(It.IsAny<string>())).Returns(true);
@@ -51,20 +52,20 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
         }
 
         [Test]
-        public void should_add_get_remove_root_folder_through_real_service()
+        public async Task should_add_get_remove_root_folder_through_real_service()
         {
             var path = $"/tmp/spike-root-{Guid.NewGuid():N}".Substring(0, 30);
 
-            var added = Subject.Add(new RootFolder { Path = path });
+            var added = await Subject.Add(new RootFolder { Path = path });
             added.Id.Should().BeGreaterThan(0);
 
-            Subject.All().Should().Contain(r => r.Id == added.Id && r.Path == path);
+            (await Subject.All()).Should().Contain(r => r.Id == added.Id && r.Path == path);
 
-            var fetched = Subject.Get(added.Id, timeout: true);
+            var fetched = await Subject.Get(added.Id, timeout: true);
             fetched.Path.Should().Be(path);
 
-            Subject.Remove(added.Id);
-            Subject.All().Should().NotContain(r => r.Id == added.Id);
+            await Subject.Remove(added.Id);
+            (await Subject.All()).Should().NotContain(r => r.Id == added.Id);
         }
     }
 }

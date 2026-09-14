@@ -28,7 +28,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
         {
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodesByFileId(It.IsAny<int>()))
-                  .Returns(episodes);
+                  .ReturnsAsync(episodes);
         }
 
         [Test]
@@ -63,11 +63,11 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodesByFileId(episodes.First().EpisodeFileId))
-                  .Returns(new List<Episode> { episodes.First() });
+                  .ReturnsAsync(new List<Episode> { episodes.First() });
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodesByFileId(episodes.Last().EpisodeFileId))
-                  .Returns(new List<Episode> { episodes.Last() });
+                  .ReturnsAsync(new List<Episode> { episodes.Last() });
 
             Subject.IsSatisfiedBy(episodes).Should().BeTrue();
         }

@@ -32,11 +32,11 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetAllSeriesPaths())
-                  .Returns(series.ToDictionary(s => s.Id, s => s.Path));
+                  .ReturnsAsync(series.ToDictionary(s => s.Id, s => s.Path));
 
             Mocker.GetMock<IRootFolderService>()
                   .Setup(s => s.GetBestRootFolderPath(It.IsAny<string>()))
-                  .Returns(rootFolderPath);
+                  .ReturnsAsync(rootFolderPath);
 
             Mocker.GetMock<IDiskProvider>()
                   .Setup(s => s.FolderExists(It.IsAny<string>()))
@@ -48,7 +48,7 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
         {
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetAllSeriesPaths())
-                  .Returns(new Dictionary<int, string>());
+                  .ReturnsAsync(new Dictionary<int, string>());
 
             Subject.Check().ShouldBeOk();
         }

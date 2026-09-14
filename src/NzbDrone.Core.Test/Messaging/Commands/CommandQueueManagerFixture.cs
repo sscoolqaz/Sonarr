@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
@@ -27,31 +28,31 @@ namespace NzbDrone.Core.Test.Messaging.Commands
                       commands.Add(c);
                       id++;
 
-                      return c;
+                      return Task.FromResult(c);
                   });
 
             Mocker.GetMock<ICommandRepository>()
                   .Setup(s => s.Get(It.IsAny<int>()))
                   .Returns<int>(c =>
                   {
-                      return commands.SingleOrDefault(e => e.Id == c);
+                      return Task.FromResult(commands.SingleOrDefault(e => e.Id == c));
                   });
         }
 
         [Test]
-        public void should_not_remove_commands_for_five_minutes_after_they_end()
+        public async Task should_not_remove_commands_for_five_minutes_after_they_end()
         {
-            var command = Subject.Push<RefreshMonitoredDownloadsCommand>(new RefreshMonitoredDownloadsCommand());
+            var command = await Subject.Push<RefreshMonitoredDownloadsCommand>(new RefreshMonitoredDownloadsCommand());
 
             // Start the command to mimic CommandQueue's behaviour
             command.StartedAt = DateTime.Now;
             command.Status = CommandStatus.Started;
 
-            Subject.Start(command);
-            Subject.Complete(command, "All done");
-            Subject.CleanCommands();
+            await Subject.Start(command);
+            await Subject.Complete(command, "All done");
+            await Subject.CleanCommands();
 
-            Subject.Get(command.Id).Should().NotBeNull();
+            (await Subject.Get(command.Id)).Should().NotBeNull();
 
             Mocker.GetMock<ICommandRepository>()
                   .Verify(v => v.Get(It.IsAny<int>()), Times.Never());

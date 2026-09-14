@@ -1,6 +1,8 @@
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Qualities;
@@ -26,7 +28,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                 .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -43,21 +45,21 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("Ütopya", "U\\Ütopya")]
         [TestCase("Æon Flux", "A\\Æon Flux")]
 
-        public void should_get_expected_folder_name_back(string title, string expected)
+        public async Task should_get_expected_folder_name_back(string title, string expected)
         {
             _series.Title = title;
             _namingConfig.SeriesFolderFormat = "{Series TitleFirstCharacter}\\{Series Title}";
 
-            Subject.GetSeriesFolder(_series).Should().Be(expected);
+            (await Subject.GetSeriesFolder(_series)).Should().Be(expected);
         }
 
         [Test]
-        public void should_be_able_to_use_lower_case_first_character()
+        public async Task should_be_able_to_use_lower_case_first_character()
         {
             _series.Title = "Westworld";
             _namingConfig.SeriesFolderFormat = "{series titlefirstcharacter}\\{series title}";
 
-            Subject.GetSeriesFolder(_series).Should().Be("w\\westworld");
+            (await Subject.GetSeriesFolder(_series)).Should().Be("w\\westworld");
         }
     }
 }

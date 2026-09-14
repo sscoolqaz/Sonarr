@@ -46,14 +46,14 @@ namespace NzbDrone.Core.Test.Download.FailedDownloadServiceTests
 
             Mocker.GetMock<IHistoryService>()
                   .Setup(s => s.Find(_trackedDownload.DownloadItem.DownloadId, EpisodeHistoryEventType.Grabbed))
-                  .Returns(_grabHistory);
+                  .ReturnsAsync(_grabHistory);
         }
 
         private void GivenNoGrabbedHistory()
         {
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.Find(_trackedDownload.DownloadItem.DownloadId, EpisodeHistoryEventType.Grabbed))
-                .Returns(new List<EpisodeHistory>());
+                .ReturnsAsync(new List<EpisodeHistory>());
         }
 
         [Test]

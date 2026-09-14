@@ -20,11 +20,11 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
         {
             Mocker.GetMock<IImportListFactory>()
                   .Setup(v => v.GetAvailableProviders())
-                  .Returns(_importLists);
+                  .ReturnsAsync(_importLists);
 
             Mocker.GetMock<IImportListStatusService>()
                    .Setup(v => v.GetBlockedProviders())
-                   .Returns(_blockedImportLists);
+                   .ReturnsAsync(_blockedImportLists);
 
             Mocker.GetMock<ILocalizationService>()
                 .Setup(s => s.GetLocalizedString(It.IsAny<string>()))

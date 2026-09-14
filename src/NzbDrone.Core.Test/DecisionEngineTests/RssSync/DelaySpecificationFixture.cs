@@ -65,7 +65,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests.RssSync
 
             Mocker.GetMock<IDelayProfileService>()
                   .Setup(s => s.BestForTags(It.IsAny<HashSet<int>>()))
-                  .Returns(_delayProfile);
+                  .ReturnsAsync(_delayProfile);
 
             Mocker.GetMock<IPendingReleaseService>()
                   .Setup(s => s.GetPendingRemoteEpisodes(It.IsAny<int>()))

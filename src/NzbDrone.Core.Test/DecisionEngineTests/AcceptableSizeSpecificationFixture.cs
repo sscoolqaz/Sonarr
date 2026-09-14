@@ -120,7 +120,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
 
             Mocker.GetMock<IEpisodeService>().Setup(
                 s => s.GetEpisodesBySeason(It.IsAny<int>(), It.IsAny<int>()))
-                .Returns(_episodes);
+                .ReturnsAsync(_episodes);
         }
 
         private void WithSize(int? minSize, int? maxSize)

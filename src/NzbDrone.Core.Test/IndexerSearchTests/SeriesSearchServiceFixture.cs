@@ -33,7 +33,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(It.IsAny<int>()))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
 
             Mocker.GetMock<ISearchForReleases>()
                   .Setup(s => s.SeasonSearch(_series.Id, It.IsAny<int>(), false, false, true, false))

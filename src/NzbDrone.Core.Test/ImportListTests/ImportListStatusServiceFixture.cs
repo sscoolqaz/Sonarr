@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
@@ -27,11 +28,11 @@ namespace NzbDrone.Core.Test.ImportListTests
         {
             Mocker.GetMock<IImportListStatusRepository>()
                   .Setup(v => v.FindByProviderId(1))
-                  .Returns(status);
+                  .ReturnsAsync(status);
 
             Mocker.GetMock<IImportListStatusRepository>()
                   .Setup(v => v.All())
-                  .Returns(new[] { status });
+                  .ReturnsAsync(new[] { status });
         }
 
         private void VerifyUpdate()
@@ -47,24 +48,24 @@ namespace NzbDrone.Core.Test.ImportListTests
         }
 
         [Test]
-        public void should_cancel_backoff_on_success()
+        public async Task should_cancel_backoff_on_success()
         {
             WithStatus(new ImportListStatus { EscalationLevel = 2 });
 
-            Subject.RecordSuccess(1);
+            await Subject.RecordSuccess(1);
 
             VerifyUpdate();
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().BeNull();
         }
 
         [Test]
-        public void should_not_store_update_if_already_okay()
+        public async Task should_not_store_update_if_already_okay()
         {
             WithStatus(new ImportListStatus { EscalationLevel = 0 });
 
-            Subject.RecordSuccess(1);
+            await Subject.RecordSuccess(1);
 
             VerifyNoUpdate();
         }

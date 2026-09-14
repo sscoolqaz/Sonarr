@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -34,7 +36,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             _episodes = new List<Episode>
                         {
@@ -53,7 +55,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         private void GivenProper()
@@ -62,7 +64,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         }
 
         [Test]
-        public void should_truncate_from_beginning()
+        public async Task should_truncate_from_beginning()
         {
             _series.Title = "The Fantastic Life of Mr. Sisko";
 
@@ -71,13 +73,13 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _episodes = _episodes.Take(1).ToList();
             _namingConfig.StandardEpisodeFormat = "{Series Title} - S{season:00}E{episode:00} - {Episode Title} {Quality Full}-{ReleaseGroup:12}";
 
-            var result = Subject.BuildFileName(_episodes, _series, _episodeFile, ".mkv");
+            var result = await Subject.BuildFileName(_episodes, _series, _episodeFile, ".mkv");
             result.Length.Should().BeLessOrEqualTo(255);
             result.Should().Be("The Fantastic Life of Mr. Sisko - S01E01 - Episode Title 1 Bluray-1080p-IWishIWas....mkv");
         }
 
         [Test]
-        public void should_truncate_from_from_end()
+        public async Task should_truncate_from_from_end()
         {
             _series.Title = "The Fantastic Life of Mr. Sisko";
 
@@ -86,7 +88,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _episodes = _episodes.Take(1).ToList();
             _namingConfig.StandardEpisodeFormat = "{Series Title} - S{season:00}E{episode:00} - {Episode Title} {Quality Full}-{ReleaseGroup:-17}";
 
-            var result = Subject.BuildFileName(_episodes, _series, _episodeFile, ".mkv");
+            var result = await Subject.BuildFileName(_episodes, _series, _episodeFile, ".mkv");
             result.Length.Should().BeLessOrEqualTo(255);
             result.Should().Be("The Fantastic Life of Mr. Sisko - S01E01 - Episode Title 1 Bluray-1080p-...ASixFourImpala.mkv");
         }

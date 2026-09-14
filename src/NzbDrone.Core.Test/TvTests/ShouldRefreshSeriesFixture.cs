@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Tv;
 using NzbDrone.Test.Common;
@@ -22,7 +24,7 @@ namespace NzbDrone.Core.Test.TvTests
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodeBySeries(_series.Id))
-                  .Returns(Builder<Episode>.CreateListOfSize(2)
+                  .ReturnsAsync(Builder<Episode>.CreateListOfSize(2)
                                            .All()
                                            .With(e => e.AirDateUtc = DateTime.Today.AddDays(-100))
                                            .Build()
@@ -68,7 +70,7 @@ namespace NzbDrone.Core.Test.TvTests
         {
             Mocker.GetMock<IEpisodeService>()
                               .Setup(s => s.GetEpisodeBySeries(_series.Id))
-                              .Returns(Builder<Episode>.CreateListOfSize(2)
+                              .ReturnsAsync(Builder<Episode>.CreateListOfSize(2)
                                                        .TheFirst(1)
                                                        .With(e => e.AirDateUtc = DateTime.Today.AddDays(-7))
                                                        .TheLast(1)
@@ -78,86 +80,86 @@ namespace NzbDrone.Core.Test.TvTests
         }
 
         [Test]
-        public void should_return_true_if_running_series_last_refreshed_more_than_6_hours_ago()
+        public async Task should_return_true_if_running_series_last_refreshed_more_than_6_hours_ago()
         {
             GivenSeriesLastRefreshedHalfADayAgo();
 
-            Subject.ShouldRefresh(_series).Should().BeTrue();
+            (await Subject.ShouldRefresh(_series)).Should().BeTrue();
         }
 
         [Test]
-        public void should_return_false_if_running_series_last_refreshed_less_than_6_hours_ago()
+        public async Task should_return_false_if_running_series_last_refreshed_less_than_6_hours_ago()
         {
             GivenSeriesLastRefreshedRecently();
 
-            Subject.ShouldRefresh(_series).Should().BeFalse();
+            (await Subject.ShouldRefresh(_series)).Should().BeFalse();
         }
 
         [Test]
-        public void should_return_false_if_ended_series_last_refreshed_yesterday()
+        public async Task should_return_false_if_ended_series_last_refreshed_yesterday()
         {
             GivenSeriesIsEnded();
             GivenSeriesLastRefreshedYesterday();
 
-            Subject.ShouldRefresh(_series).Should().BeFalse();
+            (await Subject.ShouldRefresh(_series)).Should().BeFalse();
         }
 
         [Test]
-        public void should_return_true_if_series_last_refreshed_more_than_30_days_ago()
+        public async Task should_return_true_if_series_last_refreshed_more_than_30_days_ago()
         {
             GivenSeriesIsEnded();
             GivenSeriesLastRefreshedMonthsAgo();
 
-            Subject.ShouldRefresh(_series).Should().BeTrue();
+            (await Subject.ShouldRefresh(_series)).Should().BeTrue();
         }
 
         [Test]
-        public void should_return_true_if_episode_aired_in_last_30_days()
+        public async Task should_return_true_if_episode_aired_in_last_30_days()
         {
             GivenSeriesIsEnded();
             GivenSeriesLastRefreshedYesterday();
 
             GivenRecentlyAired();
 
-            Subject.ShouldRefresh(_series).Should().BeTrue();
+            (await Subject.ShouldRefresh(_series)).Should().BeTrue();
         }
 
         [Test]
-        public void should_return_false_when_recently_refreshed_ended_show_has_not_aired_for_30_days()
+        public async Task should_return_false_when_recently_refreshed_ended_show_has_not_aired_for_30_days()
         {
             GivenSeriesIsEnded();
             GivenSeriesLastRefreshedYesterday();
 
-            Subject.ShouldRefresh(_series).Should().BeFalse();
+            (await Subject.ShouldRefresh(_series)).Should().BeFalse();
         }
 
         [Test]
-        public void should_return_false_when_recently_refreshed_ended_show_aired_in_last_30_days()
+        public async Task should_return_false_when_recently_refreshed_ended_show_aired_in_last_30_days()
         {
             GivenSeriesIsEnded();
             GivenSeriesLastRefreshedRecently();
 
             GivenRecentlyAired();
 
-            Subject.ShouldRefresh(_series).Should().BeFalse();
+            (await Subject.ShouldRefresh(_series)).Should().BeFalse();
         }
 
         [Test]
-        public void should_return_true_if_deleted_series_last_refreshed_more_than_6_hours_ago()
+        public async Task should_return_true_if_deleted_series_last_refreshed_more_than_6_hours_ago()
         {
             GivenSeriesLastRefreshedHalfADayAgo();
             GivenSeriesIsDeleted();
 
-            Subject.ShouldRefresh(_series).Should().BeTrue();
+            (await Subject.ShouldRefresh(_series)).Should().BeTrue();
         }
 
         [Test]
-        public void should_return_true_if_upcoming_series_last_refreshed_more_than_6_hours_ago()
+        public async Task should_return_true_if_upcoming_series_last_refreshed_more_than_6_hours_ago()
         {
             GivenSeriesLastRefreshedHalfADayAgo();
             GivenSeriesIsUpcoming();
 
-            Subject.ShouldRefresh(_series).Should().BeTrue();
+            (await Subject.ShouldRefresh(_series)).Should().BeTrue();
         }
     }
 }

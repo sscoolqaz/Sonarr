@@ -51,7 +51,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
         {
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.FindByEpisodeId(It.IsAny<int>()))
-                .Returns(history);
+                .ReturnsAsync(history);
         }
 
         [Test]

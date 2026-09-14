@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -30,29 +31,29 @@ namespace NzbDrone.Core.Test.TvTests
         {
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.GetSeriesFolder(_series, null))
-                  .Returns(name);
+                  .ReturnsAsync(name);
         }
 
         public void GivenExistingRootFolder(string rootFolder)
         {
             Mocker.GetMock<IRootFolderService>()
                   .Setup(s => s.GetBestRootFolderPath(It.IsAny<string>()))
-                  .Returns(rootFolder);
+                  .ReturnsAsync(rootFolder);
         }
 
         [Test]
-        public void should_create_new_series_path()
+        public async Task should_create_new_series_path()
         {
             var rootFolder = @"C:\Test\TV2".AsOsAgnostic();
 
             GivenSeriesFolderName(_series.Title);
             _series.RootFolderPath = rootFolder;
 
-            Subject.BuildPath(_series, false).Should().Be(Path.Combine(rootFolder, _series.Title));
+            (await Subject.BuildPath(_series, false)).Should().Be(Path.Combine(rootFolder, _series.Title));
         }
 
         [Test]
-        public void should_reuse_existing_relative_folder_name()
+        public async Task should_reuse_existing_relative_folder_name()
         {
             var folderName = Path.GetFileName(_series.Path);
             var rootFolder = @"C:\Test\TV2".AsOsAgnostic();
@@ -61,11 +62,11 @@ namespace NzbDrone.Core.Test.TvTests
             GivenSeriesFolderName(_series.Title);
             _series.RootFolderPath = rootFolder;
 
-            Subject.BuildPath(_series, true).Should().Be(Path.Combine(rootFolder, folderName));
+            (await Subject.BuildPath(_series, true)).Should().Be(Path.Combine(rootFolder, folderName));
         }
 
         [Test]
-        public void should_reuse_existing_relative_folder_structure()
+        public async Task should_reuse_existing_relative_folder_structure()
         {
             var existingRootFolder = @"C:\Test\TV".AsOsAgnostic();
             var existingRelativePath = @"S\Series.Title";
@@ -76,11 +77,11 @@ namespace NzbDrone.Core.Test.TvTests
             _series.RootFolderPath = rootFolder;
             _series.Path = Path.Combine(existingRootFolder, existingRelativePath);
 
-            Subject.BuildPath(_series, true).Should().Be(Path.Combine(rootFolder, existingRelativePath));
+            (await Subject.BuildPath(_series, true)).Should().Be(Path.Combine(rootFolder, existingRelativePath));
         }
 
         [Test]
-        public void should_use_built_path_for_new_series()
+        public async Task should_use_built_path_for_new_series()
         {
             var rootFolder = @"C:\Test\TV2".AsOsAgnostic();
 
@@ -88,7 +89,7 @@ namespace NzbDrone.Core.Test.TvTests
             _series.RootFolderPath = rootFolder;
             _series.Path = null;
 
-            Subject.BuildPath(_series, true).Should().Be(Path.Combine(rootFolder, _series.Title));
+            (await Subject.BuildPath(_series, true)).Should().Be(Path.Combine(rootFolder, _series.Title));
         }
     }
 }

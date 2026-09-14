@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -23,11 +24,11 @@ namespace NzbDrone.Core.Test.RemotePathMappingsTests
 
             Mocker.GetMock<IRemotePathMappingRepository>()
                   .Setup(s => s.All())
-                  .Returns(new List<RemotePathMapping>());
+                  .ReturnsAsync(new List<RemotePathMapping>());
 
             Mocker.GetMock<IRemotePathMappingRepository>()
                   .Setup(s => s.Insert(It.IsAny<RemotePathMapping>()))
-                  .Returns<RemotePathMapping>(m => m);
+                  .Returns<RemotePathMapping>(m => Task.FromResult(m));
         }
 
         private void GivenMapping()
@@ -41,7 +42,7 @@ namespace NzbDrone.Core.Test.RemotePathMappingsTests
 
             Mocker.GetMock<IRemotePathMappingRepository>()
                   .Setup(s => s.All())
-                  .Returns(mappings);
+                  .ReturnsAsync(mappings);
         }
 
         private void WithNonExistingFolder()

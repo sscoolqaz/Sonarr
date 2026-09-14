@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -50,26 +51,26 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         }
 
         [Test]
-        public void should_return_existing_language_if_episode_title_does_not_have_language()
+        public async Task should_return_existing_language_if_episode_title_does_not_have_language()
         {
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.Original }, _simpleReleaseTitle);
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().Contain(_series.OriginalLanguage);
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().Contain(_series.OriginalLanguage);
         }
 
         [Test]
-        public void should_return_parsed_language()
+        public async Task should_return_parsed_language()
         {
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.French }, _simpleReleaseTitle);
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().Equal(_remoteEpisode.ParsedEpisodeInfo.Languages);
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().Equal(_remoteEpisode.ParsedEpisodeInfo.Languages);
         }
 
         [TestCase("Series.Title.S01E01.MULTi.1080p.WEB.H265-RlsGroup")]
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_multi_languages_when_indexer_id_has_multi_languages_configuration(string releaseTitle)
+        public async Task should_return_multi_languages_when_indexer_id_has_multi_languages_configuration(string releaseTitle)
         {
             var indexerDefinition = new IndexerDefinition
             {
@@ -78,13 +79,13 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             };
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(indexerDefinition);
+                .ReturnsAsync(indexerDefinition);
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 1;
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(1), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
@@ -93,7 +94,7 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_multi_languages_from_indexer_with_id_when_indexer_id_and_name_are_set(string releaseTitle)
+        public async Task should_return_multi_languages_from_indexer_with_id_when_indexer_id_and_name_are_set(string releaseTitle)
         {
             var indexerDefinition1 = new IndexerDefinition
             {
@@ -110,18 +111,18 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(indexerDefinition1);
+                .ReturnsAsync(indexerDefinition1);
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.All())
-                .Returns(new List<IndexerDefinition>() { indexerDefinition1, indexerDefinition2 });
+                .ReturnsAsync(new List<IndexerDefinition>() { indexerDefinition1, indexerDefinition2 });
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 1;
             _remoteEpisode.Release.Indexer = "MyIndexer2";
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(1), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
@@ -130,7 +131,7 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_multi_languages_when_indexer_name_has_multi_languages_configuration(string releaseTitle)
+        public async Task should_return_multi_languages_when_indexer_name_has_multi_languages_configuration(string releaseTitle)
         {
             var indexerDefinition = new IndexerDefinition
             {
@@ -141,13 +142,13 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.FindByName("MyIndexer (Prowlarr)"))
-                .Returns(indexerDefinition);
+                .ReturnsAsync(indexerDefinition);
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { }, releaseTitle);
             _remoteEpisode.Release.Indexer = "MyIndexer (Prowlarr)";
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.FindByName("MyIndexer (Prowlarr)"), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
@@ -156,7 +157,7 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_multi_languages_when_release_as_unknown_as_default_language_and_indexer_has_multi_languages_configuration(string releaseTitle)
+        public async Task should_return_multi_languages_when_release_as_unknown_as_default_language_and_indexer_has_multi_languages_configuration(string releaseTitle)
         {
             var indexerDefinition = new IndexerDefinition
             {
@@ -165,13 +166,13 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             };
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(indexerDefinition);
+                .ReturnsAsync(indexerDefinition);
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.Unknown }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 1;
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(1), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
@@ -180,7 +181,7 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_multi_languages_when_release_as_specified_language_and_indexer_has_multi_languages_configuration(string releaseTitle)
+        public async Task should_return_multi_languages_when_release_as_specified_language_and_indexer_has_multi_languages_configuration(string releaseTitle)
         {
             var indexerDefinition = new IndexerDefinition
             {
@@ -189,13 +190,13 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             };
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(indexerDefinition);
+                .ReturnsAsync(indexerDefinition);
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.French }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 1;
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(1), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
@@ -204,7 +205,7 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_multi_languages_when_release_as_other_language_and_indexer_has_multi_languages_configuration(string releaseTitle)
+        public async Task should_return_multi_languages_when_release_as_other_language_and_indexer_has_multi_languages_configuration(string releaseTitle)
         {
             var indexerDefinition = new IndexerDefinition
             {
@@ -213,13 +214,13 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             };
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(indexerDefinition);
+                .ReturnsAsync(indexerDefinition);
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.German }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 1;
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French, Language.German });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French, Language.German });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(1), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
@@ -228,7 +229,7 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_original_when_indexer_has_no_multi_languages_configuration(string releaseTitle)
+        public async Task should_return_original_when_indexer_has_no_multi_languages_configuration(string releaseTitle)
         {
             var indexerDefinition = new IndexerDefinition
             {
@@ -237,13 +238,13 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             };
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(indexerDefinition);
+                .ReturnsAsync(indexerDefinition);
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 1;
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(1), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
@@ -252,17 +253,17 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
         [TestCase("Series Title (2025) [COMPLETA] [1080p H265 EAC3 MultiLang MultiSub][RlsGroup]")]
         [TestCase("Series Title - Stagione 1 (2025) [COMPLETA] 720p H264 MULTILANG AAC 2.0 MULTISUB-RlsGroup")]
         [TestCase("Series Title (2007) S01E01 [Multilang AC3 Sub Spa Eng Rus]")]
-        public void should_return_original_when_no_indexer_value(string releaseTitle)
+        public async Task should_return_original_when_no_indexer_value(string releaseTitle)
         {
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { }, releaseTitle);
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage });
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
 
         [Test]
-        public void should_exclude_language_that_is_part_of_episode_title_when_release_tokens_contains_episode_title()
+        public async Task should_exclude_language_that_is_part_of_episode_title_when_release_tokens_contains_episode_title()
         {
             var releaseTitle = "Series.Title.S01E01.Jimmy.The.Greek.xyz-RlsGroup";
             var releaseTokens = ".Jimmy.The.Greek.xyz-RlsGroup";
@@ -270,11 +271,11 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             _remoteEpisode.Episodes.First().Title = "Jimmy The Greek";
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.Greek }, releaseTitle, releaseTokens);
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().Equal(_series.OriginalLanguage);
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().Equal(_series.OriginalLanguage);
         }
 
         [Test]
-        public void should_remove_parsed_language_that_is_part_of_episode_title_when_release_tokens_contains_episode_title()
+        public async Task should_remove_parsed_language_that_is_part_of_episode_title_when_release_tokens_contains_episode_title()
         {
             var releaseTitle = "Series.Title.S01E01.Jimmy.The.Greek.French.xyz-RlsGroup";
             var releaseTokens = ".Jimmy.The.Greek.French.xyz-RlsGroup";
@@ -282,11 +283,11 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             _remoteEpisode.Episodes.First().Title = "Jimmy The Greek";
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.Greek, Language.French }, releaseTitle, releaseTokens);
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().Equal(Language.French);
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().Equal(Language.French);
         }
 
         [Test]
-        public void should_not_exclude_language_that_is_part_of_episode_title_when_release_tokens_does_not_contain_episode_title()
+        public async Task should_not_exclude_language_that_is_part_of_episode_title_when_release_tokens_does_not_contain_episode_title()
         {
             var releaseTitle = "Series.Title.S01E01.xyz-RlsGroup";
             var releaseTokens = ".xyz-RlsGroup";
@@ -294,11 +295,11 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             _remoteEpisode.Episodes.First().Title = "Jimmy The Greek";
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.Greek }, releaseTitle, releaseTokens);
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().Equal(Language.Greek);
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().Equal(Language.Greek);
         }
 
         [Test]
-        public void should_use_reparse_language_after_determining_languages_that_are_in_episode_titles()
+        public async Task should_use_reparse_language_after_determining_languages_that_are_in_episode_titles()
         {
             var releaseTitle = "Series.Title.S01E01.Jimmy.The.Greek.Greek.xyz-RlsGroup";
             var releaseTokens = ".Jimmy.The.Greek.Greek.xyz-RlsGroup";
@@ -306,11 +307,11 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
             _remoteEpisode.Episodes.First().Title = "Jimmy The Greek";
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { Language.Greek }, releaseTitle, releaseTokens);
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().Equal(Language.Greek);
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().Equal(Language.Greek);
         }
 
         [Test]
-        public void should_return_multi_languages_from_indexer_with_name_when_indexer_id_does_not_exist()
+        public async Task should_return_multi_languages_from_indexer_with_name_when_indexer_id_does_not_exist()
         {
             var releaseTitle = "Series.Title.S01E01.MULTi.1080p.WEB.H265-RlsGroup";
             var indexerDefinition1 = new IndexerDefinition
@@ -328,29 +329,29 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(null as IndexerDefinition);
+                .ReturnsAsync(null as IndexerDefinition);
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.FindByName("MyIndexer1"))
-                .Returns(indexerDefinition1);
+                .ReturnsAsync(indexerDefinition1);
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.All())
-                .Returns(new List<IndexerDefinition>() { indexerDefinition1, indexerDefinition2 });
+                .ReturnsAsync(new List<IndexerDefinition>() { indexerDefinition1, indexerDefinition2 });
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 10;
             _remoteEpisode.Release.Indexer = "MyIndexer1";
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(10), Times.Once());
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.FindByName("MyIndexer1"), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();
         }
 
         [Test]
-        public void should_return_multi_languages_from_indexer_with_name_when_indexer_id_not_available()
+        public async Task should_return_multi_languages_from_indexer_with_name_when_indexer_id_not_available()
         {
             var releaseTitle = "Series.Title.S01E01.MULTi.1080p.WEB.H265-RlsGroup";
             var indexerDefinition1 = new IndexerDefinition
@@ -368,22 +369,22 @@ namespace NzbDrone.Core.Test.Download.Aggregation.Aggregators
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(1))
-                .Returns(null as IndexerDefinition);
+                .ReturnsAsync(null as IndexerDefinition);
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.FindByName("MyIndexer1"))
-                .Returns(indexerDefinition1);
+                .ReturnsAsync(indexerDefinition1);
 
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.All())
-                .Returns(new List<IndexerDefinition>() { indexerDefinition1, indexerDefinition2 });
+                .ReturnsAsync(new List<IndexerDefinition>() { indexerDefinition1, indexerDefinition2 });
 
             _remoteEpisode.ParsedEpisodeInfo = GetParsedEpisodeInfo(new List<Language> { }, releaseTitle);
             _remoteEpisode.Release.IndexerId = 0;
             _remoteEpisode.Release.Indexer = "MyIndexer1";
             _remoteEpisode.Release.Title = releaseTitle;
 
-            Subject.Aggregate(_remoteEpisode).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
+            (await Subject.Aggregate(_remoteEpisode)).Languages.Should().BeEquivalentTo(new List<Language> { _series.OriginalLanguage, Language.French });
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.Find(10), Times.Never());
             Mocker.GetMock<IIndexerFactory>().Verify(c => c.FindByName("MyIndexer1"), Times.Once());
             Mocker.GetMock<IIndexerFactory>().VerifyNoOtherCalls();

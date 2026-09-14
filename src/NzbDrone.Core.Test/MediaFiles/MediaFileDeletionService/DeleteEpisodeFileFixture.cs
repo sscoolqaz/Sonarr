@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -44,7 +45,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaFileDeletionService
         {
             Mocker.GetMock<IRootFolderService>()
                 .Setup(s => s.GetBestRootFolderPath(_series.Path))
-                .Returns(ROOT_FOLDER);
+                .ReturnsAsync(ROOT_FOLDER);
 
             Mocker.GetMock<IDiskProvider>()
                   .Setup(s => s.FolderExists(ROOT_FOLDER))
@@ -68,7 +69,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaFileDeletionService
         [Test]
         public void should_throw_if_root_folder_does_not_exist()
         {
-            Assert.Throws<NzbDroneClientException>(() => Subject.DeleteEpisodeFile(_series, _episodeFile));
+            Assert.ThrowsAsync<NzbDroneClientException>(async () => await Subject.DeleteEpisodeFile(_series, _episodeFile));
             ExceptionVerification.ExpectedWarns(1);
         }
 
@@ -77,37 +78,37 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaFileDeletionService
         {
             GivenRootFolderExists();
 
-            Assert.Throws<NzbDroneClientException>(() => Subject.DeleteEpisodeFile(_series, _episodeFile));
+            Assert.ThrowsAsync<NzbDroneClientException>(async () => await Subject.DeleteEpisodeFile(_series, _episodeFile));
             ExceptionVerification.ExpectedWarns(1);
         }
 
         [Test]
-        public void should_delete_from_db_if_series_folder_does_not_exist()
+        public async Task should_delete_from_db_if_series_folder_does_not_exist()
         {
             GivenRootFolderExists();
             GivenRootFolderHasFolders();
 
-            Subject.DeleteEpisodeFile(_series, _episodeFile);
+            await Subject.DeleteEpisodeFile(_series, _episodeFile);
 
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Delete(_episodeFile, DeleteMediaFileReason.Manual), Times.Once());
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(_episodeFile.Path, It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_delete_from_db_if_episode_file_does_not_exist()
+        public async Task should_delete_from_db_if_episode_file_does_not_exist()
         {
             GivenRootFolderExists();
             GivenRootFolderHasFolders();
             GivenSeriesFolderExists();
 
-            Subject.DeleteEpisodeFile(_series, _episodeFile);
+            await Subject.DeleteEpisodeFile(_series, _episodeFile);
 
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Delete(_episodeFile, DeleteMediaFileReason.Manual), Times.Once());
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(_episodeFile.Path, It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_delete_from_disk_and_db_if_episode_file_exists()
+        public async Task should_delete_from_disk_and_db_if_episode_file_exists()
         {
             GivenRootFolderExists();
             GivenRootFolderHasFolders();
@@ -117,7 +118,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaFileDeletionService
                   .Setup(s => s.FileExists(_episodeFile.Path))
                   .Returns(true);
 
-            Subject.DeleteEpisodeFile(_series, _episodeFile);
+            await Subject.DeleteEpisodeFile(_series, _episodeFile);
 
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(_episodeFile.Path, "Series Title"), Times.Once());
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Delete(_episodeFile, DeleteMediaFileReason.Manual), Times.Once());
@@ -138,7 +139,7 @@ namespace NzbDrone.Core.Test.MediaFiles.MediaFileDeletionService
                   .Setup(s => s.DeleteFile(_episodeFile.Path, "Series Title"))
                   .Throws(new IOException());
 
-            Assert.Throws<NzbDroneClientException>(() => Subject.DeleteEpisodeFile(_series, _episodeFile));
+            Assert.ThrowsAsync<NzbDroneClientException>(async () => await Subject.DeleteEpisodeFile(_series, _episodeFile));
 
             ExceptionVerification.ExpectedErrors(1);
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(_episodeFile.Path, "Series Title"), Times.Once());

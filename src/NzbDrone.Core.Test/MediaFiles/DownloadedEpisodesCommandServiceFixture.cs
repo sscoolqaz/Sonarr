@@ -30,11 +30,11 @@ namespace NzbDrone.Core.Test.MediaFiles
         {
             Mocker.GetMock<IDownloadedEpisodesImportService>()
                 .Setup(v => v.ProcessRootFolder(It.IsAny<DirectoryInfo>()))
-                .Returns(new List<ImportResult>());
+                .ReturnsAsync(new List<ImportResult>());
 
             Mocker.GetMock<IDownloadedEpisodesImportService>()
                 .Setup(v => v.ProcessPath(It.IsAny<string>(), It.IsAny<ImportMode>(), It.IsAny<Series>(), It.IsAny<DownloadClientItem>()))
-                .Returns(new List<ImportResult>());
+                .ReturnsAsync(new List<ImportResult>());
 
             var downloadItem = Builder<DownloadClientItem>.CreateNew()
                 .With(v => v.DownloadId = "sab1")

@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -41,7 +43,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                 .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -49,7 +51,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
 // { "\\", "/", "<", ">", "?", "*", ":", "|", "\"" };
@@ -66,12 +68,12 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("Colon: Two Periods", "Colon - Two Periods")]
         [TestCase("Pipe|", "Pipe")]
         [TestCase("Quotes\"", "Quotes")]
-        public void should_replace_illegal_characters(string title, string expected)
+        public async Task should_replace_illegal_characters(string title, string expected)
         {
             _series.Title = title;
             _namingConfig.StandardEpisodeFormat = "{Series Title}";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be(expected);
         }
     }

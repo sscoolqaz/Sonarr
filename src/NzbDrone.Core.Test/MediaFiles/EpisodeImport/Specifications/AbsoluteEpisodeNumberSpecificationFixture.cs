@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.MediaFiles.EpisodeImport.Specifications;
 using NzbDrone.Core.Organizer;
@@ -42,7 +43,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.RequiresAbsoluteEpisodeNumber())
-                  .Returns(true);
+                  .ReturnsAsync(true);
         }
 
         [Test]
@@ -69,7 +70,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.RequiresAbsoluteEpisodeNumber())
-                  .Returns(false);
+                  .ReturnsAsync(false);
 
             Subject.IsSatisfiedBy(_localEpisode, null).Accepted.Should().BeTrue();
         }

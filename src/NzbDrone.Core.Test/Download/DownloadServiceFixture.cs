@@ -215,7 +215,7 @@ namespace NzbDrone.Core.Test.Download
 
             Mocker.GetMock<IDownloadClientStatusService>()
                   .Setup(v => v.GetBlockedProviders())
-                  .Returns(new List<DownloadClientStatus>
+                  .ReturnsAsync(new List<DownloadClientStatus>
                   {
                       new DownloadClientStatus
                       {

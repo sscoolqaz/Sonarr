@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -31,7 +32,7 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeServiceTests
         {
             Mocker.GetMock<IEpisodeRepository>()
                   .Setup(s => s.Find(It.IsAny<int>(), It.IsAny<string>()))
-                  .Returns(episodes.ToList());
+                  .ReturnsAsync(episodes.ToList());
         }
 
         [Test]
@@ -39,51 +40,51 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeServiceTests
         {
             GivenEpisodes(CreateEpisode(1, 1), CreateEpisode(2, 1));
 
-            Assert.Throws<InvalidOperationException>(() => Subject.FindEpisode(SERIES_ID, AIR_DATE, null));
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await Subject.FindEpisode(SERIES_ID, AIR_DATE, null));
         }
 
         [Test]
-        public void should_return_null_when_finds_no_episode()
+        public async Task should_return_null_when_finds_no_episode()
         {
             GivenEpisodes();
 
-            Subject.FindEpisode(SERIES_ID, AIR_DATE, null).Should().BeNull();
+            (await Subject.FindEpisode(SERIES_ID, AIR_DATE, null)).Should().BeNull();
         }
 
         [Test]
-        public void should_get_episode_when_single_episode_exists_for_air_date()
+        public async Task should_get_episode_when_single_episode_exists_for_air_date()
         {
             GivenEpisodes(CreateEpisode(1, 1));
 
-            Subject.FindEpisode(SERIES_ID, AIR_DATE, null).Should().NotBeNull();
+            (await Subject.FindEpisode(SERIES_ID, AIR_DATE, null)).Should().NotBeNull();
         }
 
         [Test]
-        public void should_get_episode_when_regular_episode_and_special_share_the_same_air_date()
+        public async Task should_get_episode_when_regular_episode_and_special_share_the_same_air_date()
         {
             GivenEpisodes(CreateEpisode(1, 1), CreateEpisode(0, 1));
 
-            Subject.FindEpisode(SERIES_ID, AIR_DATE, null).Should().NotBeNull();
+            (await Subject.FindEpisode(SERIES_ID, AIR_DATE, null)).Should().NotBeNull();
         }
 
         [Test]
-        public void should_get_special_when_its_the_only_episode_for_the_date_provided()
+        public async Task should_get_special_when_its_the_only_episode_for_the_date_provided()
         {
             GivenEpisodes(CreateEpisode(0, 1));
 
-            Subject.FindEpisode(SERIES_ID, AIR_DATE, null).Should().NotBeNull();
+            (await Subject.FindEpisode(SERIES_ID, AIR_DATE, null)).Should().NotBeNull();
         }
 
         [Test]
-        public void should_get_episode_when_two_regular_episodes_share_the_same_air_date_and_part_is_provided()
+        public async Task should_get_episode_when_two_regular_episodes_share_the_same_air_date_and_part_is_provided()
         {
             var episode1 = CreateEpisode(1, 1);
             var episode2 = CreateEpisode(1, 2);
 
             GivenEpisodes(episode1, episode2);
 
-            Subject.FindEpisode(SERIES_ID, AIR_DATE, 1).Should().Be(episode1);
-            Subject.FindEpisode(SERIES_ID, AIR_DATE, 2).Should().Be(episode2);
+            (await Subject.FindEpisode(SERIES_ID, AIR_DATE, 1)).Should().Be(episode1);
+            (await Subject.FindEpisode(SERIES_ID, AIR_DATE, 2)).Should().Be(episode2);
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -35,42 +36,42 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(c => c.GetAllSeriesPaths())
-                .Returns(_series);
+                .ReturnsAsync(_series);
 
             Mocker.GetMock<IMetadataFileService>()
                 .Setup(c => c.GetFilesBySeries(_series.First().Key))
-                .Returns(_metadata);
+                .ReturnsAsync(_metadata);
 
             Mocker.GetMock<IConfigService>().SetupGet(c => c.CleanupMetadataImages).Returns(true);
         }
 
         [Test]
-        public void should_not_process_non_image_files()
+        public async Task should_not_process_non_image_files()
         {
             _metadata.First().RelativePath = "season\\file.xml".AsOsAgnostic();
             _metadata.First().Type = MetadataType.EpisodeMetadata;
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDiskProvider>().Verify(c => c.OpenReadStream(It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_not_process_images_before_tvdb_switch()
+        public async Task should_not_process_images_before_tvdb_switch()
         {
             _metadata.First().LastUpdated = new DateTime(2014, 12, 25);
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDiskProvider>().Verify(c => c.OpenReadStream(It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_not_run_if_flag_is_false()
+        public async Task should_not_run_if_flag_is_false()
         {
             Mocker.GetMock<IConfigService>().SetupGet(c => c.CleanupMetadataImages).Returns(false);
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IConfigService>().VerifySet(c => c.CleanupMetadataImages = true, Times.Never());
             Mocker.GetMock<ISeriesService>().Verify(c => c.GetAllSeries(), Times.Never());
@@ -79,17 +80,17 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
         }
 
         [Test]
-        public void should_set_clean_flag_to_false()
+        public async Task should_set_clean_flag_to_false()
         {
             _metadata.First().LastUpdated = new DateTime(2014, 12, 25);
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IConfigService>().VerifySet(c => c.CleanupMetadataImages = false, Times.Once());
         }
 
         [Test]
-        public void should_delete_html_images()
+        public async Task should_delete_html_images()
         {
             var imagePath = "C:\\TV\\Season\\image.jpg".AsOsAgnostic();
             _metadata.First().LastUpdated = new DateTime(2014, 12, 29);
@@ -100,14 +101,14 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
                 .Setup(c => c.OpenReadStream(imagePath))
                 .Returns(new FileStream(GetTestPath("Files/html_image.jpg"), FileMode.Open, FileAccess.Read));
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDiskProvider>().Verify(c => c.DeleteFile(imagePath), Times.Once());
             Mocker.GetMock<IMetadataFileService>().Verify(c => c.Delete(_metadata.First().Id), Times.Once());
         }
 
         [Test]
-        public void should_delete_empty_images()
+        public async Task should_delete_empty_images()
         {
             var imagePath = "C:\\TV\\Season\\image.jpg".AsOsAgnostic();
             _metadata.First().LastUpdated = new DateTime(2014, 12, 29);
@@ -118,14 +119,14 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
                 .Setup(c => c.OpenReadStream(imagePath))
                               .Returns(new FileStream(GetTestPath("Files/emptyfile.txt"), FileMode.Open, FileAccess.Read));
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDiskProvider>().Verify(c => c.DeleteFile(imagePath), Times.Once());
             Mocker.GetMock<IMetadataFileService>().Verify(c => c.Delete(_metadata.First().Id), Times.Once());
         }
 
         [Test]
-        public void should_not_delete_non_html_files()
+        public async Task should_not_delete_non_html_files()
         {
             var imagePath = "C:\\TV\\Season\\image.jpg".AsOsAgnostic();
             _metadata.First().LastUpdated = new DateTime(2014, 12, 29);
@@ -135,7 +136,7 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
                 .Setup(c => c.OpenReadStream(imagePath))
                               .Returns(new FileStream(GetTestPath("Files/Queue.txt"), FileMode.Open, FileAccess.Read));
 
-            Subject.Clean();
+            await Subject.Clean();
             AssertImageWasNotRemoved();
         }
 

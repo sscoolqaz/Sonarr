@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
@@ -47,74 +48,74 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
         private static string NewLabel(string prefix) => $"{prefix}-{Guid.NewGuid():N}".Substring(0, 20);
 
         [Test]
-        public void insert_should_resolve_to_this_connections_own_row_id()
+        public async Task insert_should_resolve_to_this_connections_own_row_id()
         {
             var label = NewLabel("wc-ins");
 
-            var inserted = _repo.Insert(new Tag { Label = label });
+            var inserted = await _repo.Insert(new Tag { Label = label });
 
             inserted.Id.Should().BeGreaterThan(0);
-            _repo.Get(inserted.Id).Label.Should().Be(label);
+            (await _repo.Get(inserted.Id)).Label.Should().Be(label);
         }
 
         [Test]
-        public void rapid_sequential_inserts_should_each_resolve_to_their_own_row()
+        public async Task rapid_sequential_inserts_should_each_resolve_to_their_own_row()
         {
             for (var i = 0; i < 10; i++)
             {
                 var label = NewLabel($"wc-seq{i}");
 
-                var inserted = _repo.Insert(new Tag { Label = label });
+                var inserted = await _repo.Insert(new Tag { Label = label });
 
-                _repo.Get(inserted.Id).Label.Should().Be(label);
+                (await _repo.Get(inserted.Id)).Label.Should().Be(label);
             }
         }
 
         [Test]
-        public void update_should_wait_until_the_new_value_is_confirmed()
+        public async Task update_should_wait_until_the_new_value_is_confirmed()
         {
-            var original = _repo.Insert(new Tag { Label = NewLabel("wc-upd") });
+            var original = await _repo.Insert(new Tag { Label = NewLabel("wc-upd") });
             var updatedLabel = NewLabel("wc-upd2");
 
-            _repo.Update(new Tag { Id = original.Id, Label = updatedLabel });
+            await _repo.Update(new Tag { Id = original.Id, Label = updatedLabel });
 
-            _repo.Get(original.Id).Label.Should().Be(updatedLabel);
+            (await _repo.Get(original.Id)).Label.Should().Be(updatedLabel);
         }
 
         [Test]
-        public void set_fields_should_wait_until_the_field_is_confirmed()
+        public async Task set_fields_should_wait_until_the_field_is_confirmed()
         {
-            var original = _repo.Insert(new Tag { Label = NewLabel("wc-sf") });
+            var original = await _repo.Insert(new Tag { Label = NewLabel("wc-sf") });
             var updatedLabel = NewLabel("wc-sf2");
 
-            _repo.SetFields(new Tag { Id = original.Id, Label = updatedLabel }, t => t.Label);
+            await _repo.SetFields(new Tag { Id = original.Id, Label = updatedLabel }, t => t.Label);
 
-            _repo.Get(original.Id).Label.Should().Be(updatedLabel);
+            (await _repo.Get(original.Id)).Label.Should().Be(updatedLabel);
         }
 
         [Test]
-        public void delete_should_wait_until_the_row_is_confirmed_removed()
+        public async Task delete_should_wait_until_the_row_is_confirmed_removed()
         {
-            var inserted = _repo.Insert(new Tag { Label = NewLabel("wc-del") });
+            var inserted = await _repo.Insert(new Tag { Label = NewLabel("wc-del") });
 
-            _repo.Delete(inserted.Id);
+            await _repo.Delete(inserted.Id);
 
-            _repo.Find(inserted.Id).Should().BeNull();
+            (await _repo.Find(inserted.Id)).Should().BeNull();
         }
 
         // P1-8 additions: three defect scenarios the original happy-path tests didn't cover.
 
         [Test]
-        public void no_op_update_same_values_should_not_timeout()
+        public async Task no_op_update_same_values_should_not_timeout()
         {
             // A no-op update (byte-identical row content) commits server-side but produces no
             // OnUpdate row-delta event. Confirmation must come via the reducer-committed channel
             // instead, otherwise this times out on a legitimate successful write.
-            var inserted = _repo.Insert(new Tag { Label = NewLabel("wc-noop") });
+            var inserted = await _repo.Insert(new Tag { Label = NewLabel("wc-noop") });
 
-            _repo.Update(new Tag { Id = inserted.Id, Label = inserted.Label });
+            await _repo.Update(new Tag { Id = inserted.Id, Label = inserted.Label });
 
-            _repo.Get(inserted.Id).Label.Should().Be(inserted.Label);
+            (await _repo.Get(inserted.Id)).Label.Should().Be(inserted.Label);
         }
 
         [Test]
@@ -123,15 +124,15 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
             // If the server-side reducer returns Status.Failed (e.g. row not found), the write
             // path must signal failure immediately via the reducer-committed channel rather than
             // waiting out the full WriteConfirmationTimeout.
-            var act = () => _repo.Update(new Tag { Id = int.MaxValue, Label = "ghost" });
+            Func<Task> act = () => _repo.Update(new Tag { Id = int.MaxValue, Label = "ghost" });
 
             // Either throws InvalidOperationException (failure-fast) or times out — the former is
             // the correct behavior. Both are acceptable here; the test fails only on unexpected success.
-            act.Should().Throw<Exception>();
+            act.Should().ThrowAsync<Exception>();
         }
 
         [Test]
-        public void orphan_started_then_single_update_should_both_complete_without_false_confirmation()
+        public async Task orphan_started_then_single_update_should_both_complete_without_false_confirmation()
         {
             // Regression guard for the bulk-reducer interference scenario: OrphanStarted() uses
             // InvokeAndWaitForReducerCommitted (confirmed via the OrphanStartedCommands reducer
@@ -140,11 +141,11 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
             // and must confirm against its own row id, not against the bulk reducer's events.
             var commandRepo = new SpacetimeCommandRepository(_connection, Mock.Of<IEventAggregator>());
 
-            commandRepo.OrphanStarted();
+            await commandRepo.OrphanStarted();
 
-            var tag = _repo.Insert(new Tag { Label = NewLabel("wc-blk") });
-            _repo.Update(new Tag { Id = tag.Id, Label = NewLabel("wc-blk2") });
-            _repo.Get(tag.Id).Label.Should().StartWith("wc-blk2");
+            var tag = await _repo.Insert(new Tag { Label = NewLabel("wc-blk") });
+            await _repo.Update(new Tag { Id = tag.Id, Label = NewLabel("wc-blk2") });
+            (await _repo.Get(tag.Id)).Label.Should().StartWith("wc-blk2");
         }
     }
 }

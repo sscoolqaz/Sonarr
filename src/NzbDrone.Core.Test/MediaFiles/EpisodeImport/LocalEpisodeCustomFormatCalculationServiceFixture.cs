@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -67,27 +68,27 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
         }
 
         [Test]
-        public void should_build_a_filename_and_use_it_to_calculate_custom_score()
+        public async Task should_build_a_filename_and_use_it_to_calculate_custom_score()
         {
             var renamedFileName = @"C:\Test\Unsorted\The.Office.S03E115.DVDRip.English.XviD-OSiTV.avi";
 
             Mocker.GetMock<IBuildFileNames>()
                 .Setup(s => s.BuildFileName(It.IsAny<List<Episode>>(), It.IsAny<Series>(), It.IsAny<EpisodeFile>(), "", null, null))
-                .Returns(renamedFileName);
+                .ReturnsAsync(renamedFileName);
 
-            Subject.ParseEpisodeCustomFormats(_localEpisode).Should().BeEquivalentTo([_englishCustomFormat]);
+            (await Subject.ParseEpisodeCustomFormats(_localEpisode)).Should().BeEquivalentTo([_englishCustomFormat]);
         }
 
         [Test]
-        public void should_update_custom_formats_on_local_episode()
+        public async Task should_update_custom_formats_on_local_episode()
         {
             var renamedFileName = @"C:\Test\Unsorted\The.Office.S03E115.DVDRip.English.XviD-OSiTV.avi";
 
             Mocker.GetMock<IBuildFileNames>()
                 .Setup(s => s.BuildFileName(It.IsAny<List<Episode>>(), It.IsAny<Series>(), It.IsAny<EpisodeFile>(), "", null, null))
-                .Returns(renamedFileName);
+                .ReturnsAsync(renamedFileName);
 
-            Subject.UpdateEpisodeCustomFormats(_localEpisode);
+            await Subject.UpdateEpisodeCustomFormats(_localEpisode);
             _localEpisode.FileNameUsedForCustomFormatCalculation.Should().Be(renamedFileName);
 
             _localEpisode.OriginalFileNameCustomFormats.Should().BeEquivalentTo([_spanishCustomFormat]);

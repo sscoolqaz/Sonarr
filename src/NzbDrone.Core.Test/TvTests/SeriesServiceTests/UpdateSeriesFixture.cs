@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -36,33 +37,33 @@ namespace NzbDrone.Core.Test.TvTests.SeriesServiceTests
 
             Mocker.GetMock<IAutoTaggingService>()
                 .Setup(s => s.GetTagChanges(It.IsAny<Series>()))
-                .Returns(new AutoTaggingChanges());
+                .ReturnsAsync(new AutoTaggingChanges());
 
             Mocker.GetMock<ISeriesRepository>()
                 .Setup(s => s.Update(It.IsAny<Series>()))
-                .Returns<Series>(r => r);
+                .Returns<Series>(r => Task.FromResult(r));
         }
 
         private void GivenExistingSeries()
         {
             Mocker.GetMock<ISeriesRepository>()
                   .Setup(s => s.Get(It.IsAny<int>()))
-                  .Returns(_existingSeries);
+                  .ReturnsAsync(_existingSeries);
         }
 
         [Test]
-        public void should_not_update_episodes_if_season_hasnt_changed()
+        public async Task should_not_update_episodes_if_season_hasnt_changed()
         {
             GivenExistingSeries();
 
-            Subject.UpdateSeries(_fakeSeries);
+            await Subject.UpdateSeries(_fakeSeries);
 
             Mocker.GetMock<IEpisodeService>()
                   .Verify(v => v.SetEpisodeMonitoredBySeason(_fakeSeries.Id, It.IsAny<int>(), It.IsAny<bool>()), Times.Never());
         }
 
         [Test]
-        public void should_update_series_when_it_changes()
+        public async Task should_update_series_when_it_changes()
         {
             GivenExistingSeries();
             var seasonNumber = 1;
@@ -70,7 +71,7 @@ namespace NzbDrone.Core.Test.TvTests.SeriesServiceTests
 
             _fakeSeries.Seasons.Single(s => s.SeasonNumber == seasonNumber).Monitored = monitored;
 
-            Subject.UpdateSeries(_fakeSeries);
+            await Subject.UpdateSeries(_fakeSeries);
 
             Mocker.GetMock<IEpisodeService>()
                   .Verify(v => v.SetEpisodeMonitoredBySeason(_fakeSeries.Id, seasonNumber, monitored), Times.Once());
@@ -80,7 +81,7 @@ namespace NzbDrone.Core.Test.TvTests.SeriesServiceTests
         }
 
         [Test]
-        public void should_add_and_remove_tags()
+        public async Task should_add_and_remove_tags()
         {
             GivenExistingSeries();
             var seasonNumber = 1;
@@ -91,13 +92,13 @@ namespace NzbDrone.Core.Test.TvTests.SeriesServiceTests
 
             Mocker.GetMock<IAutoTaggingService>()
                 .Setup(s => s.GetTagChanges(_fakeSeries))
-                .Returns(new AutoTaggingChanges
+                .ReturnsAsync(new AutoTaggingChanges
                 {
                     TagsToAdd = new HashSet<int> { 3 },
                     TagsToRemove = new HashSet<int> { 1 }
                 });
 
-            var result = Subject.UpdateSeries(_fakeSeries);
+            var result = await Subject.UpdateSeries(_fakeSeries);
 
             result.Tags.Should().BeEquivalentTo(new[] { 2, 3 });
         }

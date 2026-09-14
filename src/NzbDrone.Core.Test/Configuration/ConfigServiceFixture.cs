@@ -71,7 +71,7 @@ namespace NzbDrone.Core.Test.Configuration
                 values.Add(new Config { Key = key, Value = value });
             });
 
-            Mocker.GetMock<IConfigRepository>().Setup(c => c.All()).Returns(values);
+            Mocker.GetMock<IConfigRepository>().Setup(c => c.All()).ReturnsAsync(values);
 
             foreach (var propertyInfo in allProperties)
             {
@@ -117,7 +117,7 @@ namespace NzbDrone.Core.Test.Configuration
         {
             Mocker.GetMock<IConfigRepository>()
                   .Setup(v => v.Get("downloadedepisodesfolder"))
-                  .Returns(new Config { Id = 1, Key = "DownloadedEpisodesFolder", Value = @"C:\test".AsOsAgnostic() });
+                  .ReturnsAsync(new Config { Id = 1, Key = "DownloadedEpisodesFolder", Value = @"C:\test".AsOsAgnostic() });
 
             var dict = new Dictionary<string, object>();
             dict.Add("DownloadedEpisodesFolder", null);

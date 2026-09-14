@@ -18,11 +18,11 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.GetAvailableProviders())
-                  .Returns(new List<IIndexer>());
+                  .ReturnsAsync(new List<IIndexer>());
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.RssEnabled(It.IsAny<bool>()))
-                  .Returns(new List<IIndexer>());
+                  .ReturnsAsync(new List<IIndexer>());
 
             Mocker.GetMock<ILocalizationService>()
                   .Setup(s => s.GetLocalizedString(It.IsAny<string>()))
@@ -37,21 +37,21 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.GetAvailableProviders())
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
         }
 
         private void GivenRssEnabled()
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.RssEnabled(It.IsAny<bool>()))
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
         }
 
         private void GivenRssFiltered()
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.RssEnabled(false))
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
 
             Mocker.GetMock<ILocalizationService>()
                   .Setup(s => s.GetLocalizedString(It.IsAny<string>()))

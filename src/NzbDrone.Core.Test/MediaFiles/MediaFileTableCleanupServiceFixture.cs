@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -35,14 +36,14 @@ namespace NzbDrone.Core.Test.MediaFiles
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(c => c.GetEpisodeBySeries(It.IsAny<int>()))
-                  .Returns(_episodes);
+                  .ReturnsAsync(_episodes);
         }
 
         private void GivenEpisodeFiles(IEnumerable<EpisodeFile> episodeFiles)
         {
             Mocker.GetMock<IMediaFileService>()
                   .Setup(c => c.GetFilesBySeries(It.IsAny<int>()))
-                  .Returns(episodeFiles.ToList());
+                  .ReturnsAsync(episodeFiles.ToList());
         }
 
         private void GivenFilesAreNotAttachedToEpisode()
@@ -51,7 +52,7 @@ namespace NzbDrone.Core.Test.MediaFiles
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(c => c.GetEpisodeBySeries(It.IsAny<int>()))
-                  .Returns(_episodes);
+                  .ReturnsAsync(_episodes);
         }
 
         private List<string> FilesOnDisk(IEnumerable<EpisodeFile> episodeFiles)
@@ -60,20 +61,20 @@ namespace NzbDrone.Core.Test.MediaFiles
         }
 
         [Test]
-        public void should_skip_files_that_exist_in_disk()
+        public async Task should_skip_files_that_exist_in_disk()
         {
             var episodeFiles = Builder<EpisodeFile>.CreateListOfSize(10)
                 .Build();
 
             GivenEpisodeFiles(episodeFiles);
 
-            Subject.Clean(_series, FilesOnDisk(episodeFiles));
+            await Subject.Clean(_series, FilesOnDisk(episodeFiles));
 
             Mocker.GetMock<IEpisodeService>().Verify(c => c.UpdateEpisode(It.IsAny<Episode>()), Times.Never());
         }
 
         [Test]
-        public void should_delete_non_existent_files()
+        public async Task should_delete_non_existent_files()
         {
             var episodeFiles = Builder<EpisodeFile>.CreateListOfSize(10)
                 .Random(2)
@@ -82,13 +83,13 @@ namespace NzbDrone.Core.Test.MediaFiles
 
             GivenEpisodeFiles(episodeFiles);
 
-            Subject.Clean(_series, FilesOnDisk(episodeFiles.Where(e => e.RelativePath != DELETED_PATH)));
+            await Subject.Clean(_series, FilesOnDisk(episodeFiles.Where(e => e.RelativePath != DELETED_PATH)));
 
             Mocker.GetMock<IMediaFileService>().Verify(c => c.Delete(It.Is<EpisodeFile>(e => e.RelativePath == DELETED_PATH), DeleteMediaFileReason.MissingFromDisk), Times.Exactly(2));
         }
 
         [Test]
-        public void should_delete_files_that_dont_belong_to_any_episodes()
+        public async Task should_delete_files_that_dont_belong_to_any_episodes()
         {
             var episodeFiles = Builder<EpisodeFile>.CreateListOfSize(10)
                                 .Random(10)
@@ -98,23 +99,23 @@ namespace NzbDrone.Core.Test.MediaFiles
             GivenEpisodeFiles(episodeFiles);
             GivenFilesAreNotAttachedToEpisode();
 
-            Subject.Clean(_series, FilesOnDisk(episodeFiles));
+            await Subject.Clean(_series, FilesOnDisk(episodeFiles));
 
             Mocker.GetMock<IMediaFileService>().Verify(c => c.Delete(It.IsAny<EpisodeFile>(), DeleteMediaFileReason.NoLinkedEpisodes), Times.Exactly(10));
         }
 
         [Test]
-        public void should_unlink_episode_when_episodeFile_does_not_exist()
+        public async Task should_unlink_episode_when_episodeFile_does_not_exist()
         {
             GivenEpisodeFiles(new List<EpisodeFile>());
 
-            Subject.Clean(_series, new List<string>());
+            await Subject.Clean(_series, new List<string>());
 
             Mocker.GetMock<IEpisodeService>().Verify(c => c.UpdateEpisode(It.Is<Episode>(e => e.EpisodeFileId == 0)), Times.Exactly(10));
         }
 
         [Test]
-        public void should_not_update_episode_when_episodeFile_exists()
+        public async Task should_not_update_episode_when_episodeFile_exists()
         {
             var episodeFiles = Builder<EpisodeFile>.CreateListOfSize(10)
                                 .Random(10)
@@ -123,7 +124,7 @@ namespace NzbDrone.Core.Test.MediaFiles
 
             GivenEpisodeFiles(episodeFiles);
 
-            Subject.Clean(_series, FilesOnDisk(episodeFiles));
+            await Subject.Clean(_series, FilesOnDisk(episodeFiles));
 
             Mocker.GetMock<IEpisodeService>().Verify(c => c.UpdateEpisode(It.IsAny<Episode>()), Times.Never());
         }

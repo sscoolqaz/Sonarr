@@ -24,7 +24,7 @@ namespace NzbDrone.Core.Test.Qualities
         {
             Mocker.GetMock<IQualityDefinitionRepository>()
                   .Setup(s => s.All())
-                  .Returns(new List<QualityDefinition>
+                  .ReturnsAsync(new List<QualityDefinition>
                       {
                               new QualityDefinition(Quality.SDTV) { Weight = 1, MinSize = 0, MaxSize = 100, Id = 20 }
                       });
@@ -40,7 +40,7 @@ namespace NzbDrone.Core.Test.Qualities
         {
             Mocker.GetMock<IQualityDefinitionRepository>()
                   .Setup(s => s.All())
-                  .Returns(new List<QualityDefinition>
+                  .ReturnsAsync(new List<QualityDefinition>
                       {
                               new QualityDefinition(Quality.SDTV) { Weight = 1, MinSize = 0, MaxSize = 100, Id = 20 }
                       });
@@ -56,7 +56,7 @@ namespace NzbDrone.Core.Test.Qualities
         {
             Mocker.GetMock<IQualityDefinitionRepository>()
                   .Setup(s => s.All())
-                  .Returns(new List<QualityDefinition>
+                  .ReturnsAsync(new List<QualityDefinition>
                       {
                               new QualityDefinition(new Quality { Id = 100, Name = "Test" }) { Weight = 1, MinSize = 0, MaxSize = 100, Id = 20 }
                       });

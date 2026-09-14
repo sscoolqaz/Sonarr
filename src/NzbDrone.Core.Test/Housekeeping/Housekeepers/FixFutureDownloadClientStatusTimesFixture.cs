@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -15,7 +16,7 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
     public class FixFutureDownloadClientStatusTimesFixture : CoreTest<FixFutureDownloadClientStatusTimes>
     {
         [Test]
-        public void should_set_disabled_till_when_its_too_far_in_the_future()
+        public async Task should_set_disabled_till_when_its_too_far_in_the_future()
         {
             var disabledTillTime = EscalationBackOff.Periods[1];
             var downloadClientStatuses = Builder<DownloadClientStatus>.CreateListOfSize(5)
@@ -28,9 +29,9 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Setup(s => s.All())
-                  .Returns(downloadClientStatuses);
+                  .ReturnsAsync(downloadClientStatuses);
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Verify(v => v.UpdateMany(
@@ -39,7 +40,7 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
         }
 
         [Test]
-        public void should_set_initial_failure_when_its_in_the_future()
+        public async Task should_set_initial_failure_when_its_in_the_future()
         {
             var downloadClientStatuses = Builder<DownloadClientStatus>.CreateListOfSize(5)
                                                         .All()
@@ -51,9 +52,9 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Setup(s => s.All())
-                  .Returns(downloadClientStatuses);
+                  .ReturnsAsync(downloadClientStatuses);
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Verify(v => v.UpdateMany(
@@ -62,7 +63,7 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
         }
 
         [Test]
-        public void should_set_most_recent_failure_when_its_in_the_future()
+        public async Task should_set_most_recent_failure_when_its_in_the_future()
         {
             var downloadClientStatuses = Builder<DownloadClientStatus>.CreateListOfSize(5)
                                                         .All()
@@ -74,9 +75,9 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Setup(s => s.All())
-                  .Returns(downloadClientStatuses);
+                  .ReturnsAsync(downloadClientStatuses);
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Verify(v => v.UpdateMany(
@@ -85,7 +86,7 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
         }
 
         [Test]
-        public void should_not_change_statuses_when_times_are_in_the_past()
+        public async Task should_not_change_statuses_when_times_are_in_the_past()
         {
             var downloadClientStatuses = Builder<DownloadClientStatus>.CreateListOfSize(5)
                                                         .All()
@@ -97,9 +98,9 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Setup(s => s.All())
-                  .Returns(downloadClientStatuses);
+                  .ReturnsAsync(downloadClientStatuses);
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                   .Verify(v => v.UpdateMany(

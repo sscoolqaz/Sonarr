@@ -42,7 +42,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests.Search
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(v => v.Get(1))
-                  .Returns(_indexerDefinition);
+                  .ReturnsAsync(_indexerDefinition);
         }
 
         private void GivenReleaseSeeders(int? seeders)

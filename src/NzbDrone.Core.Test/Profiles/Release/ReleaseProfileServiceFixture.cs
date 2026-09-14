@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Profiles.Releases;
 using NzbDrone.Core.Test.Framework;
@@ -60,56 +62,56 @@ namespace NzbDrone.Core.Test.Profiles
 
             Mocker.GetMock<IRestrictionRepository>()
                   .Setup(s => s.All())
-                  .Returns(_releaseProfiles);
+                  .ReturnsAsync(_releaseProfiles);
         }
 
         [Test]
-        public void all_for_tags_should_return_release_profiles_without_tags_by_default()
+        public async Task all_for_tags_should_return_release_profiles_without_tags_by_default()
         {
-            var releaseProfiles = Subject.AllForTags([]);
+            var releaseProfiles = await Subject.AllForTags([]);
             releaseProfiles.Should().Equal(_releaseProfilesWithoutTags);
         }
 
         [Test]
-        public void all_for_tags_should_return_release_profiles_with_provided_tag_or_without_tags()
+        public async Task all_for_tags_should_return_release_profiles_with_provided_tag_or_without_tags()
         {
-            var releaseProfiles = Subject.AllForTags([_providedTag]);
+            var releaseProfiles = await Subject.AllForTags([_providedTag]);
             releaseProfiles.Should().Equal(_releaseProfilesWithProvidedTagOrWithoutTags);
         }
 
         [Test]
-        public void all_for_tags_should_not_return_release_profiles_with_provided_tag_excluded()
+        public async Task all_for_tags_should_not_return_release_profiles_with_provided_tag_excluded()
         {
-            var releaseProfiles = Subject.AllForTags([_providedTagToExclude]);
+            var releaseProfiles = await Subject.AllForTags([_providedTagToExclude]);
             releaseProfiles.Should().NotContain(_excludedReleaseProfile);
             releaseProfiles.Should().NotContain(_includedAndExcludedReleaseProfile);
         }
 
         [Test]
-        public void all_for_tag_should_return_release_profiles_with_provided_tag()
+        public async Task all_for_tag_should_return_release_profiles_with_provided_tag()
         {
-            var releaseProfiles = Subject.AllForTag(_providedTag);
+            var releaseProfiles = await Subject.AllForTag(_providedTag);
             releaseProfiles.Should().Equal(_releaseProfilesWithProvidedTag);
         }
 
         [Test]
-        public void all_should_return_all_release_profiles()
+        public async Task all_should_return_all_release_profiles()
         {
-            var releaseProfiles = Subject.All();
+            var releaseProfiles = await Subject.All();
             releaseProfiles.Should().Equal(_releaseProfiles);
         }
 
         [Test]
-        public void all_for_tags_should_not_return_release_profiles_with_a_provided_tag_both_included_and_excluded()
+        public async Task all_for_tags_should_not_return_release_profiles_with_a_provided_tag_both_included_and_excluded()
         {
-            var releaseProfiles = Subject.AllForTags([_providedTag, _providedTagToExclude]);
+            var releaseProfiles = await Subject.AllForTags([_providedTag, _providedTagToExclude]);
             releaseProfiles.Should().Equal([_defaultReleaseProfile, _includedReleaseProfile]);
         }
 
         [Test]
-        public void all_for_tags_should_return_matching_tags_that_are_not_excluded_tags()
+        public async Task all_for_tags_should_return_matching_tags_that_are_not_excluded_tags()
         {
-            var releaseProfiles = Subject.AllForTags([_providedTag]);
+            var releaseProfiles = await Subject.AllForTags([_providedTag]);
             releaseProfiles.Should().Equal([_defaultReleaseProfile, _includedReleaseProfile, _excludedReleaseProfile, _includedAndExcludedReleaseProfile]);
         }
     }

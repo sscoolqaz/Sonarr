@@ -39,7 +39,7 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(v => v.GetAllSeries())
-                .Returns(series);
+                .ReturnsAsync(series);
 
             Mocker.GetMock<ILocalizationService>()
                 .Setup(s => s.GetLocalizedString(It.IsAny<string>()))

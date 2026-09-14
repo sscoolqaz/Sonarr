@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -40,7 +42,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                 .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -48,7 +50,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         [TestCase("The Mist", "Mist, The")]
@@ -61,12 +63,12 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("The Amazing Race (Latin America)", "Amazing Race, The Latin America")]
         [TestCase("The Rat Pack (A&E)", "Rat Pack, The AandE")]
         [TestCase("The Climax: I (Almost) Got Away With It (2016)", "Climax I Almost Got Away With It, The 2016")]
-        public void should_get_expected_title_back(string title, string expected)
+        public async Task should_get_expected_title_back(string title, string expected)
         {
             _series.Title = title;
             _namingConfig.StandardEpisodeFormat = "{Series CleanTitleThe}";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be(expected);
         }
 
@@ -74,12 +76,12 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("Anne")]
         [TestCase("Theodore")]
         [TestCase("3%")]
-        public void should_not_change_title(string title)
+        public async Task should_not_change_title(string title)
         {
             _series.Title = title;
             _namingConfig.StandardEpisodeFormat = "{Series CleanTitleThe}";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be(title);
         }
     }

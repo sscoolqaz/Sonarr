@@ -28,7 +28,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
 
             Mocker.GetMock<IDelayProfileService>()
                   .Setup(s => s.BestForTags(It.IsAny<HashSet<int>>()))
-                  .Returns(_delayProfile);
+                  .ReturnsAsync(_delayProfile);
         }
 
         private void GivenProtocol(DownloadProtocol downloadProtocol)

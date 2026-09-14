@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -11,7 +12,7 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
     public class UpdateCleanTitleForSeriesFixture : CoreTest<UpdateCleanTitleForSeries>
     {
         [Test]
-        public void should_update_clean_title()
+        public async Task should_update_clean_title()
         {
             var series = Builder<Series>.CreateNew()
                                         .With(s => s.Title = "Full Title")
@@ -20,16 +21,16 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
 
             Mocker.GetMock<ISeriesRepository>()
                  .Setup(s => s.All())
-                 .Returns(new[] { series });
+                 .ReturnsAsync(new[] { series });
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<ISeriesRepository>()
                 .Verify(v => v.Update(It.Is<Series>(s => s.CleanTitle == "fulltitle")), Times.Once());
         }
 
         [Test]
-        public void should_not_update_unchanged_title()
+        public async Task should_not_update_unchanged_title()
         {
             var series = Builder<Series>.CreateNew()
                                         .With(s => s.Title = "Full Title")
@@ -38,9 +39,9 @@ namespace NzbDrone.Core.Test.Housekeeping.Housekeepers
 
             Mocker.GetMock<ISeriesRepository>()
                  .Setup(s => s.All())
-                 .Returns(new[] { series });
+                 .ReturnsAsync(new[] { series });
 
-            Subject.Clean();
+            await Subject.Clean();
 
             Mocker.GetMock<ISeriesRepository>()
                 .Verify(v => v.Update(It.Is<Series>(s => s.CleanTitle == "fulltitle")), Times.Never());

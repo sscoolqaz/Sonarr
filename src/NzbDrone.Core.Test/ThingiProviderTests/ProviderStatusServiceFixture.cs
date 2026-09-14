@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NLog;
@@ -8,6 +9,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Test.Framework;
 using NzbDrone.Core.ThingiProvider;
+using NzbDrone.Core.ThingiProvider.Events;
 using NzbDrone.Core.ThingiProvider.Status;
 
 namespace NzbDrone.Core.Test.ThingiProviderTests
@@ -58,11 +60,11 @@ namespace NzbDrone.Core.Test.ThingiProviderTests
         {
             Mocker.GetMock<IMockProviderStatusRepository>()
                 .Setup(v => v.FindByProviderId(1))
-                .Returns(status);
+                .ReturnsAsync(status);
 
             Mocker.GetMock<IMockProviderStatusRepository>()
                 .Setup(v => v.All())
-                .Returns(new[] { status });
+                .ReturnsAsync(new[] { status });
 
             return status;
         }
@@ -80,45 +82,45 @@ namespace NzbDrone.Core.Test.ThingiProviderTests
         }
 
         [Test]
-        public void should_start_backoff_on_first_failure()
+        public async Task should_start_backoff_on_first_failure()
         {
             WithStatus(new MockProviderStatus());
 
-            Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
 
             VerifyUpdate();
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().NotBeNull();
             status.DisabledTill.Should().HaveValue();
             status.DisabledTill.Value.Should().BeCloseTo(_epoch + TimeSpan.FromMinutes(1), _disabledTillPrecision);
         }
 
         [Test]
-        public void should_cancel_backoff_on_success()
+        public async Task should_cancel_backoff_on_success()
         {
             WithStatus(new MockProviderStatus { EscalationLevel = 2 });
 
-            Subject.RecordSuccess(1);
+            await Subject.RecordSuccess(1);
 
             VerifyUpdate();
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().BeNull();
         }
 
         [Test]
-        public void should_not_store_update_if_already_okay()
+        public async Task should_not_store_update_if_already_okay()
         {
             WithStatus(new MockProviderStatus { EscalationLevel = 0 });
 
-            Subject.RecordSuccess(1);
+            await Subject.RecordSuccess(1);
 
             VerifyNoUpdate();
         }
 
         [Test]
-        public void should_preserve_escalation_on_intermittent_success()
+        public async Task should_preserve_escalation_on_intermittent_success()
         {
             WithStatus(new MockProviderStatus
             {
@@ -127,18 +129,18 @@ namespace NzbDrone.Core.Test.ThingiProviderTests
                 EscalationLevel = 3
             });
 
-            Subject.RecordSuccess(1);
-            Subject.RecordSuccess(1);
-            Subject.RecordFailure(1);
+            await Subject.RecordSuccess(1);
+            await Subject.RecordSuccess(1);
+            await Subject.RecordFailure(1);
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().NotBeNull();
             status.DisabledTill.Should().HaveValue();
             status.DisabledTill.Value.Should().BeCloseTo(_epoch + TimeSpan.FromMinutes(5), _disabledTillPrecision);
         }
 
         [Test]
-        public void should_not_escalate_further_till_after_5_minutes_since_startup()
+        public async Task should_not_escalate_further_till_after_5_minutes_since_startup()
         {
             GivenRecentStartup();
 
@@ -149,19 +151,75 @@ namespace NzbDrone.Core.Test.ThingiProviderTests
                 EscalationLevel = 3
             });
 
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().NotBeNull();
 
             origStatus.EscalationLevel.Should().Be(3);
             status.DisabledTill.Should().BeCloseTo(_epoch + TimeSpan.FromMinutes(5), _disabledTillPrecision);
+        }
+
+        // The tests below exercise ProviderStatusServiceBase's own async plumbing rather than
+        // its escalation math - this base class is shared by NotificationStatusService,
+        // IndexerStatusService, ImportListStatusService and DownloadClientStatusService, so
+        // covering it here covers all four real services' shared behavior at once.
+
+        [Test]
+        public void record_failure_should_propagate_repository_exception_and_not_publish_a_status_changed_event()
+        {
+            WithStatus(new MockProviderStatus());
+
+            Mocker.GetMock<IMockProviderStatusRepository>()
+                  .Setup(v => v.Upsert(It.IsAny<MockProviderStatus>()))
+                  .ThrowsAsync(new InvalidOperationException("repository unavailable"));
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await Subject.RecordFailure(1));
+
+            // ProviderStatusChangedEvent is published immediately after the awaited Upsert call
+            // with no guard around it - if that exception were ever swallowed, the event would
+            // still fire even though nothing was actually persisted.
+            Mocker.GetMock<IEventAggregator>()
+                  .Verify(e => e.PublishEvent(It.IsAny<ProviderStatusChangedEvent<IMockProvider>>()), Times.Never);
+        }
+
+        [Test]
+        public async Task record_failure_should_release_its_lock_after_a_repository_exception_so_the_next_call_is_not_blocked_forever()
+        {
+            // RecordFailure/RecordSuccess serialize their read-modify-write against
+            // _providerStatusRepository through a SemaphoreSlim (converted from a plain `lock`
+            // specifically because the critical section now awaits) - the WaitAsync/Release is a
+            // try/finally around the repository call, so an exception from that call must still
+            // release the semaphore. If it didn't, every subsequent RecordSuccess/RecordFailure
+            // call through this same service instance would hang forever waiting on the lock
+            // instead of surfacing its own result.
+            WithStatus(new MockProviderStatus());
+
+            Mocker.GetMock<IMockProviderStatusRepository>()
+                  .Setup(v => v.Upsert(It.IsAny<MockProviderStatus>()))
+                  .ThrowsAsync(new InvalidOperationException("repository unavailable"));
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () => await Subject.RecordFailure(1));
+
+            Mocker.GetMock<IMockProviderStatusRepository>()
+                  .Setup(v => v.Upsert(It.IsAny<MockProviderStatus>()))
+                  .ReturnsAsync(new MockProviderStatus());
+
+            var secondCall = Task.Run(async () => await Subject.RecordFailure(1));
+            var completed = await Task.WhenAny(secondCall, Task.Delay(TimeSpan.FromSeconds(5)));
+
+            completed.Should().Be(secondCall, "the lock must have been released by the first call's failure, not left held");
+            await secondCall;
+
+            // Upsert was called once by the failing attempt and once more by the successful one.
+            Mocker.GetMock<IMockProviderStatusRepository>()
+                  .Verify(v => v.Upsert(It.IsAny<MockProviderStatus>()), Times.Exactly(2));
         }
     }
 }

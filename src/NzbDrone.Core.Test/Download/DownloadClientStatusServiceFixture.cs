@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
@@ -27,11 +28,11 @@ namespace NzbDrone.Core.Test.Download
         {
             Mocker.GetMock<IDownloadClientStatusRepository>()
                 .Setup(v => v.FindByProviderId(1))
-                .Returns(status);
+                .ReturnsAsync(status);
 
             Mocker.GetMock<IDownloadClientStatusRepository>()
                 .Setup(v => v.All())
-                .Returns(new[] { status });
+                .ReturnsAsync(new[] { status });
 
             return status;
         }
@@ -49,7 +50,7 @@ namespace NzbDrone.Core.Test.Download
         }
 
         [Test]
-        public void should_not_consider_blocked_within_5_minutes_since_initial_failure()
+        public async Task should_not_consider_blocked_within_5_minutes_since_initial_failure()
         {
             WithStatus(new DownloadClientStatus
             {
@@ -58,16 +59,16 @@ namespace NzbDrone.Core.Test.Download
                 EscalationLevel = 3
             });
 
-            Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
 
             VerifyUpdate();
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().BeNull();
         }
 
         [Test]
-        public void should_consider_blocked_after_5_minutes_since_initial_failure()
+        public async Task should_consider_blocked_after_5_minutes_since_initial_failure()
         {
             WithStatus(new DownloadClientStatus
             {
@@ -76,16 +77,16 @@ namespace NzbDrone.Core.Test.Download
                 EscalationLevel = 3
             });
 
-            Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
 
             VerifyUpdate();
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().NotBeNull();
         }
 
         [Test]
-        public void should_not_escalate_further_till_after_5_minutes_since_initial_failure()
+        public async Task should_not_escalate_further_till_after_5_minutes_since_initial_failure()
         {
             var origStatus = WithStatus(new DownloadClientStatus
             {
@@ -94,22 +95,22 @@ namespace NzbDrone.Core.Test.Download
                 EscalationLevel = 3
             });
 
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().BeNull();
 
             origStatus.EscalationLevel.Should().Be(3);
         }
 
         [Test]
-        public void should_escalate_further_after_5_minutes_since_initial_failure()
+        public async Task should_escalate_further_after_5_minutes_since_initial_failure()
         {
             WithStatus(new DownloadClientStatus
             {
@@ -118,22 +119,22 @@ namespace NzbDrone.Core.Test.Download
                 EscalationLevel = 3
             });
 
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().NotBeNull();
 
             status.EscalationLevel.Should().BeGreaterThan(3);
         }
 
         [Test]
-        public void should_not_escalate_beyond_3_hours()
+        public async Task should_not_escalate_beyond_3_hours()
         {
             WithStatus(new DownloadClientStatus
             {
@@ -142,17 +143,17 @@ namespace NzbDrone.Core.Test.Download
                 EscalationLevel = 3
             });
 
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
-            Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
+            await Subject.RecordFailure(1);
 
-            var status = Subject.GetBlockedProviders().FirstOrDefault();
+            var status = (await Subject.GetBlockedProviders()).FirstOrDefault();
             status.Should().NotBeNull();
             status.DisabledTill.Should().HaveValue();
             status.DisabledTill.Should().NotBeAfter(_epoch + TimeSpan.FromHours(3.1));

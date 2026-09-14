@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -45,17 +46,17 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeFileMovingServiceTests
 
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.BuildFilePath(It.IsAny<List<Episode>>(), It.IsAny<Series>(), It.IsAny<EpisodeFile>(), It.IsAny<string>(), It.IsAny<NamingConfig>(), It.IsAny<List<CustomFormat>>()))
-                  .Returns(@"C:\Test\TV\Series\Season 01\File Name.avi".AsOsAgnostic());
+                  .ReturnsAsync(@"C:\Test\TV\Series\Season 01\File Name.avi".AsOsAgnostic());
 
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.BuildSeasonPath(It.IsAny<Series>(), It.IsAny<int>()))
-                  .Returns(@"C:\Test\TV\Series\Season 01".AsOsAgnostic());
+                  .ReturnsAsync(@"C:\Test\TV\Series\Season 01".AsOsAgnostic());
 
             var rootFolder = @"C:\Test\TV\".AsOsAgnostic();
 
             Mocker.GetMock<IRootFolderService>()
                 .Setup(s => s.GetBestRootFolderPath(It.IsAny<string>()))
-                .Returns(rootFolder);
+                .ReturnsAsync(rootFolder);
 
             Mocker.GetMock<IDiskProvider>()
                   .Setup(s => s.FolderExists(rootFolder))
@@ -67,7 +68,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeFileMovingServiceTests
         }
 
         [Test]
-        public void should_catch_UnauthorizedAccessException_during_folder_inheritance()
+        public async Task should_catch_UnauthorizedAccessException_during_folder_inheritance()
         {
             WindowsOnly();
 
@@ -75,11 +76,11 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeFileMovingServiceTests
                   .Setup(s => s.InheritFolderPermissions(It.IsAny<string>()))
                   .Throws<UnauthorizedAccessException>();
 
-            Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
         }
 
         [Test]
-        public void should_catch_InvalidOperationException_during_folder_inheritance()
+        public async Task should_catch_InvalidOperationException_during_folder_inheritance()
         {
             WindowsOnly();
 
@@ -87,13 +88,13 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeFileMovingServiceTests
                   .Setup(s => s.InheritFolderPermissions(It.IsAny<string>()))
                   .Throws<InvalidOperationException>();
 
-            Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
         }
 
         [Test]
-        public void should_notify_on_series_folder_creation()
+        public async Task should_notify_on_series_folder_creation()
         {
-            Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IEventAggregator>()
                   .Verify(s => s.PublishEvent<EpisodeFolderCreatedEvent>(It.Is<EpisodeFolderCreatedEvent>(p =>
@@ -102,9 +103,9 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeFileMovingServiceTests
         }
 
         [Test]
-        public void should_notify_on_season_folder_creation()
+        public async Task should_notify_on_season_folder_creation()
         {
-            Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IEventAggregator>()
                   .Verify(s => s.PublishEvent<EpisodeFolderCreatedEvent>(It.Is<EpisodeFolderCreatedEvent>(p =>
@@ -113,13 +114,13 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeFileMovingServiceTests
         }
 
         [Test]
-        public void should_not_notify_if_series_folder_already_exists()
+        public async Task should_not_notify_if_series_folder_already_exists()
         {
             Mocker.GetMock<IDiskProvider>()
                   .Setup(s => s.FolderExists(_series.Path))
                   .Returns(true);
 
-            Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.MoveEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IEventAggregator>()
                   .Verify(s => s.PublishEvent<EpisodeFolderCreatedEvent>(It.Is<EpisodeFolderCreatedEvent>(p =>

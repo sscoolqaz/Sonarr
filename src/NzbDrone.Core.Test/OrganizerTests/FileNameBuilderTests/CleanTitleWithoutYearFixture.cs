@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -40,7 +42,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                 .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -48,7 +50,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         [TestCase("The Mist", 2018, "The Mist")]
@@ -56,24 +58,24 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("The Climax: I (Almost) Got Away With It (2016)", 2016, "The Climax I Almost Got Away With It")]
         [TestCase("The Series Title's (2016)", 2016, "The Series Titles")]
         [TestCase("The Series Title's", 2016, "The Series Title's")]
-        public void should_get_expected_title_back(string title, int year, string expected)
+        public async Task should_get_expected_title_back(string title, int year, string expected)
         {
             _series.Title = title;
             _series.Year = year;
             _namingConfig.StandardEpisodeFormat = "{Series CleanTitleWithoutYear}";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be(expected);
         }
 
         [Test]
-        public void should_not_include_0_for_year()
+        public async Task should_not_include_0_for_year()
         {
             _series.Title = "The Alienist";
             _series.Year = 0;
             _namingConfig.StandardEpisodeFormat = "{Series CleanTitleWithoutYear}";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be("The Alienist");
         }
     }

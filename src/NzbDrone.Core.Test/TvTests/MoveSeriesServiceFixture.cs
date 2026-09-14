@@ -49,7 +49,7 @@ namespace NzbDrone.Core.Test.TvTests
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(It.IsAny<int>()))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
 
             Mocker.GetMock<IDiskProvider>()
                   .Setup(s => s.FolderExists(It.IsAny<string>()))
@@ -106,7 +106,7 @@ namespace NzbDrone.Core.Test.TvTests
 
             Mocker.GetMock<IBuildFileNames>()
                     .Setup(s => s.GetSeriesFolder(It.IsAny<Series>(), null))
-                    .Returns(seriesFolder);
+                    .ReturnsAsync(seriesFolder);
 
             Subject.Execute(_bulkCommand);
 

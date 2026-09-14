@@ -98,11 +98,11 @@ namespace NzbDrone.Core.Test.ImportListTests
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(v => v.AllSeriesTvdbIds())
-                  .Returns(new Dictionary<int, int>());
+                  .ReturnsAsync(new Dictionary<int, int>());
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(v => v.GetAllSeries())
-                .Returns(_existingSeries);
+                .ReturnsAsync(_existingSeries);
 
             Mocker.GetMock<ISearchForNewSeries>()
                   .Setup(v => v.SearchForNewSeries(It.IsAny<string>()))
@@ -114,15 +114,15 @@ namespace NzbDrone.Core.Test.ImportListTests
 
             Mocker.GetMock<IImportListFactory>()
                   .Setup(v => v.All())
-                  .Returns(() => _importLists.Select(x => x.Definition as ImportListDefinition).ToList());
+                  .ReturnsAsync(() => _importLists.Select(x => x.Definition as ImportListDefinition).ToList());
 
             Mocker.GetMock<IImportListFactory>()
                 .Setup(v => v.GetAvailableProviders())
-                .Returns(_importLists);
+                .ReturnsAsync(_importLists);
 
             Mocker.GetMock<IImportListFactory>()
                 .Setup(v => v.AutomaticAddEnabled(It.IsAny<bool>()))
-                .Returns(() => _importLists.Where(x => (x.Definition as ImportListDefinition).EnableAutomaticAdd).ToList());
+                .ReturnsAsync(() => _importLists.Where(x => (x.Definition as ImportListDefinition).EnableAutomaticAdd).ToList());
 
             Mocker.GetMock<IFetchAndParseImportList>()
                   .Setup(v => v.Fetch())
@@ -130,7 +130,7 @@ namespace NzbDrone.Core.Test.ImportListTests
 
             Mocker.GetMock<IImportListExclusionService>()
                   .Setup(v => v.All())
-                  .Returns(new List<ImportListExclusion>());
+                  .ReturnsAsync(new List<ImportListExclusion>());
 
             Mocker.GetMock<IImportListItemService>()
                 .Setup(s => s.All())
@@ -162,14 +162,14 @@ namespace NzbDrone.Core.Test.ImportListTests
         {
             Mocker.GetMock<ISeriesService>()
                   .Setup(v => v.AllSeriesTvdbIds())
-                  .Returns(new Dictionary<int, int> { { 1, _list1Series.First().TvdbId } });
+                  .ReturnsAsync(new Dictionary<int, int> { { 1, _list1Series.First().TvdbId } });
         }
 
         private void WithExcludedSeries()
         {
             Mocker.GetMock<IImportListExclusionService>()
                   .Setup(v => v.All())
-                  .Returns(new List<ImportListExclusion>
+                  .ReturnsAsync(new List<ImportListExclusion>
                     {
                       new ImportListExclusion
                         {
@@ -225,7 +225,7 @@ namespace NzbDrone.Core.Test.ImportListTests
 
             Mocker.GetMock<IImportListFactory>()
                   .Setup(v => v.Get(id))
-                  .Returns(importListDefinition);
+                  .ReturnsAsync(importListDefinition);
 
             var mockImportList = new Mock<IImportList>();
             mockImportList.SetupGet(s => s.Definition).Returns(importListDefinition);
@@ -245,7 +245,7 @@ namespace NzbDrone.Core.Test.ImportListTests
 
             Mocker.GetMock<IImportListStatusService>()
                 .Setup(v => v.GetListStatus(id))
-                .Returns(status);
+                .ReturnsAsync(status);
 
             _importLists.Add(mockImportList.Object);
         }
@@ -605,7 +605,7 @@ namespace NzbDrone.Core.Test.ImportListTests
         {
             Mocker.GetMock<IImportListFactory>()
                 .Setup(v => v.AutomaticAddEnabled(It.IsAny<bool>()))
-                .Returns(new List<IImportList>());
+                .ReturnsAsync(new List<IImportList>());
 
             Subject.Execute(new ImportListSyncCommand());
 
@@ -648,7 +648,7 @@ namespace NzbDrone.Core.Test.ImportListTests
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(v => v.AllSeriesTvdbIds())
-                  .Returns(new Dictionary<int, int> { { 5, 81189 } });
+                  .ReturnsAsync(new Dictionary<int, int> { { 5, 81189 } });
 
             Subject.Execute(_commandAll);
 

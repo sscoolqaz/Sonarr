@@ -28,11 +28,11 @@ namespace NzbDrone.Core.Test.Download
 
             Mocker.GetMock<IDownloadClientFactory>()
                   .Setup(v => v.GetAvailableProviders())
-                  .Returns(_downloadClients);
+                  .ReturnsAsync(_downloadClients);
 
             Mocker.GetMock<IDownloadClientStatusService>()
                   .Setup(v => v.GetBlockedProviders())
-                  .Returns(_blockedProviders);
+                  .ReturnsAsync(_blockedProviders);
         }
 
         private Mock<IDownloadClient> WithUsenetClient(int priority = 0, HashSet<int> tags = null)
@@ -75,7 +75,7 @@ namespace NzbDrone.Core.Test.Download
         {
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Find(It.IsAny<int>()))
-                .Returns(Builder<IndexerDefinition>
+                .ReturnsAsync(Builder<IndexerDefinition>
                     .CreateNew()
                     .With(v => v.Id = _nextId++)
                     .With(v => v.DownloadClientId = downloadClientId)

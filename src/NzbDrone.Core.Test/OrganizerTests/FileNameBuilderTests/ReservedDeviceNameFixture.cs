@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -33,7 +35,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             _episode1 = Builder<Episode>.CreateNew()
                             .With(e => e.Title = "City Sushi")
@@ -50,37 +52,37 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         [TestCase("Con Game", "Con_Game")]
         [TestCase("Com1 Sat", "Com1_Sat")]
-        public void should_replace_reserved_device_name_in_series_folder(string title, string expected)
+        public async Task should_replace_reserved_device_name_in_series_folder(string title, string expected)
         {
             _series.Title = title;
             _namingConfig.SeriesFolderFormat = "{Series.Title}";
 
-            Subject.GetSeriesFolder(_series).Should().Be($"{expected}");
+            (await Subject.GetSeriesFolder(_series)).Should().Be($"{expected}");
         }
 
         [TestCase("Con Game", "Con_Game")]
         [TestCase("Com1 Sat", "Com1_Sat")]
-        public void should_replace_reserved_device_name_in_season_folder(string title, string expected)
+        public async Task should_replace_reserved_device_name_in_season_folder(string title, string expected)
         {
             _series.Title = title;
             _namingConfig.SeasonFolderFormat = "{Series.Title} - Season {Season:00}";
 
-            Subject.GetSeasonFolder(_series, 1).Should().Be($"{expected} - Season 01");
+            (await Subject.GetSeasonFolder(_series, 1)).Should().Be($"{expected} - Season 01");
         }
 
         [TestCase("Con Game", "Con_Game")]
         [TestCase("Com1 Sat", "Com1_Sat")]
-        public void should_replace_reserved_device_name_in_file_name(string title, string expected)
+        public async Task should_replace_reserved_device_name_in_file_name(string title, string expected)
         {
             _series.Title = title;
             _namingConfig.StandardEpisodeFormat = "{Series.Title} - S{Season:00}E{Episode:00}";
 
-            Subject.BuildFileName(new List<Episode> { _episode1 }, _series, _episodeFile).Should().Be($"{expected} - S15E06");
+            (await Subject.BuildFileName(new List<Episode> { _episode1 }, _series, _episodeFile)).Should().Be($"{expected} - S15E06");
         }
     }
 }

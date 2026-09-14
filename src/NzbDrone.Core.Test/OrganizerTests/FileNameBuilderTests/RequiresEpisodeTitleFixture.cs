@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Test.Framework;
@@ -34,27 +36,27 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
         }
 
         [Test]
-        public void should_return_false_when_episode_title_is_not_part_of_the_pattern()
+        public async Task should_return_false_when_episode_title_is_not_part_of_the_pattern()
         {
             _namingConfig.StandardEpisodeFormat = "{Series Title} S{season:00}E{episode:00}";
-            Subject.RequiresEpisodeTitle(_series, new List<Episode> { _episode }).Should().BeFalse();
+            (await Subject.RequiresEpisodeTitle(_series, new List<Episode> { _episode })).Should().BeFalse();
         }
 
         [Test]
-        public void should_return_false_if_renaming_episodes_is_off()
+        public async Task should_return_false_if_renaming_episodes_is_off()
         {
             _namingConfig.RenameEpisodes = false;
-            Subject.RequiresEpisodeTitle(_series, new List<Episode> { _episode }).Should().BeFalse();
+            (await Subject.RequiresEpisodeTitle(_series, new List<Episode> { _episode })).Should().BeFalse();
         }
 
         [Test]
-        public void should_return_true_when_episode_title_is_part_of_the_pattern()
+        public async Task should_return_true_when_episode_title_is_part_of_the_pattern()
         {
-            Subject.RequiresEpisodeTitle(_series, new List<Episode> { _episode }).Should().BeTrue();
+            (await Subject.RequiresEpisodeTitle(_series, new List<Episode> { _episode })).Should().BeTrue();
         }
     }
 }

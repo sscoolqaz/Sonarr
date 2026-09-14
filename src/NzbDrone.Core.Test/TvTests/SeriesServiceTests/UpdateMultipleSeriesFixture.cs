@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -32,34 +33,34 @@ namespace NzbDrone.Core.Test.TvTests.SeriesServiceTests
 
             Mocker.GetMock<IAutoTaggingService>()
                 .Setup(s => s.GetTagChanges(It.IsAny<Series>()))
-                .Returns(new AutoTaggingChanges());
+                .ReturnsAsync(new AutoTaggingChanges());
         }
 
         [Test]
-        public void should_call_repo_updateMany()
+        public async Task should_call_repo_updateMany()
         {
-            Subject.UpdateSeries(_series, false);
+            await Subject.UpdateSeries(_series, false);
 
             Mocker.GetMock<ISeriesRepository>().Verify(v => v.UpdateMany(_series), Times.Once());
         }
 
         [Test]
-        public void should_update_path_when_rootFolderPath_is_supplied()
+        public async Task should_update_path_when_rootFolderPath_is_supplied()
         {
             var newRoot = @"C:\Test\TV2".AsOsAgnostic();
             _series.ForEach(s => s.RootFolderPath = newRoot);
 
             Mocker.GetMock<IBuildSeriesPaths>()
                   .Setup(s => s.BuildPath(It.IsAny<Series>(), false))
-                  .Returns<Series, bool>((s, u) => Path.Combine(s.RootFolderPath, s.Title));
+                  .Returns<Series, bool>((s, u) => Task.FromResult(Path.Combine(s.RootFolderPath, s.Title)));
 
-            Subject.UpdateSeries(_series, false).ForEach(s => s.Path.Should().StartWith(newRoot));
+            (await Subject.UpdateSeries(_series, false)).ForEach(s => s.Path.Should().StartWith(newRoot));
         }
 
         [Test]
-        public void should_not_update_path_when_rootFolderPath_is_empty()
+        public async Task should_not_update_path_when_rootFolderPath_is_empty()
         {
-            Subject.UpdateSeries(_series, false).ForEach(s =>
+            (await Subject.UpdateSeries(_series, false)).ForEach(s =>
             {
                 var expectedPath = _series.Single(ser => ser.Id == s.Id).Path;
                 s.Path.Should().Be(expectedPath);
@@ -67,7 +68,7 @@ namespace NzbDrone.Core.Test.TvTests.SeriesServiceTests
         }
 
         [Test]
-        public void should_be_able_to_update_many_series()
+        public async Task should_be_able_to_update_many_series()
         {
             var series = Builder<Series>.CreateListOfSize(50)
                                         .All()
@@ -80,25 +81,25 @@ namespace NzbDrone.Core.Test.TvTests.SeriesServiceTests
 
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.GetSeriesFolder(It.IsAny<Series>(), (NamingConfig)null))
-                  .Returns<Series, NamingConfig>((s, n) => s.Title);
+                  .Returns<Series, NamingConfig>((s, n) => Task.FromResult(s.Title));
 
-            Subject.UpdateSeries(series, false);
+            await Subject.UpdateSeries(series, false);
         }
 
         [Test]
-        public void should_add_and_remove_tags()
+        public async Task should_add_and_remove_tags()
         {
             _series[0].Tags = new HashSet<int> { 1, 2 };
 
             Mocker.GetMock<IAutoTaggingService>()
                 .Setup(s => s.GetTagChanges(_series[0]))
-                .Returns(new AutoTaggingChanges
+                .ReturnsAsync(new AutoTaggingChanges
                 {
                     TagsToAdd = new HashSet<int> { 3 },
                     TagsToRemove = new HashSet<int> { 1 }
                 });
 
-            var result = Subject.UpdateSeries(_series, false);
+            var result = await Subject.UpdateSeries(_series, false);
 
             result[0].Tags.Should().BeEquivalentTo(new[] { 2, 3 });
         }

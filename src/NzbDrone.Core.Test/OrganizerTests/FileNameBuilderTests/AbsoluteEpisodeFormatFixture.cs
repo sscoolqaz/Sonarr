@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -42,7 +44,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                   .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -50,48 +52,48 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         [Test]
-        public void should_use_standard_format_if_absolute_format_requires_absolute_episode_number_and_it_is_missing()
+        public async Task should_use_standard_format_if_absolute_format_requires_absolute_episode_number_and_it_is_missing()
         {
             _episode.AbsoluteEpisodeNumber = null;
             _namingConfig.StandardEpisodeFormat = "{Series Title} S{season:00}E{episode:00}";
             _namingConfig.AnimeEpisodeFormat = "{Series Title} {absolute:00} [{ReleaseGroup}]";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be("Anime Series S15E06");
         }
 
         [Test]
-        public void should_use_absolute_format_if_absolute_format_requires_absolute_episode_number_and_it_is_available()
+        public async Task should_use_absolute_format_if_absolute_format_requires_absolute_episode_number_and_it_is_available()
         {
             _namingConfig.StandardEpisodeFormat = "{Series Title} S{season:00}E{episode:00}";
             _namingConfig.AnimeEpisodeFormat = "{Series Title} {absolute:00} [{ReleaseGroup}]";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be("Anime Series 100 [SonarrTest]");
         }
 
         [Test]
-        public void should_use_absolute_format_if_absolute_format_does_not_require_absolute_episode_number_and_it_is_not_available()
+        public async Task should_use_absolute_format_if_absolute_format_does_not_require_absolute_episode_number_and_it_is_not_available()
         {
             _namingConfig.StandardEpisodeFormat = "{Series Title} S{season:00}E{episode:00}";
             _namingConfig.AnimeEpisodeFormat = "{Series Title} S{season:00}E{episode:00} [{ReleaseGroup}]";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be("Anime Series S15E06 [SonarrTest]");
         }
 
         [Test]
-        public void should_use_standard_format_without_absolute_numbering_if_absolute_format_requires_absolute_episode_number_and_it_is_missing()
+        public async Task should_use_standard_format_without_absolute_numbering_if_absolute_format_requires_absolute_episode_number_and_it_is_missing()
         {
             _episode.AbsoluteEpisodeNumber = null;
             _namingConfig.StandardEpisodeFormat = "{Series Title} S{season:00}E{episode:00} - {absolute:00}";
             _namingConfig.AnimeEpisodeFormat = "{Series Title} {absolute:00} [{ReleaseGroup}]";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                 .Should().Be("Anime Series S15E06");
         }
     }

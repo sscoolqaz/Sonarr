@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -94,47 +95,47 @@ namespace NzbDrone.Core.Test.MediaFiles
         }
 
         [Test]
-        public void should_delete_single_episode_file_once()
+        public async Task should_delete_single_episode_file_once()
         {
             GivenSingleEpisodeWithSingleEpisodeFile();
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(It.IsAny<string>(), It.IsAny<string>()), Times.Once());
         }
 
         [Test]
-        public void should_delete_the_same_episode_file_only_once()
+        public async Task should_delete_the_same_episode_file_only_once()
         {
             GivenMultipleEpisodesWithSingleEpisodeFile();
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(It.IsAny<string>(), It.IsAny<string>()), Times.Once());
         }
 
         [Test]
-        public void should_delete_multiple_different_episode_files()
+        public async Task should_delete_multiple_different_episode_files()
         {
             GivenMultipleEpisodesWithMultipleEpisodeFiles();
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(2));
         }
 
         [Test]
-        public void should_delete_episode_file_from_database()
+        public async Task should_delete_episode_file_from_database()
         {
             GivenSingleEpisodeWithSingleEpisodeFile();
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Delete(It.IsAny<EpisodeFile>(), DeleteMediaFileReason.Upgrade), Times.Once());
         }
 
         [Test]
-        public void should_delete_existing_file_fromdb_if_file_doesnt_exist()
+        public async Task should_delete_existing_file_fromdb_if_file_doesnt_exist()
         {
             GivenSingleEpisodeWithSingleEpisodeFile();
 
@@ -142,7 +143,7 @@ namespace NzbDrone.Core.Test.MediaFiles
                 .Setup(c => c.FileExists(It.IsAny<string>()))
                 .Returns(false);
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Delete(_localEpisode.Episodes.Single().EpisodeFile, DeleteMediaFileReason.Upgrade), Times.Once());
 
@@ -150,7 +151,7 @@ namespace NzbDrone.Core.Test.MediaFiles
         }
 
         [Test]
-        public void should_not_try_to_recyclebin_existing_file_if_file_doesnt_exist()
+        public async Task should_not_try_to_recyclebin_existing_file_if_file_doesnt_exist()
         {
             GivenSingleEpisodeWithSingleEpisodeFile();
 
@@ -158,7 +159,7 @@ namespace NzbDrone.Core.Test.MediaFiles
                 .Setup(c => c.FileExists(It.IsAny<string>()))
                 .Returns(false);
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IRecycleBinProvider>().Verify(v => v.DeleteFile(It.IsAny<string>(), It.IsAny<string>()), Times.Never());
 
@@ -166,19 +167,19 @@ namespace NzbDrone.Core.Test.MediaFiles
         }
 
         [Test]
-        public void should_return_old_episode_file_in_oldFiles()
+        public async Task should_return_old_episode_file_in_oldFiles()
         {
             GivenSingleEpisodeWithSingleEpisodeFile();
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode).OldFiles.Count.Should().Be(1);
+            (await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode)).OldFiles.Count.Should().Be(1);
         }
 
         [Test]
-        public void should_return_old_episode_files_in_oldFiles()
+        public async Task should_return_old_episode_files_in_oldFiles()
         {
             GivenMultipleEpisodesWithMultipleEpisodeFiles();
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode).OldFiles.Count.Should().Be(2);
+            (await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode)).OldFiles.Count.Should().Be(2);
         }
 
         [Test]
@@ -190,13 +191,13 @@ namespace NzbDrone.Core.Test.MediaFiles
                   .Setup(c => c.FolderExists(Directory.GetParent(_localEpisode.Series.Path).FullName))
                   .Returns(false);
 
-            Assert.Throws<RootFolderNotFoundException>(() => Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode));
+            Assert.ThrowsAsync<RootFolderNotFoundException>(async () => await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode));
 
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Delete(_localEpisode.Episodes.Single().EpisodeFile, DeleteMediaFileReason.Upgrade), Times.Never());
         }
 
         [Test]
-        public void should_import_if_existing_file_doesnt_exist_in_db()
+        public async Task should_import_if_existing_file_doesnt_exist_in_db()
         {
             _localEpisode.Episodes = Builder<Episode>.CreateListOfSize(1)
                                                      .All()
@@ -205,7 +206,7 @@ namespace NzbDrone.Core.Test.MediaFiles
                                                      .Build()
                                                      .ToList();
 
-            Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
+            await Subject.UpgradeEpisodeFile(_episodeFile, _localEpisode);
 
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Delete(_localEpisode.Episodes.Single().EpisodeFile, It.IsAny<DeleteMediaFileReason>()), Times.Never());
         }

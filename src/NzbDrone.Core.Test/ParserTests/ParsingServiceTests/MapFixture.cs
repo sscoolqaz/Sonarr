@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -59,21 +60,21 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         {
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.FindByTitle(It.IsAny<string>()))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
         }
 
         private void GivenMatchByTvdbId()
         {
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.FindByTvdbId(It.IsAny<int>()))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
         }
 
         private void GivenMatchByTvRageId()
         {
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.FindByTvRageId(It.IsAny<int>()))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
         }
 
         private void GivenParseResultSeriesDoesntMatchSearchCriteria()
@@ -82,48 +83,48 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         }
 
         [Test]
-        public void should_lookup_series_by_name()
+        public async Task should_lookup_series_by_name()
         {
             GivenMatchBySeriesTitle();
 
-            Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId);
+            await Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTitle(It.IsAny<string>()), Times.Once());
         }
 
         [Test]
-        public void should_use_tvdbid_when_series_title_lookup_fails()
+        public async Task should_use_tvdbid_when_series_title_lookup_fails()
         {
             GivenMatchByTvdbId();
 
-            Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId);
+            await Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTvdbId(It.IsAny<int>()), Times.Once());
         }
 
         [Test]
-        public void should_use_tvrageid_when_series_title_lookup_fails()
+        public async Task should_use_tvrageid_when_series_title_lookup_fails()
         {
             GivenMatchByTvRageId();
 
-            Subject.Map(_parsedEpisodeInfo, 0, _series.TvRageId, null);
+            await Subject.Map(_parsedEpisodeInfo, 0, _series.TvRageId, null);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTvRageId(It.IsAny<int>()), Times.Once());
         }
 
         [Test]
-        public void should_not_use_tvrageid_when_scene_naming_exception_exists()
+        public async Task should_not_use_tvrageid_when_scene_naming_exception_exists()
         {
             GivenMatchByTvRageId();
 
             Mocker.GetMock<ISceneMappingService>()
                   .Setup(v => v.FindSceneMapping(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()))
-                  .Returns(new SceneMapping { TvdbId = 10 });
+                  .ReturnsAsync(new SceneMapping { TvdbId = 10 });
 
-            var result = Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId);
+            var result = await Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTvRageId(It.IsAny<int>()), Times.Never());
@@ -132,29 +133,29 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         }
 
         [Test]
-        public void should_use_search_criteria_series_title()
+        public async Task should_use_search_criteria_series_title()
         {
             GivenMatchBySeriesTitle();
 
-            Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTitle(It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_FindByTitle_when_search_criteria_matching_fails()
+        public async Task should_FindByTitle_when_search_criteria_matching_fails()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
-            Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTitle(It.IsAny<string>()), Times.Once());
         }
 
         [Test]
-        public void should_FindByTitle_using_year_when_FindByTitle_matching_fails()
+        public async Task should_FindByTitle_using_year_when_FindByTitle_matching_fails()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
@@ -167,95 +168,95 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.FindByTitle(_parsedEpisodeInfo.SeriesTitleInfo.TitleWithoutYear, _parsedEpisodeInfo.SeriesTitleInfo.Year))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
 
-            Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTitle(It.IsAny<string>(), It.IsAny<int>()), Times.Once());
         }
 
         [Test]
-        public void should_FindByTvdbId_when_search_criteria_and_FindByTitle_matching_fails()
+        public async Task should_FindByTvdbId_when_search_criteria_and_FindByTitle_matching_fails()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
-            Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTvdbId(It.IsAny<int>()), Times.Once());
         }
 
         [Test]
-        public void should_FindByTvRageId_when_search_criteria_and_FindByTitle_matching_fails()
+        public async Task should_FindByTvRageId_when_search_criteria_and_FindByTitle_matching_fails()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
-            Subject.Map(_parsedEpisodeInfo, 0, 10, null, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, 0, 10, null, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTvRageId(It.IsAny<int>()), Times.Once());
         }
 
         [Test]
-        public void should_not_FindByTvRageId_when_search_criteria_and_FindByTitle_matching_fails_and_tvdb_id_is_specified()
+        public async Task should_not_FindByTvRageId_when_search_criteria_and_FindByTitle_matching_fails_and_tvdb_id_is_specified()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
-            Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, 10, 10, null, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                 .Verify(v => v.FindByTvRageId(It.IsAny<int>()), Times.Never());
         }
 
         [Test]
-        public void should_FindByImdbId_when_search_criteria_and_FindByTitle_matching_fails()
+        public async Task should_FindByImdbId_when_search_criteria_and_FindByTitle_matching_fails()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
-            Subject.Map(_parsedEpisodeInfo, 0, 0, "tt12345", _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, 0, 0, "tt12345", _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                 .Verify(v => v.FindByImdbId(It.IsAny<string>()), Times.Once());
         }
 
         [Test]
-        public void should_not_FindByImdbId_when_search_criteria_and_FindByTitle_matching_fails_and_tvdb_id_is_specified()
+        public async Task should_not_FindByImdbId_when_search_criteria_and_FindByTitle_matching_fails_and_tvdb_id_is_specified()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
-            Subject.Map(_parsedEpisodeInfo, 10, 10, "tt12345", _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, 10, 10, "tt12345", _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                 .Verify(v => v.FindByImdbId(It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_use_tvdbid_matching_when_alias_is_found()
+        public async Task should_use_tvdbid_matching_when_alias_is_found()
         {
             Mocker.GetMock<ISceneMappingService>()
                   .Setup(s => s.FindTvdbId(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()))
-                  .Returns(_series.TvdbId);
+                  .ReturnsAsync(_series.TvdbId);
 
-            Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTitle(It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_use_tvrageid_match_from_search_criteria_when_title_match_fails()
+        public async Task should_use_tvrageid_match_from_search_criteria_when_title_match_fails()
         {
             GivenParseResultSeriesDoesntMatchSearchCriteria();
 
-            Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, _singleEpisodeSearchCriteria);
+            await Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, _singleEpisodeSearchCriteria);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.FindByTitle(It.IsAny<string>()), Times.Never());
         }
 
         [Test]
-        public void should_use_scene_season_number_from_xem_mapping_if_alias_matches_a_specific_season_number()
+        public async Task should_use_scene_season_number_from_xem_mapping_if_alias_matches_a_specific_season_number()
         {
             _parsedEpisodeInfo.SeasonNumber = 1;
 
@@ -267,15 +268,15 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
 
             Mocker.GetMock<ISceneMappingService>()
                 .Setup(s => s.FindSceneMapping(_parsedEpisodeInfo.SeriesTitle, _parsedEpisodeInfo.ReleaseTitle, _parsedEpisodeInfo.SeasonNumber))
-                .Returns(sceneMapping);
+                .ReturnsAsync(sceneMapping);
 
-            var result = Subject.Map(_parsedEpisodeInfo, _series);
+            var result = await Subject.Map(_parsedEpisodeInfo, _series);
 
             result.MappedSeasonNumber.Should().Be(sceneMapping.SceneSeasonNumber);
         }
 
         [Test]
-        public void should_not_use_scene_season_number_from_xem_mapping_if_alias_matches_a_specific_season_number_but_did_not_parse_season_1()
+        public async Task should_not_use_scene_season_number_from_xem_mapping_if_alias_matches_a_specific_season_number_but_did_not_parse_season_1()
         {
             _parsedEpisodeInfo.SeasonNumber = 2;
 
@@ -287,15 +288,15 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
 
             Mocker.GetMock<ISceneMappingService>()
                 .Setup(s => s.FindSceneMapping(_parsedEpisodeInfo.SeriesTitle, _parsedEpisodeInfo.ReleaseTitle, _parsedEpisodeInfo.SeasonNumber))
-                .Returns(sceneMapping);
+                .ReturnsAsync(sceneMapping);
 
-            var result = Subject.Map(_parsedEpisodeInfo, _series);
+            var result = await Subject.Map(_parsedEpisodeInfo, _series);
 
             result.MappedSeasonNumber.Should().Be(sceneMapping.SceneSeasonNumber);
         }
 
         [Test]
-        public void should_use_tvdbid_matching_when_alias_without_year_is_found()
+        public async Task should_use_tvdbid_matching_when_alias_without_year_is_found()
         {
             var alias = "Series Alias";
 
@@ -305,13 +306,13 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
 
             Mocker.GetMock<ISceneMappingService>()
                 .Setup(s => s.FindTvdbId(alias, It.IsAny<string>(), It.IsAny<int>()))
-                .Returns(_series.TvdbId);
+                .ReturnsAsync(_series.TvdbId);
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(s => s.FindByTvdbId(_series.Id))
-                .Returns(_series);
+                .ReturnsAsync(_series);
 
-            var result = Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, null);
+            var result = await Subject.Map(_parsedEpisodeInfo, _series.TvdbId, _series.TvRageId, _series.ImdbId, null);
 
             result.Series.Should().Be(_series);
 
@@ -320,7 +321,7 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         }
 
         [Test]
-        public void should_not_use_tvdbid_matching_when_alias_without_year_is_found_with_wrong_year()
+        public async Task should_not_use_tvdbid_matching_when_alias_without_year_is_found_with_wrong_year()
         {
             var alias = "Series Alias";
 
@@ -330,13 +331,13 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
 
             Mocker.GetMock<ISceneMappingService>()
                 .Setup(s => s.FindTvdbId(alias, It.IsAny<string>(), It.IsAny<int>()))
-                .Returns(_series.TvdbId);
+                .ReturnsAsync(_series.TvdbId);
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(s => s.FindByTvdbId(_series.Id))
-                .Returns(_series);
+                .ReturnsAsync(_series);
 
-            var result = Subject.Map(_parsedEpisodeInfo, 0, 0, "", null);
+            var result = await Subject.Map(_parsedEpisodeInfo, 0, 0, "", null);
 
             result.Series.Should().BeNull();
 
@@ -345,7 +346,7 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         }
 
         [Test]
-        public void should_use_year_when_looking_up_by_all_titles_in_release_title()
+        public async Task should_use_year_when_looking_up_by_all_titles_in_release_title()
         {
             var alias = "Series Alias";
             var title = "Series Title";
@@ -359,15 +360,15 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(s => s.FindByTitle(title, _series.Year))
-                .Returns(_series);
+                .ReturnsAsync(_series);
 
-            var result = Subject.Map(_parsedEpisodeInfo, 0, 0, "", null);
+            var result = await Subject.Map(_parsedEpisodeInfo, 0, 0, "", null);
 
             result.Series.Should().Be(_series);
         }
 
         [Test]
-        public void should_use_title_with_year_when_looking_up_by_all_titles_in_release_title()
+        public async Task should_use_title_with_year_when_looking_up_by_all_titles_in_release_title()
         {
             var alias = "Series Alias";
             var title = "Series Title";
@@ -381,9 +382,9 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(s => s.FindByTitle($"{title} {_series.Year}"))
-                .Returns(_series);
+                .ReturnsAsync(_series);
 
-            var result = Subject.Map(_parsedEpisodeInfo, 0, 0, "", null);
+            var result = await Subject.Map(_parsedEpisodeInfo, 0, 0, "", null);
 
             result.Series.Should().Be(_series);
         }

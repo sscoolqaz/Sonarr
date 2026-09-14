@@ -29,27 +29,27 @@ namespace NzbDrone.Core.Test.Download.Pending.PendingReleaseServiceTests
 
             Mocker.GetMock<IPendingReleaseRepository>()
                  .Setup(s => s.AllBySeriesId(It.IsAny<int>()))
-                 .Returns(_pending);
+                 .ReturnsAsync(_pending);
 
             Mocker.GetMock<IPendingReleaseRepository>()
                   .Setup(s => s.All())
-                  .Returns(_pending);
+                  .ReturnsAsync(_pending);
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(It.IsAny<int>()))
-                  .Returns(new Series());
+                  .ReturnsAsync(new Series());
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(It.IsAny<IEnumerable<int>>()))
-                  .Returns(new List<Series> { new Series() });
+                  .ReturnsAsync(new List<Series> { new Series() });
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<Series>()))
-                  .Returns(new RemoteEpisode { Episodes = new List<Episode> { _episode } });
+                  .ReturnsAsync(new RemoteEpisode { Episodes = new List<Episode> { _episode } });
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetEpisodes(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<Series>(), It.IsAny<bool>(), null))
-                  .Returns(new List<Episode> { _episode });
+                  .ReturnsAsync(new List<Episode> { _episode });
         }
 
         private void AddPending(int id, int seasonNumber, int[] episodes)

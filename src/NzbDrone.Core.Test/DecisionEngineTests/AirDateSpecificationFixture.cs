@@ -43,7 +43,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
         {
             Mocker.GetMock<IReleaseProfileService>()
                 .Setup(s => s.EnabledForTags(It.IsAny<HashSet<int>>(), It.IsAny<int>()))
-                .Returns(new List<ReleaseProfile>
+                .ReturnsAsync(new List<ReleaseProfile>
                 {
                     new()
                     {
@@ -146,7 +146,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
 
             Mocker.GetMock<IReleaseProfileService>()
                 .Setup(s => s.EnabledForTags(It.IsAny<HashSet<int>>(), It.IsAny<int>()))
-                .Returns(new List<ReleaseProfile>
+                .ReturnsAsync(new List<ReleaseProfile>
                 {
                     new()
                     {
@@ -171,7 +171,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
 
             Mocker.GetMock<IReleaseProfileService>()
                 .Setup(s => s.EnabledForTags(It.IsAny<HashSet<int>>(), It.IsAny<int>()))
-                .Returns(new List<ReleaseProfile>
+                .ReturnsAsync(new List<ReleaseProfile>
                 {
                     new()
                     {

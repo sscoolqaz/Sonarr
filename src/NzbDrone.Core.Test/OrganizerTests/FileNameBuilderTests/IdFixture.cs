@@ -1,5 +1,7 @@
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Test.Framework;
@@ -27,42 +29,42 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig = NamingConfig.Default;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
         }
 
         [Test]
-        public void should_add_imdb_id()
+        public async Task should_add_imdb_id()
         {
             _namingConfig.SeriesFolderFormat = "{Series Title} ({ImdbId})";
 
-            Subject.GetSeriesFolder(_series)
+            (await Subject.GetSeriesFolder(_series))
                    .Should().Be($"Series Title ({_series.ImdbId})");
         }
 
         [Test]
-        public void should_add_tvdb_id()
+        public async Task should_add_tvdb_id()
         {
             _namingConfig.SeriesFolderFormat = "{Series Title} ({TvdbId})";
 
-            Subject.GetSeriesFolder(_series)
+            (await Subject.GetSeriesFolder(_series))
                    .Should().Be($"Series Title ({_series.TvdbId})");
         }
 
         [Test]
-        public void should_add_tvmaze_id()
+        public async Task should_add_tvmaze_id()
         {
             _namingConfig.SeriesFolderFormat = "{Series Title} ({TvMazeId})";
 
-            Subject.GetSeriesFolder(_series)
+            (await Subject.GetSeriesFolder(_series))
                    .Should().Be($"Series Title ({_series.TvMazeId})");
         }
 
         [Test]
-        public void should_add_tmdb_id()
+        public async Task should_add_tmdb_id()
         {
             _namingConfig.SeriesFolderFormat = "{Series Title} ({TmdbId})";
 
-            Subject.GetSeriesFolder(_series)
+            (await Subject.GetSeriesFolder(_series))
                 .Should().Be($"Series Title ({_series.TmdbId})");
         }
     }

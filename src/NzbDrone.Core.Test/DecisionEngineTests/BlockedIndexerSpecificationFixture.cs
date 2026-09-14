@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.DecisionEngine;
 using NzbDrone.Core.DecisionEngine.Specifications;
@@ -26,14 +27,14 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
 
             Mocker.GetMock<IIndexerStatusService>()
                   .Setup(v => v.GetBlockedProviders())
-                  .Returns(new List<IndexerStatus>());
+                  .ReturnsAsync(new List<IndexerStatus>());
         }
 
         private void WithBlockedIndexer()
         {
             Mocker.GetMock<IIndexerStatusService>()
                   .Setup(v => v.GetBlockedProviders())
-                  .Returns(new List<IndexerStatus> { new IndexerStatus { ProviderId = 1, DisabledTill = DateTime.UtcNow } });
+                  .ReturnsAsync(new List<IndexerStatus> { new IndexerStatus { ProviderId = 1, DisabledTill = DateTime.UtcNow } });
         }
 
         [Test]

@@ -1,4 +1,6 @@
+using System.Threading.Tasks;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Test.Framework;
@@ -18,7 +20,7 @@ namespace NzbDrone.Core.Test.OrganizerTests
             _namingConfig = NamingConfig.Default;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
         }
 
         [TestCase("30 Rock", "{Series Title}", "30 Rock")]
@@ -27,13 +29,13 @@ namespace NzbDrone.Core.Test.OrganizerTests
         [TestCase("Venture Bros.", "{Series.Title}", "Venture.Bros")]
         [TestCase(".hack", "{Series.Title}", "hack")]
         [TestCase("30 Rock", ".{Series.Title}.", "30.Rock")]
-        public void should_use_seriesFolderFormat_to_build_folder_name(string seriesTitle, string format, string expected)
+        public async Task should_use_seriesFolderFormat_to_build_folder_name(string seriesTitle, string format, string expected)
         {
             _namingConfig.SeriesFolderFormat = format;
 
             var series = new Series { Title = seriesTitle };
 
-            Subject.GetSeriesFolder(series).Should().Be(expected);
+            (await Subject.GetSeriesFolder(series)).Should().Be(expected);
         }
     }
 }

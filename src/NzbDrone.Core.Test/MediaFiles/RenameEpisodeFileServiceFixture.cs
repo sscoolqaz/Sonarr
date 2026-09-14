@@ -32,21 +32,21 @@ namespace NzbDrone.Core.Test.MediaFiles
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(_series.Id))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
         }
 
         private void GivenNoEpisodeFiles()
         {
             Mocker.GetMock<IMediaFileService>()
                   .Setup(s => s.Get(It.IsAny<IEnumerable<int>>()))
-                  .Returns(new List<EpisodeFile>());
+                  .ReturnsAsync(new List<EpisodeFile>());
         }
 
         private void GivenEpisodeFiles()
         {
             Mocker.GetMock<IMediaFileService>()
                   .Setup(s => s.Get(It.IsAny<IEnumerable<int>>()))
-                  .Returns(_episodeFiles);
+                  .ReturnsAsync(_episodeFiles);
         }
 
         private void GivenMovedFiles()

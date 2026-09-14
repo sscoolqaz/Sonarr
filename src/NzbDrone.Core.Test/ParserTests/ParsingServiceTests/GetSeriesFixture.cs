@@ -1,4 +1,5 @@
-﻿using FluentAssertions;
+﻿using System.Threading.Tasks;
+using FluentAssertions;
 using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.DataAugmentation.Scene;
@@ -12,34 +13,34 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
     public class GetSeriesFixture : CoreTest<ParsingService>
     {
         [Test]
-        public void should_use_passed_in_title_when_it_cannot_be_parsed()
+        public async Task should_use_passed_in_title_when_it_cannot_be_parsed()
         {
             const string title = "30 Stone";
 
-            Subject.GetSeries(title);
+            await Subject.GetSeries(title);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(s => s.FindByTitle(title), Times.Once());
         }
 
         [Test]
-        public void should_use_parsed_series_title()
+        public async Task should_use_parsed_series_title()
         {
             const string title = "30.Stone.S01E01.720p.hdtv";
 
-            Subject.GetSeries(title);
+            await Subject.GetSeries(title);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(s => s.FindByTitle(Parser.Parser.ParseTitle(title).SeriesTitle), Times.Once());
         }
 
         [Test]
-        public void should_fallback_to_title_without_year_and_year_when_title_lookup_fails()
+        public async Task should_fallback_to_title_without_year_and_year_when_title_lookup_fails()
         {
             const string title = "Show.2004.S01E01.720p.hdtv";
             var parsedEpisodeInfo = Parser.Parser.ParseTitle(title);
 
-            Subject.GetSeries(title);
+            await Subject.GetSeries(title);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(s => s.FindByTitle(parsedEpisodeInfo.SeriesTitleInfo.TitleWithoutYear,
@@ -48,13 +49,13 @@ namespace NzbDrone.Core.Test.ParserTests.ParsingServiceTests
         }
 
         [Test]
-        public void should_parse_concatenated_title()
+        public async Task should_parse_concatenated_title()
         {
             var series = new Series { TvdbId = 100 };
-            Mocker.GetMock<ISeriesService>().Setup(v => v.FindByTitle("Welcome")).Returns(series);
-            Mocker.GetMock<ISceneMappingService>().Setup(v => v.FindTvdbId("Mairimashita", It.IsAny<string>(), It.IsAny<int>())).Returns(100);
+            Mocker.GetMock<ISeriesService>().Setup(v => v.FindByTitle("Welcome")).ReturnsAsync(series);
+            Mocker.GetMock<ISceneMappingService>().Setup(v => v.FindTvdbId("Mairimashita", It.IsAny<string>(), It.IsAny<int>())).ReturnsAsync(100);
 
-            var result = Subject.GetSeries("Welcome (Mairimashita).S01E01.720p.WEB-DL-Viva");
+            var result = await Subject.GetSeries("Welcome (Mairimashita).S01E01.720p.WEB-DL-Viva");
 
             result.Should().NotBeNull();
             result.TvdbId.Should().Be(100);

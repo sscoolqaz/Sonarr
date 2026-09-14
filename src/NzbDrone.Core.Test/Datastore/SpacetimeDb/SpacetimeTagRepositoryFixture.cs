@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
@@ -44,15 +45,15 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
 
             // TagService.Delete() calls Details(), which fans out to every other tag-aware
             // service. None of those are under test here, so give them empty results.
-            Mocker.GetMock<IDelayProfileService>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<DelayProfile>());
-            Mocker.GetMock<IImportListFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<ImportListDefinition>());
-            Mocker.GetMock<INotificationFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<NotificationDefinition>());
-            Mocker.GetMock<IReleaseProfileService>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<ReleaseProfile>());
-            Mocker.GetMock<IReleaseProfileService>().Setup(s => s.AllExcludedForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<ReleaseProfile>());
-            Mocker.GetMock<ISeriesService>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<Series>());
-            Mocker.GetMock<IIndexerFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<IndexerDefinition>());
-            Mocker.GetMock<IAutoTaggingService>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<AutoTag>());
-            Mocker.GetMock<IDownloadClientFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).Returns(new System.Collections.Generic.List<DownloadClientDefinition>());
+            Mocker.GetMock<IDelayProfileService>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<DelayProfile>());
+            Mocker.GetMock<IImportListFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<ImportListDefinition>());
+            Mocker.GetMock<INotificationFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<NotificationDefinition>());
+            Mocker.GetMock<IReleaseProfileService>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<ReleaseProfile>());
+            Mocker.GetMock<IReleaseProfileService>().Setup(s => s.AllExcludedForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<ReleaseProfile>());
+            Mocker.GetMock<ISeriesService>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<Series>());
+            Mocker.GetMock<IIndexerFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<IndexerDefinition>());
+            Mocker.GetMock<IAutoTaggingService>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<AutoTag>());
+            Mocker.GetMock<IDownloadClientFactory>().Setup(s => s.AllForTag(It.IsAny<int>())).ReturnsAsync(new System.Collections.Generic.List<DownloadClientDefinition>());
         }
 
         [TearDown]
@@ -62,37 +63,37 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
         }
 
         [Test]
-        public void should_add_get_update_delete_tag_through_real_tag_service()
+        public async Task should_add_get_update_delete_tag_through_real_tag_service()
         {
             var label = $"spike-{Guid.NewGuid():N}".Substring(0, 20);
 
-            var added = Subject.Add(new Tag { Label = label });
+            var added = await Subject.Add(new Tag { Label = label });
             added.Id.Should().BeGreaterThan(0);
             added.Label.Should().Be(label);
 
-            var fetchedById = Subject.GetTag(added.Id);
+            var fetchedById = await Subject.GetTag(added.Id);
             fetchedById.Label.Should().Be(label);
 
-            var fetchedByLabel = Subject.GetTag(label);
+            var fetchedByLabel = await Subject.GetTag(label);
             fetchedByLabel.Id.Should().Be(added.Id);
 
             var updatedLabel = label + "-updated";
-            Subject.Update(new Tag { Id = added.Id, Label = updatedLabel });
-            Subject.GetTag(added.Id).Label.Should().Be(updatedLabel);
+            await Subject.Update(new Tag { Id = added.Id, Label = updatedLabel });
+            (await Subject.GetTag(added.Id)).Label.Should().Be(updatedLabel);
 
-            Subject.All().Should().Contain(t => t.Id == added.Id && t.Label == updatedLabel);
+            (await Subject.All()).Should().Contain(t => t.Id == added.Id && t.Label == updatedLabel);
 
-            Subject.Delete(added.Id);
-            Assert.Throws<ModelNotFoundException>(() => Subject.GetTag(added.Id));
+            await Subject.Delete(added.Id);
+            Assert.ThrowsAsync<ModelNotFoundException>(async () => await Subject.GetTag(added.Id));
         }
 
         [Test]
-        public void should_return_existing_tag_when_adding_duplicate_label()
+        public async Task should_return_existing_tag_when_adding_duplicate_label()
         {
             var label = $"spike-dup-{Guid.NewGuid():N}".Substring(0, 20);
 
-            var first = Subject.Add(new Tag { Label = label });
-            var second = Subject.Add(new Tag { Label = label });
+            var first = await Subject.Add(new Tag { Label = label });
+            var second = await Subject.Add(new Tag { Label = label });
 
             second.Id.Should().Be(first.Id);
         }

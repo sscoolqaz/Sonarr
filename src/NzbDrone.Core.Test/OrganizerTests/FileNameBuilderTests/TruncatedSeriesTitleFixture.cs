@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Organizer;
@@ -31,7 +33,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                 .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -39,18 +41,18 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         [TestCase("{Series Title:16}", "The Fantastic...")]
         [TestCase("{Series TitleThe:17}", "Fantastic Life...")]
         [TestCase("{Series CleanTitle:-13}", "...Mr. Sisko")]
-        public void should_truncate_series_title(string format, string expected)
+        public async Task should_truncate_series_title(string format, string expected)
         {
             _series.Title = "The Fantastic Life of Mr. Sisko";
             _namingConfig.SeriesFolderFormat = format;
 
-            var result = Subject.GetSeriesFolder(_series, _namingConfig);
+            var result = await Subject.GetSeriesFolder(_series, _namingConfig);
             result.Should().Be(expected);
         }
     }

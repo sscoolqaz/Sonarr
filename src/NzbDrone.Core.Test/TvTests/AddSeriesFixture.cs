@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using FluentValidation;
@@ -41,7 +42,7 @@ namespace NzbDrone.Core.Test.TvTests
         {
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.GetSeriesFolder(It.IsAny<Series>(), null))
-                  .Returns<Series, NamingConfig>((c, n) => c.Title);
+                  .Returns<Series, NamingConfig>((c, n) => Task.FromResult(c.Title));
 
             Mocker.GetMock<IAddSeriesValidator>()
                   .Setup(s => s.Validate(It.IsAny<Series>()))
@@ -49,7 +50,7 @@ namespace NzbDrone.Core.Test.TvTests
         }
 
         [Test]
-        public void should_be_able_to_add_a_series_without_passing_in_title()
+        public async Task should_be_able_to_add_a_series_without_passing_in_title()
         {
             var newSeries = new Series
             {
@@ -60,13 +61,13 @@ namespace NzbDrone.Core.Test.TvTests
             GivenValidSeries(newSeries.TvdbId);
             GivenValidPath();
 
-            var series = Subject.AddSeries(newSeries);
+            var series = await Subject.AddSeries(newSeries);
 
             series.Title.Should().Be(_fakeSeries.Title);
         }
 
         [Test]
-        public void should_have_proper_path()
+        public async Task should_have_proper_path()
         {
             var newSeries = new Series
                             {
@@ -77,13 +78,13 @@ namespace NzbDrone.Core.Test.TvTests
             GivenValidSeries(newSeries.TvdbId);
             GivenValidPath();
 
-            var series = Subject.AddSeries(newSeries);
+            var series = await Subject.AddSeries(newSeries);
 
             series.Path.Should().Be(Path.Combine(newSeries.RootFolderPath, _fakeSeries.Title));
         }
 
         [Test]
-        public void should_throw_if_series_validation_fails()
+        public async Task should_throw_if_series_validation_fails()
         {
             var newSeries = new Series
             {
@@ -100,11 +101,11 @@ namespace NzbDrone.Core.Test.TvTests
                                                     new ValidationFailure("Path", "Test validation failure")
                                                 }));
 
-            Assert.Throws<ValidationException>(() => Subject.AddSeries(newSeries));
+            Assert.ThrowsAsync<ValidationException>(() => Subject.AddSeries(newSeries));
         }
 
         [Test]
-        public void should_throw_if_series_cannot_be_found()
+        public async Task should_throw_if_series_cannot_be_found()
         {
             var newSeries = new Series
             {
@@ -123,7 +124,7 @@ namespace NzbDrone.Core.Test.TvTests
                                                     new ValidationFailure("Path", "Test validation failure")
                                                 }));
 
-            Assert.Throws<ValidationException>(() => Subject.AddSeries(newSeries));
+            Assert.ThrowsAsync<ValidationException>(() => Subject.AddSeries(newSeries));
 
             ExceptionVerification.ExpectedErrors(1);
         }

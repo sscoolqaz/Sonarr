@@ -18,15 +18,15 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.GetAvailableProviders())
-                  .Returns(new List<IIndexer>());
+                  .ReturnsAsync(new List<IIndexer>());
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.AutomaticSearchEnabled(It.IsAny<bool>()))
-                  .Returns(new List<IIndexer>());
+                  .ReturnsAsync(new List<IIndexer>());
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.InteractiveSearchEnabled(It.IsAny<bool>()))
-                  .Returns(new List<IIndexer>());
+                  .ReturnsAsync(new List<IIndexer>());
 
             Mocker.GetMock<ILocalizationService>()
                   .Setup(s => s.GetLocalizedString(It.IsAny<string>()))
@@ -41,32 +41,32 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.GetAvailableProviders())
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
         }
 
         private void GivenAutomaticSearchEnabled()
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.AutomaticSearchEnabled(It.IsAny<bool>()))
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
         }
 
         private void GivenInteractiveSearchEnabled()
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.InteractiveSearchEnabled(It.IsAny<bool>()))
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
         }
 
         private void GivenSearchFiltered()
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.AutomaticSearchEnabled(false))
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.InteractiveSearchEnabled(false))
-                  .Returns(new List<IIndexer> { _indexerMock.Object });
+                  .ReturnsAsync(new List<IIndexer> { _indexerMock.Object });
 
             Mocker.GetMock<ILocalizationService>()
                   .Setup(s => s.GetLocalizedString(It.IsAny<string>()))

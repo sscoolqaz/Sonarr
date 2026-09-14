@@ -53,7 +53,7 @@ namespace NzbDrone.Core.Test.DataAugmentation.SceneNumbering
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(v => v.GetEpisodeBySeries(It.IsAny<int>()))
-                  .Returns(_episodes);
+                  .ReturnsAsync(_episodes);
         }
 
         private void GivenTvdbMappings()

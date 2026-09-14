@@ -33,11 +33,11 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(s => s.AutomaticSearchEnabled(true))
-                  .Returns(new List<IIndexer> { _mockIndexer.Object });
+                  .ReturnsAsync(new List<IIndexer> { _mockIndexer.Object });
 
             Mocker.GetMock<IMakeDownloadDecision>()
                 .Setup(s => s.GetSearchDecision(It.IsAny<List<Parser.Model.ReleaseInfo>>(), It.IsAny<SearchCriteriaBase>()))
-                .Returns(new List<DownloadDecision>());
+                .ReturnsAsync(new List<DownloadDecision>());
 
             _xemSeries = Builder<Series>.CreateNew()
                 .With(v => v.UseSceneNumbering = true)
@@ -48,19 +48,19 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(v => v.GetSeries(_xemSeries.Id))
-                .Returns(_xemSeries);
+                .ReturnsAsync(_xemSeries);
 
             Mocker.GetMock<IEpisodeService>()
                 .Setup(v => v.GetEpisodesBySeason(_xemSeries.Id, It.IsAny<int>()))
-                .Returns<int, int>((i, j) => _xemEpisodes.Where(d => d.SeasonNumber == j).ToList());
+                .ReturnsAsync((int i, int j) => _xemEpisodes.Where(d => d.SeasonNumber == j).ToList());
 
             Mocker.GetMock<ISceneMappingService>()
                   .Setup(s => s.FindByTvdbId(It.IsAny<int>()))
-                  .Returns(new List<SceneMapping>());
+                  .ReturnsAsync(new List<SceneMapping>());
 
             Mocker.GetMock<ISceneMappingService>()
                   .Setup(s => s.GetSceneNames(It.IsAny<int>(), It.IsAny<List<int>>(), It.IsAny<List<int>>()))
-                  .Returns(new List<string>());
+                  .ReturnsAsync(new List<string>());
         }
 
         private void WithEpisode(int seasonNumber, int episodeNumber, int? sceneSeasonNumber, int? sceneEpisodeNumber, string airDate = null)
@@ -177,7 +177,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(v => v.GetSeries(_xemSeries.Id))
-                .Returns(_xemSeries);
+                .ReturnsAsync(_xemSeries);
 
             WithEpisodes();
 
@@ -207,7 +207,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(v => v.GetSeries(_xemSeries.Id))
-                .Returns(_xemSeries);
+                .ReturnsAsync(_xemSeries);
 
             WithEpisodes();
 
@@ -237,7 +237,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISeriesService>()
                 .Setup(v => v.GetSeries(_xemSeries.Id))
-                .Returns(_xemSeries);
+                .ReturnsAsync(_xemSeries);
 
             WithEpisodes();
 
@@ -672,7 +672,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISceneMappingService>()
                 .Setup(s => s.FindByTvdbId(It.IsAny<int>()))
-                .Returns(new List<SceneMapping>
+                .ReturnsAsync(new List<SceneMapping>
                 {
                     new SceneMapping
                     {
@@ -715,7 +715,7 @@ namespace NzbDrone.Core.Test.IndexerSearchTests
 
             Mocker.GetMock<ISceneMappingService>()
                 .Setup(s => s.FindByTvdbId(It.IsAny<int>()))
-                .Returns(new List<SceneMapping>
+                .ReturnsAsync(new List<SceneMapping>
                 {
                     new SceneMapping
                     {

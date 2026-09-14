@@ -1,5 +1,7 @@
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Test.Framework;
@@ -34,21 +36,21 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
         }
 
         [Test]
-        public void should_return_false_when_absolute_episode_number_is_not_part_of_the_pattern()
+        public async Task should_return_false_when_absolute_episode_number_is_not_part_of_the_pattern()
         {
             _namingConfig.AnimeEpisodeFormat = "{Series Title} S{season:00}E{episode:00}";
-            Subject.RequiresAbsoluteEpisodeNumber().Should().BeFalse();
+            (await Subject.RequiresAbsoluteEpisodeNumber()).Should().BeFalse();
         }
 
         [Test]
-        public void should_return_true_when_absolute_episode_number_is_part_of_the_pattern()
+        public async Task should_return_true_when_absolute_episode_number_is_part_of_the_pattern()
         {
             _namingConfig.AnimeEpisodeFormat = "{Series Title} {absolute:00}";
-            Subject.RequiresAbsoluteEpisodeNumber().Should().BeTrue();
+            (await Subject.RequiresAbsoluteEpisodeNumber()).Should().BeTrue();
         }
     }
 }

@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -34,7 +36,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             _episode1 = Builder<Episode>.CreateNew()
                             .With(e => e.Title = "City Sushi")
@@ -65,7 +67,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         [TestCase("Hey, Baby, What's Wrong (1)", "Hey, Baby, What's Wrong (2)", "Hey, Baby, What's Wrong")]
@@ -76,19 +78,19 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("Meet the Guys and Girls of Cycle 20 part 1", "Meet the Guys and Girls of Cycle 20 part 2", "Meet the Guys and Girls of Cycle 20")]
         [TestCase("Meet the Guys and Girls of Cycle 20 pt 1", "Meet the Guys and Girls of Cycle 20 pt 2", "Meet the Guys and Girls of Cycle 20")]
         [TestCase("Meet the Guys and Girls of Cycle 20 pt. 1", "Meet the Guys and Girls of Cycle 20 pt. 2", "Meet the Guys and Girls of Cycle 20")]
-        public void should_collapse_episode_titles_when_episode_titles_are_the_same(string title1, string title2, string expected)
+        public async Task should_collapse_episode_titles_when_episode_titles_are_the_same(string title1, string title2, string expected)
         {
             _namingConfig.StandardEpisodeFormat = "{Episode Title}";
 
             _episode1.Title = title1;
             _episode2.Title = title2;
 
-            Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile))
                    .Should().Be(expected);
         }
 
         [Test]
-        public void should_not_collapse_episode_titles_when_episode_titles_are_not_the_same()
+        public async Task should_not_collapse_episode_titles_when_episode_titles_are_not_the_same()
         {
             _namingConfig.StandardEpisodeFormat = "{Series Title} - S{season:00}E{episode:00} - {Episode Title}";
             _namingConfig.MultiEpisodeStyle = MultiEpisodeStyle.Scene;
@@ -96,19 +98,19 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _episode1.Title = "Hello";
             _episode2.Title = "World";
 
-            Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile))
                    .Should().Be("South Park - S15E06-E07 - Hello + World");
         }
 
         [Test]
-        public void should_not_collaspe_when_result_is_empty()
+        public async Task should_not_collaspe_when_result_is_empty()
         {
             _namingConfig.StandardEpisodeFormat = "{Episode Title}";
 
             _episode1.Title = "Part 1";
             _episode2.Title = "Part 2";
 
-            Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile))
                    .Should().Be("Part 1 + Part 2");
         }
     }

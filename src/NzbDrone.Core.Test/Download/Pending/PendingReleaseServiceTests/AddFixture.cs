@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -72,27 +73,27 @@ namespace NzbDrone.Core.Test.Download.Pending.PendingReleaseServiceTests
 
             Mocker.GetMock<IPendingReleaseRepository>()
                   .Setup(s => s.All())
-                  .Returns(_heldReleases);
+                  .ReturnsAsync(_heldReleases);
 
             Mocker.GetMock<IPendingReleaseRepository>()
                   .Setup(s => s.AllBySeriesId(It.IsAny<int>()))
-                  .Returns<int>(i => _heldReleases.Where(v => v.SeriesId == i).ToList());
+                  .Returns<int>(i => Task.FromResult(_heldReleases.Where(v => v.SeriesId == i).ToList()));
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(It.IsAny<int>()))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(It.IsAny<IEnumerable<int>>()))
-                  .Returns(new List<Series> { _series });
+                  .ReturnsAsync(new List<Series> { _series });
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetEpisodes(It.IsAny<ParsedEpisodeInfo>(), _series, true, null))
-                  .Returns(new List<Episode> { _episode });
+                  .ReturnsAsync(new List<Episode> { _episode });
 
             Mocker.GetMock<IParsingService>()
                 .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), _series))
-                .Returns(_remoteEpisode);
+                .ReturnsAsync(_remoteEpisode);
 
             Mocker.GetMock<IPrioritizeDownloadDecision>()
                   .Setup(s => s.PrioritizeDecisions(It.IsAny<List<DownloadDecision>>()))

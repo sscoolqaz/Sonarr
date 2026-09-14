@@ -87,7 +87,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
         {
             Mocker.GetMock<IDelayProfileService>()
                   .Setup(s => s.BestForTags(It.IsAny<HashSet<int>>()))
-                  .Returns(new DelayProfile
+                  .ReturnsAsync(new DelayProfile
                   {
                       PreferredProtocol = downloadProtocol
                   });

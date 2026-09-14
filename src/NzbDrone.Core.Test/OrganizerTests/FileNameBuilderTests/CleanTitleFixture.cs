@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -41,7 +43,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                 .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -49,7 +51,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         [TestCase("Florence + the Machine", "Florence + the Machine")]
@@ -81,17 +83,17 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("Don’t Blink", "Dont Blink")]
         [TestCase("The ` Legend of Kings", "The Legend of Kings")]
         [TestCase("Joker: Folie à deux", "Joker Folie a deux")]
-        public void should_get_expected_title_back(string title, string expected)
+        public async Task should_get_expected_title_back(string title, string expected)
         {
             _series.Title = title;
             _namingConfig.StandardEpisodeFormat = "{Series CleanTitle}";
 
-            Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode }, _series, _episodeFile))
                    .Should().Be(expected);
         }
 
         [Test]
-        public void should_use_and_as_separator_for_multiple_episodes()
+        public async Task should_use_and_as_separator_for_multiple_episodes()
         {
             var episodes = Builder<Episode>.CreateListOfSize(2)
                                            .TheFirst(1)
@@ -103,7 +105,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             _namingConfig.StandardEpisodeFormat = "{Episode CleanTitle}";
 
-            Subject.BuildFileName(episodes, _series, _episodeFile)
+            (await Subject.BuildFileName(episodes, _series, _episodeFile))
                    .Should().Be(episodes.First().Title + " and " + episodes.Last().Title);
         }
     }

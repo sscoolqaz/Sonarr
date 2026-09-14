@@ -42,7 +42,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests.RssSync
             Mocker
                 .GetMock<IIndexerFactory>()
                 .Setup(m => m.Get(1))
-                .Returns(_fakeIndexerDefinition);
+                .ReturnsAsync(_fakeIndexerDefinition);
 
             _specification = Mocker.Resolve<IndexerTagSpecification>();
 

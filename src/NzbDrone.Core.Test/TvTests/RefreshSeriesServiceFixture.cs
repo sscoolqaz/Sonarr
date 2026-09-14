@@ -39,7 +39,7 @@ namespace NzbDrone.Core.Test.TvTests
 
             Mocker.GetMock<ISeriesService>()
                   .Setup(s => s.GetSeries(_series.Id))
-                  .Returns(_series);
+                  .ReturnsAsync(_series);
 
             Mocker.GetMock<IProvideSeriesInfo>()
                   .Setup(s => s.GetSeriesInfo(It.IsAny<int>()))
@@ -47,7 +47,7 @@ namespace NzbDrone.Core.Test.TvTests
 
             Mocker.GetMock<IAutoTaggingService>()
                 .Setup(s => s.GetTagChanges(_series))
-                .Returns(new AutoTaggingChanges());
+                .ReturnsAsync(new AutoTaggingChanges());
         }
 
         private void GivenNewSeriesInfo(Series series)

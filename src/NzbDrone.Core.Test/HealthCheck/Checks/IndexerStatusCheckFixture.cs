@@ -20,11 +20,11 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
         {
             Mocker.GetMock<IIndexerFactory>()
                   .Setup(v => v.GetAvailableProviders())
-                  .Returns(_indexers);
+                  .ReturnsAsync(_indexers);
 
             Mocker.GetMock<IIndexerStatusService>()
                    .Setup(v => v.GetBlockedProviders())
-                   .Returns(_blockedIndexers);
+                   .ReturnsAsync(_blockedIndexers);
 
             Mocker.GetMock<ILocalizationService>()
                   .Setup(s => s.GetLocalizedString(It.IsAny<string>()))

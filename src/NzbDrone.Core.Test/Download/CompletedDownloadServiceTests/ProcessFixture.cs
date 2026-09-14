@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -53,11 +54,11 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
 
             Mocker.GetMock<IHistoryService>()
                   .Setup(s => s.FindByDownloadId(_trackedDownload.DownloadItem.DownloadId))
-                  .Returns(new List<EpisodeHistory>());
+                  .ReturnsAsync(new List<EpisodeHistory>());
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetSeries("Drone.S01E01.HDTV"))
-                  .Returns(remoteEpisode.Series);
+                  .ReturnsAsync(remoteEpisode.Series);
         }
 
         private RemoteEpisode BuildRemoteEpisode()
@@ -73,14 +74,14 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
         {
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.FindByDownloadId(_trackedDownload.DownloadItem.DownloadId))
-                .Returns(new List<EpisodeHistory>());
+                .ReturnsAsync(new List<EpisodeHistory>());
         }
 
         private void GivenSeriesMatch()
         {
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetSeries(It.IsAny<string>()))
-                  .Returns(_trackedDownload.RemoteEpisode.Series);
+                  .ReturnsAsync(_trackedDownload.RemoteEpisode.Series);
         }
 
         private void GivenABadlyNamedDownload()
@@ -89,18 +90,18 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
             _trackedDownload.DownloadItem.Title = "Droned Pilot"; // Set a badly named download
             Mocker.GetMock<IHistoryService>()
                   .Setup(s => s.FindByDownloadId(It.Is<string>(i => i == "1234")))
-                  .Returns(new List<EpisodeHistory>
+                  .ReturnsAsync(new List<EpisodeHistory>
                   {
                       new EpisodeHistory() { SourceTitle = "Droned S01E01", EventType = EpisodeHistoryEventType.Grabbed }
                   });
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetSeries(It.IsAny<string>()))
-                  .Returns((Series)null);
+                  .ReturnsAsync((Series)null);
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetSeries("Droned S01E01"))
-                  .Returns(BuildRemoteEpisode().Series);
+                  .ReturnsAsync(BuildRemoteEpisode().Series);
         }
 
         [TestCase(DownloadItemStatus.Downloading)]
@@ -108,73 +109,73 @@ namespace NzbDrone.Core.Test.Download.CompletedDownloadServiceTests
         [TestCase(DownloadItemStatus.Queued)]
         [TestCase(DownloadItemStatus.Paused)]
         [TestCase(DownloadItemStatus.Warning)]
-        public void should_not_process_if_download_status_isnt_completed(DownloadItemStatus status)
+        public async Task should_not_process_if_download_status_isnt_completed(DownloadItemStatus status)
         {
             _trackedDownload.DownloadItem.Status = status;
 
-            Subject.Check(_trackedDownload);
+            await Subject.Check(_trackedDownload);
 
             AssertNotReadyToImport();
         }
 
         [Test]
-        public void should_not_process_if_matching_history_is_not_found_and_no_category_specified()
+        public async Task should_not_process_if_matching_history_is_not_found_and_no_category_specified()
         {
             _trackedDownload.DownloadItem.Category = null;
             GivenNoGrabbedHistory();
 
-            Subject.Check(_trackedDownload);
+            await Subject.Check(_trackedDownload);
 
             AssertNotReadyToImport();
         }
 
         [Test]
-        public void should_process_if_matching_history_is_not_found_but_category_specified()
+        public async Task should_process_if_matching_history_is_not_found_but_category_specified()
         {
             _trackedDownload.DownloadItem.Category = "tv";
             GivenNoGrabbedHistory();
             GivenSeriesMatch();
 
-            Subject.Check(_trackedDownload);
+            await Subject.Check(_trackedDownload);
 
             AssertReadyToImport();
         }
 
         [Test]
-        public void should_not_process_if_output_path_is_empty()
+        public async Task should_not_process_if_output_path_is_empty()
         {
             _trackedDownload.DownloadItem.OutputPath = default(OsPath);
 
-            Subject.Check(_trackedDownload);
+            await Subject.Check(_trackedDownload);
 
             AssertNotReadyToImport();
         }
 
         [Test]
-        public void should_not_process_if_the_download_cannot_be_tracked_using_the_source_title_as_it_was_initiated_externally()
+        public async Task should_not_process_if_the_download_cannot_be_tracked_using_the_source_title_as_it_was_initiated_externally()
         {
             GivenABadlyNamedDownload();
 
             Mocker.GetMock<IDownloadedEpisodesImportService>()
                   .Setup(v => v.ProcessPath(It.IsAny<string>(), It.IsAny<ImportMode>(), It.IsAny<Series>(), It.IsAny<DownloadClientItem>()))
-                  .Returns(new List<ImportResult>
+                  .ReturnsAsync(new List<ImportResult>
                            {
                                new ImportResult(new ImportDecision(new LocalEpisode { Path = @"C:\TestPath\Droned.S01E01.mkv" }))
                            });
 
-            Subject.Check(_trackedDownload);
+            await Subject.Check(_trackedDownload);
 
             AssertNotReadyToImport();
         }
 
         [Test]
-        public void should_not_process_when_there_is_a_title_mismatch()
+        public async Task should_not_process_when_there_is_a_title_mismatch()
         {
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetSeries("Drone.S01E01.HDTV"))
-                  .Returns((Series)null);
+                  .ReturnsAsync((Series)null);
 
-            Subject.Check(_trackedDownload);
+            await Subject.Check(_trackedDownload);
 
             AssertNotReadyToImport();
         }

@@ -65,7 +65,7 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
         {
             Mocker.GetMock<IRootFolderService>()
                   .Setup(s => s.All())
-                  .Returns(new List<RootFolder> { new RootFolder { Path = folder.AsOsAgnostic() } });
+                  .ReturnsAsync(new List<RootFolder> { new RootFolder { Path = folder.AsOsAgnostic() } });
         }
 
         [Test]

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using NUnit.Framework;
@@ -65,11 +66,11 @@ namespace NzbDrone.Core.Test.Extras.Others
         [TestCase("Series_Title_S01E01.nfo", "Series Title - S01E01.nfo")]
         [TestCase("S01E01.thumb.jpg", "Series Title - S01E01.jpg")]
         [TestCase(@"Series.Title.S01E01\thumb.jpg", "Series Title - S01E01.jpg")]
-        public void should_import_matching_file(string filePath, string expectedOutputPath)
+        public async Task should_import_matching_file(string filePath, string expectedOutputPath)
         {
             var files = new List<string> { Path.Combine(_episodeFolder, filePath).AsOsAgnostic() };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(1);
 
@@ -77,7 +78,7 @@ namespace NzbDrone.Core.Test.Extras.Others
         }
 
         [Test]
-        public void should_not_import_multiple_nfo_files()
+        public async Task should_not_import_multiple_nfo_files()
         {
             var files = new List<string>
             {
@@ -85,14 +86,14 @@ namespace NzbDrone.Core.Test.Extras.Others
                 Path.Combine(_episodeFolder, "Series_Title_S01E01.nfo").AsOsAgnostic(),
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(1);
         }
 
         [Test]
         [TestCase(@"audio_folder_1\Series Title S01E01.mka", @"audio_folder_2\Series Title S01E01.mka", "Series Title - S01E01.1.mka", "Series Title - S01E01.2.mka")]
-        public void should_import_all_files_with_same_name(string firstExtraFilePath, string secondExtraFilePath, string firstOutputPath, string secondOutputPath)
+        public async Task should_import_all_files_with_same_name(string firstExtraFilePath, string secondExtraFilePath, string firstOutputPath, string secondOutputPath)
         {
             var files = new List<string>
             {
@@ -100,7 +101,7 @@ namespace NzbDrone.Core.Test.Extras.Others
                 Path.Combine(_episodeFolder, secondExtraFilePath).AsOsAgnostic()
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(2);
 
@@ -109,7 +110,7 @@ namespace NzbDrone.Core.Test.Extras.Others
         }
 
         [Test]
-        public void should_increment_suffix_for_each_duplicate_file()
+        public async Task should_increment_suffix_for_each_duplicate_file()
         {
             var files = new List<string>
             {
@@ -118,7 +119,7 @@ namespace NzbDrone.Core.Test.Extras.Others
                 Path.Combine(_episodeFolder, @"audio_folder_3\Series Title S01E01.mka").AsOsAgnostic(),
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(3);
             results[0].RelativePath.AsOsAgnostic().PathEquals(Path.Combine("Season 1", "Series Title - S01E01.1.mka").AsOsAgnostic()).Should().Be(true);
@@ -127,7 +128,7 @@ namespace NzbDrone.Core.Test.Extras.Others
         }
 
         [Test]
-        public void should_suffix_files_matched_by_filename_prefix()
+        public async Task should_suffix_files_matched_by_filename_prefix()
         {
             var files = new List<string>
             {
@@ -135,7 +136,7 @@ namespace NzbDrone.Core.Test.Extras.Others
                 Path.Combine(_episodeFolder, "Series.Title.S01E01.commentary.mka").AsOsAgnostic(),
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(2);
             results[0].RelativePath.AsOsAgnostic().PathEquals(Path.Combine("Season 1", "Series Title - S01E01.1.mka").AsOsAgnostic()).Should().Be(true);
@@ -143,7 +144,7 @@ namespace NzbDrone.Core.Test.Extras.Others
         }
 
         [Test]
-        public void should_suffix_files_matched_by_both_filename_and_episode_info()
+        public async Task should_suffix_files_matched_by_both_filename_and_episode_info()
         {
             var files = new List<string>
             {
@@ -151,7 +152,7 @@ namespace NzbDrone.Core.Test.Extras.Others
                 Path.Combine(_episodeFolder, @"extras\S01E01.mka").AsOsAgnostic(),
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(2);
             results[0].RelativePath.AsOsAgnostic().PathEquals(Path.Combine("Season 1", "Series Title - S01E01.1.mka").AsOsAgnostic()).Should().Be(true);
@@ -159,7 +160,7 @@ namespace NzbDrone.Core.Test.Extras.Others
         }
 
         [Test]
-        public void should_not_suffix_when_other_files_do_not_match_episode()
+        public async Task should_not_suffix_when_other_files_do_not_match_episode()
         {
             var files = new List<string>
             {
@@ -167,7 +168,7 @@ namespace NzbDrone.Core.Test.Extras.Others
                 Path.Combine(_episodeFolder, "Series.Title.S01E02.mka").AsOsAgnostic(),
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(1);
             results[0].RelativePath.AsOsAgnostic().PathEquals(Path.Combine("Season 1", "Series Title - S01E01.mka").AsOsAgnostic()).Should().Be(true);

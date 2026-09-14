@@ -91,7 +91,7 @@ namespace NzbDrone.Core.Test.MetadataSource.SkyHook
                 TvdbId = tvdbId
             };
 
-            Mocker.GetMock<ISeriesService>().Setup(c => c.FindByTvdbId(tvdbId)).Returns(existingSeries);
+            Mocker.GetMock<ISeriesService>().Setup(c => c.FindByTvdbId(tvdbId)).ReturnsAsync(existingSeries);
 
             var result = Subject.SearchForNewSeries("tvdbid: " + tvdbId);
 

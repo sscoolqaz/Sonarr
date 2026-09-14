@@ -65,7 +65,7 @@ namespace NzbDrone.Core.Test.DecisionEngineTests
 
             Mocker.GetMock<IHistoryService>()
                   .Setup(s => s.FindByEpisodeId(It.IsAny<int>()))
-                  .Returns(_history);
+                  .ReturnsAsync(_history);
         }
 
         private void GivenCdhDisabled()

@@ -18,7 +18,7 @@ namespace NzbDrone.Core.Test.Download.Pending.PendingReleaseServiceTests
         {
             Mocker.GetMock<IPendingReleaseRepository>()
                               .Setup(v => v.All())
-                              .Returns(new List<PendingRelease>
+                              .ReturnsAsync(new List<PendingRelease>
                                 {
                                       new PendingRelease { Release = new ReleaseInfo { IndexerId = 1 } }
                                 });
@@ -29,7 +29,7 @@ namespace NzbDrone.Core.Test.Download.Pending.PendingReleaseServiceTests
         {
             Mocker.GetMock<IIndexerStatusService>()
                 .Setup(v => v.GetBlockedProviders())
-                .Returns(new List<IndexerStatus>());
+                .ReturnsAsync(new List<IndexerStatus>());
 
             GivenPendingRelease();
 
@@ -45,7 +45,7 @@ namespace NzbDrone.Core.Test.Download.Pending.PendingReleaseServiceTests
         {
             Mocker.GetMock<IIndexerStatusService>()
                 .Setup(v => v.GetBlockedProviders())
-                .Returns(new List<IndexerStatus> { new IndexerStatus { ProviderId = 1, DisabledTill = DateTime.UtcNow.AddHours(2) } });
+                .ReturnsAsync(new List<IndexerStatus> { new IndexerStatus { ProviderId = 1, DisabledTill = DateTime.UtcNow.AddHours(2) } });
 
             GivenPendingRelease();
 

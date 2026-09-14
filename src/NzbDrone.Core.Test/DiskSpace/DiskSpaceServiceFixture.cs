@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
 using Moq;
 using NUnit.Framework;
@@ -49,14 +50,14 @@ namespace NzbDrone.Core.Test.DiskSpace
         {
             Mocker.GetMock<ISeriesService>()
                 .Setup(v => v.GetAllSeriesPaths())
-                .Returns(new Dictionary<int, string>(seriesPaths.Select((value, i) => new KeyValuePair<int, string>(i, value))));
+                .ReturnsAsync(new Dictionary<int, string>(seriesPaths.Select((value, i) => new KeyValuePair<int, string>(i, value))));
         }
 
         private void GivenRootFolder(string seriesPath, string rootFolderPath)
         {
             Mocker.GetMock<IRootFolderService>()
                 .Setup(v => v.GetBestRootFolderPath(seriesPath))
-                .Returns(rootFolderPath);
+                .ReturnsAsync(rootFolderPath);
         }
 
         private void GivenExistingFolder(string folder)
@@ -67,26 +68,26 @@ namespace NzbDrone.Core.Test.DiskSpace
         }
 
         [Test]
-        public void should_check_diskspace_for_series_folders()
+        public async Task should_check_diskspace_for_series_folders()
         {
             GivenSeries(_seriesFolder);
             GivenRootFolder(_seriesFolder, _rootFolder);
             GivenExistingFolder(_rootFolder);
 
-            var freeSpace = Subject.GetFreeSpace();
+            var freeSpace = await Subject.GetFreeSpace();
 
             freeSpace.Should().NotBeEmpty();
         }
 
         [Test]
-        public void should_check_diskspace_for_same_root_folder_only_once()
+        public async Task should_check_diskspace_for_same_root_folder_only_once()
         {
             GivenSeries(_seriesFolder, _seriesFolder2);
             GivenRootFolder(_seriesFolder, _rootFolder);
             GivenRootFolder(_seriesFolder2, _rootFolder);
             GivenExistingFolder(_rootFolder);
 
-            var freeSpace = Subject.GetFreeSpace();
+            var freeSpace = await Subject.GetFreeSpace();
 
             freeSpace.Should().HaveCount(1);
 
@@ -95,12 +96,12 @@ namespace NzbDrone.Core.Test.DiskSpace
         }
 
         [Test]
-        public void should_not_check_diskspace_for_missing_series_root_folders()
+        public async Task should_not_check_diskspace_for_missing_series_root_folders()
         {
             GivenSeries(_seriesFolder);
             GivenRootFolder(_seriesFolder, _rootFolder);
 
-            var freeSpace = Subject.GetFreeSpace();
+            var freeSpace = await Subject.GetFreeSpace();
 
             freeSpace.Should().BeEmpty();
 
@@ -116,7 +117,7 @@ namespace NzbDrone.Core.Test.DiskSpace
         [TestCase("/some/place/docker/aufs")]
         [TestCase("/etc/network")]
         [TestCase("/Volumes/.timemachine/ABC123456-A1BC-12A3B45678C9/2025-05-13-181401.backup")]
-        public void should_not_check_diskspace_for_irrelevant_mounts(string path)
+        public async Task should_not_check_diskspace_for_irrelevant_mounts(string path)
         {
             var mount = new Mock<IMount>();
             mount.SetupGet(v => v.RootDirectory).Returns(path);
@@ -126,7 +127,7 @@ namespace NzbDrone.Core.Test.DiskSpace
                   .Setup(v => v.GetMounts())
                   .Returns(new List<IMount> { mount.Object });
 
-            var freeSpace = Subject.GetFreeSpace();
+            var freeSpace = await Subject.GetFreeSpace();
 
             freeSpace.Should().BeEmpty();
         }

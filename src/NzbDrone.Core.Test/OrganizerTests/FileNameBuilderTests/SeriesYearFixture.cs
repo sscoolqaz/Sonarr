@@ -1,6 +1,8 @@
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Qualities;
@@ -26,7 +28,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             Mocker.GetMock<IQualityDefinitionService>()
                 .Setup(v => v.Get(Moq.It.IsAny<Quality>()))
@@ -36,13 +38,13 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("The Mist", 2017, "2017\\The Mist")]
         [TestCase("A", 2021, "2021\\A")]
         [TestCase("30 Rock", 2006, "2006\\30 Rock")]
-        public void should_get_expected_folder_name_back(string title, int year, string expected)
+        public async Task should_get_expected_folder_name_back(string title, int year, string expected)
         {
             _series.Title = title;
             _series.Year = year;
             _namingConfig.SeriesFolderFormat = "{Series Year}\\{Series Title}";
 
-            Subject.GetSeriesFolder(_series).Should().Be(expected);
+            (await Subject.GetSeriesFolder(_series)).Should().Be(expected);
         }
     }
 }

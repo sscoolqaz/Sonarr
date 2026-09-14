@@ -1,5 +1,7 @@
 using System.Linq;
+using System.Threading.Tasks;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.RootFolders;
 using NzbDrone.Core.Test.Framework;
@@ -14,52 +16,52 @@ namespace NzbDrone.Core.Test.RootFolderTests
         {
             Mocker.GetMock<IRootFolderRepository>()
                 .Setup(s => s.All())
-                .Returns(paths.Select(p => new RootFolder { Path = p }));
+                .ReturnsAsync(paths.Select(p => new RootFolder { Path = p }));
         }
 
         [Test]
-        public void should_return_root_folder_that_is_parent_path()
+        public async Task should_return_root_folder_that_is_parent_path()
         {
             GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
-            Subject.GetBestRootFolderPath(@"C:\Test\TV\Series Title".AsOsAgnostic()).Should().Be(@"C:\Test\TV".AsOsAgnostic());
+            (await Subject.GetBestRootFolderPath(@"C:\Test\TV\Series Title".AsOsAgnostic())).Should().Be(@"C:\Test\TV".AsOsAgnostic());
         }
 
         [Test]
-        public void should_return_root_folder_that_is_grandparent_path()
+        public async Task should_return_root_folder_that_is_grandparent_path()
         {
             GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
-            Subject.GetBestRootFolderPath(@"C:\Test\TV\S\Series Title".AsOsAgnostic()).Should().Be(@"C:\Test\TV".AsOsAgnostic());
+            (await Subject.GetBestRootFolderPath(@"C:\Test\TV\S\Series Title".AsOsAgnostic())).Should().Be(@"C:\Test\TV".AsOsAgnostic());
         }
 
         [Test]
-        public void should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found()
+        public async Task should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found()
         {
             var seriesPath = @"T:\Test\TV\Series Title".AsOsAgnostic();
 
             GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
-            Subject.GetBestRootFolderPath(seriesPath).Should().Be(@"T:\Test\TV".AsOsAgnostic());
+            (await Subject.GetBestRootFolderPath(seriesPath)).Should().Be(@"T:\Test\TV".AsOsAgnostic());
         }
 
         [Test]
-        public void should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found_for_posix_path()
+        public async Task should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found_for_posix_path()
         {
             WindowsOnly();
 
             var seriesPath = "/mnt/tv/Series Title";
 
             GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
-            Subject.GetBestRootFolderPath(seriesPath).Should().Be(@"/mnt/tv");
+            (await Subject.GetBestRootFolderPath(seriesPath)).Should().Be(@"/mnt/tv");
         }
 
         [Test]
-        public void should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found_for_windows_path()
+        public async Task should_get_parent_path_from_os_path_if_matching_root_folder_is_not_found_for_windows_path()
         {
             PosixOnly();
 
             var seriesPath = @"T:\Test\TV\Series Title";
 
             GivenRootFolders(@"C:\Test\TV".AsOsAgnostic(), @"D:\Test\TV".AsOsAgnostic());
-            Subject.GetBestRootFolderPath(seriesPath).Should().Be(@"T:\Test\TV");
+            (await Subject.GetBestRootFolderPath(seriesPath)).Should().Be(@"T:\Test\TV");
         }
     }
 }

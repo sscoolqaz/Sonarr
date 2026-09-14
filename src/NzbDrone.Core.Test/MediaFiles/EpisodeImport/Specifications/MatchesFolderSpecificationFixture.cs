@@ -53,7 +53,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.GetEpisodes(parsedEpisodeInfo, It.IsAny<Series>(), true, null))
-                  .Returns(episodes);
+                  .ReturnsAsync(episodes);
         }
 
         [Test]
@@ -234,11 +234,11 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IParsingService>()
                 .Setup(v => v.ParseSpecialEpisodeTitle(fileInfo, It.IsAny<string>(), 0, 0, null, null))
-                .Returns(actualInfo);
+                .ReturnsAsync(actualInfo);
 
             Mocker.GetMock<IParsingService>()
                 .Setup(v => v.ParseSpecialEpisodeTitle(folderInfo, It.IsAny<string>(), 0, 0, null, null))
-                .Returns(actualInfo);
+                .ReturnsAsync(actualInfo);
 
             Subject.IsSatisfiedBy(localEpisode, null).Accepted.Should().BeTrue();
         }
@@ -276,7 +276,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IParsingService>()
                 .Setup(s => s.GetEpisodes(_localEpisode.FileEpisodeInfo, It.IsAny<Series>(), true, null))
-                .Returns(new List<Episode> { episode });
+                .ReturnsAsync(new List<Episode> { episode });
 
             GivenEpisodes(_localEpisode.FolderEpisodeInfo, new[] { 1, 2, 3, 4, 5 });
 

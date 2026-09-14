@@ -25,7 +25,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
         {
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.FindByDownloadId(It.Is<string>(sr => sr == "35238")))
-                .Returns(new List<EpisodeHistory>()
+                .ReturnsAsync(new List<EpisodeHistory>()
                 {
                  new EpisodeHistory()
                 {
@@ -56,7 +56,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.Is<ParsedEpisodeInfo>(i => i.SeasonNumber == 1 && i.SeriesTitle == "TV Series"), It.IsAny<int>(), It.IsAny<IEnumerable<int>>()))
-                  .Returns(remoteEpisode);
+                  .ReturnsAsync(remoteEpisode);
 
             var client = new DownloadClientDefinition()
             {
@@ -101,7 +101,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
             episodeHistory.Data.Add("indexer", "MyIndexer (Prowlarr)");
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.FindByDownloadId(It.Is<string>(sr => sr == "35238")))
-                .Returns(new List<EpisodeHistory>()
+                .ReturnsAsync(new List<EpisodeHistory>()
                 {
                     episodeHistory
                 });
@@ -114,10 +114,10 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
             };
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.Get(indexerDefinition.Id))
-                .Returns(indexerDefinition);
+                .ReturnsAsync(indexerDefinition);
             Mocker.GetMock<IIndexerFactory>()
                 .Setup(v => v.All())
-                .Returns(new List<IndexerDefinition>() { indexerDefinition });
+                .ReturnsAsync(new List<IndexerDefinition>() { indexerDefinition });
 
             var remoteEpisode = new RemoteEpisode
             {
@@ -133,7 +133,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                 .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                .Returns(remoteEpisode);
+                .ReturnsAsync(remoteEpisode);
 
             var client = new DownloadClientDefinition()
             {
@@ -179,7 +179,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.FindByDownloadId(It.Is<string>(sr => sr == "35238")))
-                .Returns(new List<EpisodeHistory>()
+                .ReturnsAsync(new List<EpisodeHistory>()
                 {
                  new EpisodeHistory()
                 {
@@ -192,11 +192,11 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.Is<ParsedEpisodeInfo>(i => i.SeasonNumber == 0 && i.SeriesTitle == "TV Series"), It.IsAny<int>(), It.IsAny<IEnumerable<int>>()))
-                  .Returns(remoteEpisode);
+                  .ReturnsAsync(remoteEpisode);
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.ParseSpecialEpisodeTitle(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                  .Returns(remoteEpisode.ParsedEpisodeInfo);
+                  .ReturnsAsync(remoteEpisode.ParsedEpisodeInfo);
 
             var client = new DownloadClientDefinition()
             {
@@ -247,11 +247,11 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                  .Returns(remoteEpisode);
+                  .ReturnsAsync(remoteEpisode);
 
             Mocker.GetMock<IHistoryService>()
                   .Setup(s => s.FindByDownloadId(It.IsAny<string>()))
-                  .Returns(new List<EpisodeHistory>());
+                  .ReturnsAsync(new List<EpisodeHistory>());
 
             var client = new DownloadClientDefinition()
             {
@@ -277,7 +277,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                  .Returns(default(RemoteEpisode));
+                  .ReturnsAsync(default(RemoteEpisode));
 
             Subject.Handle(new EpisodeInfoRefreshedEvent(remoteEpisode.Series, new List<Episode>(), new List<Episode>(), remoteEpisode.Episodes));
 
@@ -306,11 +306,11 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                  .Returns(default(RemoteEpisode));
+                  .ReturnsAsync(default(RemoteEpisode));
 
             Mocker.GetMock<IHistoryService>()
                   .Setup(s => s.FindByDownloadId(It.IsAny<string>()))
-                  .Returns(new List<EpisodeHistory>());
+                  .ReturnsAsync(new List<EpisodeHistory>());
 
             var client = new DownloadClientDefinition()
             {
@@ -336,7 +336,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                  .Returns(default(RemoteEpisode));
+                  .ReturnsAsync(default(RemoteEpisode));
 
             Subject.Handle(new EpisodeInfoRefreshedEvent(remoteEpisode.Series, new List<Episode>(), new List<Episode>(), remoteEpisode.Episodes));
 
@@ -365,11 +365,11 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                  .Returns(default(RemoteEpisode));
+                  .ReturnsAsync(default(RemoteEpisode));
 
             Mocker.GetMock<IHistoryService>()
                   .Setup(s => s.FindByDownloadId(It.IsAny<string>()))
-                  .Returns(new List<EpisodeHistory>());
+                  .ReturnsAsync(new List<EpisodeHistory>());
 
             var client = new DownloadClientDefinition()
             {
@@ -395,7 +395,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                   .Setup(s => s.Map(It.IsAny<ParsedEpisodeInfo>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), null))
-                  .Returns(default(RemoteEpisode));
+                  .ReturnsAsync(default(RemoteEpisode));
 
             Subject.Handle(new SeriesDeletedEvent(new List<Series> { remoteEpisode.Series }, true, true));
 
@@ -409,7 +409,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
         {
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.FindByDownloadId(It.Is<string>(sr => sr == "35238")))
-                .Returns([]);
+                .ReturnsAsync([]);
 
             Mocker.GetMock<IDownloadHistoryService>()
                 .Setup(s => s.GetLatestDownloadHistoryItem(It.Is<string>(sr => sr == "35238")))
@@ -433,7 +433,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                 .Setup(s => s.Map(It.Is<ParsedEpisodeInfo>(i => i.SeasonNumber == 1 && i.SeriesTitle == "TV Series"), It.IsAny<Series>()))
-                .Returns(remoteEpisode);
+                .ReturnsAsync(remoteEpisode);
 
             var client = new DownloadClientDefinition
             {
@@ -475,7 +475,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
         {
             Mocker.GetMock<IHistoryService>()
                 .Setup(s => s.FindByDownloadId(It.Is<string>(sr => sr == "35238")))
-                .Returns([]);
+                .ReturnsAsync([]);
 
             Mocker.GetMock<IDownloadHistoryService>()
                 .Setup(s => s.GetLatestDownloadHistoryItem(It.Is<string>(sr => sr == "35238")))
@@ -499,7 +499,7 @@ namespace NzbDrone.Core.Test.Download.TrackedDownloads
 
             Mocker.GetMock<IParsingService>()
                 .Setup(s => s.Map(It.Is<ParsedEpisodeInfo>(i => i.SeasonNumber == 1 && i.SeriesTitle == "TV Series"), It.IsAny<Series>()))
-                .Returns(remoteEpisode);
+                .ReturnsAsync(remoteEpisode);
 
             var client = new DownloadClientDefinition
             {

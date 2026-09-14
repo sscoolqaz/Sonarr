@@ -16,7 +16,7 @@ namespace NzbDrone.Core.Test.ImportListTests
         {
             Mocker.GetMock<IImportListItemRepository>()
                 .Setup(v => v.GetAllForLists(It.IsAny<List<int>>()))
-                .Returns(existing);
+                .ReturnsAsync(existing);
         }
 
         [Test]

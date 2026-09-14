@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -35,13 +36,13 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
         {
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.SetEpisodeMonitoredBySeries(It.IsAny<int>(), It.IsAny<MonitorTypes>(), It.IsAny<int>(), It.IsAny<int>()))
-                  .Returns(seasonNumbers.ToList());
+                  .ReturnsAsync(seasonNumbers.ToList());
         }
 
         [Test]
-        public void should_update_series_without_changing_episodes_when_options_are_null()
+        public async Task should_update_series_without_changing_episodes_when_options_are_null()
         {
-            Subject.SetEpisodeMonitoredStatus(_series, null);
+            await Subject.SetEpisodeMonitoredStatus(_series, null);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.UpdateSeries(It.IsAny<Series>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once());
@@ -51,9 +52,9 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
         }
 
         [Test]
-        public void should_do_nothing_when_skip()
+        public async Task should_do_nothing_when_skip()
         {
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Skip });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Skip });
 
             Mocker.GetMock<IEpisodeService>()
                   .Verify(v => v.SetEpisodeMonitoredBySeries(It.IsAny<int>(), It.IsAny<MonitorTypes>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never());
@@ -63,81 +64,81 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
         }
 
         [Test]
-        public void should_apply_monitored_status_with_first_and_last_season()
+        public async Task should_apply_monitored_status_with_first_and_last_season()
         {
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Missing });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Missing });
 
             Mocker.GetMock<IEpisodeService>()
                   .Verify(v => v.SetEpisodeMonitoredBySeries(_series.Id, MonitorTypes.Missing, 1, 2), Times.Once());
         }
 
         [Test]
-        public void should_monitor_last_season_when_monitoring_all()
+        public async Task should_monitor_last_season_when_monitoring_all()
         {
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.All });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.All });
 
             VerifySeasonMonitored(2);
         }
 
         [Test]
-        public void should_monitor_last_season_when_monitoring_future_and_series_continuing()
+        public async Task should_monitor_last_season_when_monitoring_future_and_series_continuing()
         {
             _series.Status = SeriesStatusType.Continuing;
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Future });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Future });
 
             VerifySeasonMonitored(2);
         }
 
         [Test]
-        public void should_monitor_last_season_when_monitoring_future_and_series_upcoming()
+        public async Task should_monitor_last_season_when_monitoring_future_and_series_upcoming()
         {
             _series.Status = SeriesStatusType.Upcoming;
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Future });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Future });
 
             VerifySeasonMonitored(2);
         }
 
         [Test]
-        public void should_not_monitor_last_season_when_monitoring_future_and_series_ended()
+        public async Task should_not_monitor_last_season_when_monitoring_future_and_series_ended()
         {
             _series.Status = SeriesStatusType.Ended;
 
             GivenMonitoredSeasons();
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Future });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Future });
 
             VerifySeasonNotMonitored(2);
         }
 
         [Test]
-        public void should_not_monitor_first_season_when_monitoring_pilot()
+        public async Task should_not_monitor_first_season_when_monitoring_pilot()
         {
             GivenMonitoredSeasons(1);
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Pilot });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Pilot });
 
             VerifySeasonNotMonitored(1);
         }
 
         [Test]
-        public void should_monitor_season_with_monitored_episodes()
+        public async Task should_monitor_season_with_monitored_episodes()
         {
             GivenMonitoredSeasons(1);
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Missing });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.Missing });
 
             VerifySeasonMonitored(1);
             VerifySeasonNotMonitored(2);
         }
 
         [Test]
-        public void should_unmonitor_seasons_without_monitored_episodes()
+        public async Task should_unmonitor_seasons_without_monitored_episodes()
         {
             GivenMonitoredSeasons();
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.None });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.None });
 
             VerifySeasonNotMonitored(0);
             VerifySeasonNotMonitored(1);
@@ -145,11 +146,11 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
         }
 
         [Test]
-        public void should_monitor_specials_season_when_specials_have_monitored_episodes()
+        public async Task should_monitor_specials_season_when_specials_have_monitored_episodes()
         {
             GivenMonitoredSeasons(0);
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.MonitorSpecials });
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions { Monitor = MonitorTypes.MonitorSpecials });
 
             VerifySeasonMonitored(0);
         }

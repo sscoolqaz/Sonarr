@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.MediaFiles;
@@ -34,7 +36,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
             _namingConfig.RenameEpisodes = true;
 
             Mocker.GetMock<INamingConfigService>()
-                  .Setup(c => c.GetConfig()).Returns(_namingConfig);
+                  .Setup(c => c.GetConfig()).ReturnsAsync(_namingConfig);
 
             _episode1 = Builder<Episode>.CreateNew()
                             .With(e => e.Title = "Episode Title")
@@ -58,7 +60,7 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
 
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(v => v.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
         }
 
         private void GivenProper()
@@ -69,14 +71,14 @@ namespace NzbDrone.Core.Test.OrganizerTests.FileNameBuilderTests
         [TestCase("Episode Title (1)", "Episode Title (2)")]
         [TestCase("Episode Title Part 1", "Episode Title Part 2")]
         [TestCase("Episode Title", "Episode Title: Part 2")]
-        public void should_replace_Series_space_Title(string firstTitle, string secondTitle)
+        public async Task should_replace_Series_space_Title(string firstTitle, string secondTitle)
         {
             _episode1.Title = firstTitle;
             _episode2.Title = secondTitle;
 
             _namingConfig.StandardEpisodeFormat = "{Episode Title} {Quality Full}";
 
-            Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile)
+            (await Subject.BuildFileName(new List<Episode> { _episode1, _episode2 }, _series, _episodeFile))
                    .Should().Be("Episode Title HDTV-720p");
         }
     }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -20,7 +21,7 @@ namespace NzbDrone.Core.Test.Profiles
         {
             Mocker.GetMock<IImportListFactory>()
                   .Setup(s => s.All())
-                  .Returns(new List<ImportListDefinition>());
+                  .ReturnsAsync(new List<ImportListDefinition>());
         }
 
         [Test]
@@ -28,7 +29,7 @@ namespace NzbDrone.Core.Test.Profiles
         {
             Mocker.GetMock<ICustomFormatService>()
                   .Setup(s => s.All())
-                  .Returns(new List<CustomFormat>());
+                  .ReturnsAsync(new List<CustomFormat>());
 
             Subject.Handle(new ApplicationStartedEvent());
 
@@ -44,7 +45,7 @@ namespace NzbDrone.Core.Test.Profiles
         {
             Mocker.GetMock<IQualityProfileRepository>()
                   .Setup(s => s.All())
-                  .Returns(Builder<QualityProfile>.CreateListOfSize(2).Build().ToList());
+                  .ReturnsAsync(Builder<QualityProfile>.CreateListOfSize(2).Build().ToList());
 
             Subject.Handle(new ApplicationStartedEvent());
 
@@ -64,25 +65,25 @@ namespace NzbDrone.Core.Test.Profiles
                                             .With(c => c.QualityProfileId = profile.Id)
                                             .Build().ToList();
 
-            Mocker.GetMock<ISeriesService>().Setup(c => c.GetAllSeries()).Returns(seriesList);
-            Mocker.GetMock<IQualityProfileRepository>().Setup(c => c.Get(profile.Id)).Returns(profile);
+            Mocker.GetMock<ISeriesService>().Setup(c => c.GetAllSeries()).ReturnsAsync(seriesList);
+            Mocker.GetMock<IQualityProfileRepository>().Setup(c => c.Get(profile.Id)).ReturnsAsync(profile);
 
-            Assert.Throws<QualityProfileInUseException>(() => Subject.Delete(profile.Id));
+            Assert.ThrowsAsync<QualityProfileInUseException>(async () => await Subject.Delete(profile.Id));
 
             Mocker.GetMock<IQualityProfileRepository>().Verify(c => c.Delete(It.IsAny<int>()), Times.Never());
         }
 
         [Test]
-        public void should_delete_profile_if_not_assigned_to_series()
+        public async Task should_delete_profile_if_not_assigned_to_series()
         {
             var seriesList = Builder<Series>.CreateListOfSize(3)
                                             .All()
                                             .With(c => c.QualityProfileId = 2)
                                             .Build().ToList();
 
-            Mocker.GetMock<ISeriesService>().Setup(c => c.GetAllSeries()).Returns(seriesList);
+            Mocker.GetMock<ISeriesService>().Setup(c => c.GetAllSeries()).ReturnsAsync(seriesList);
 
-            Subject.Delete(1);
+            await Subject.Delete(1);
 
             Mocker.GetMock<IQualityProfileRepository>().Verify(c => c.Delete(1), Times.Once());
         }
@@ -103,14 +104,14 @@ namespace NzbDrone.Core.Test.Profiles
                                                            .Random(1)
                                                            .Build().ToList();
 
-            Mocker.GetMock<IQualityProfileRepository>().Setup(c => c.Get(profile.Id)).Returns(profile);
-            Mocker.GetMock<ISeriesService>().Setup(c => c.GetAllSeries()).Returns(seriesList);
+            Mocker.GetMock<IQualityProfileRepository>().Setup(c => c.Get(profile.Id)).ReturnsAsync(profile);
+            Mocker.GetMock<ISeriesService>().Setup(c => c.GetAllSeries()).ReturnsAsync(seriesList);
 
             Mocker.GetMock<IImportListFactory>()
                   .Setup(s => s.All())
-                  .Returns(importLists);
+                  .ReturnsAsync(importLists);
 
-            Assert.Throws<QualityProfileInUseException>(() => Subject.Delete(1));
+            Assert.ThrowsAsync<QualityProfileInUseException>(async () => await Subject.Delete(1));
 
             Mocker.GetMock<IQualityProfileRepository>().Verify(c => c.Delete(It.IsAny<int>()), Times.Never());
         }

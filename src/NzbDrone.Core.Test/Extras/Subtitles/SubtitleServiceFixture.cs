@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -68,11 +69,11 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
 
         [Test]
         [TestCase("Series.Title.S01E01.en.nfo")]
-        public void should_not_import_non_subtitle_file(string filePath)
+        public async Task should_not_import_non_subtitle_file(string filePath)
         {
             var files = new List<string> { Path.Combine(_episodeFolder, filePath).AsOsAgnostic() };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(0);
         }
@@ -86,11 +87,11 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
         [TestCase("Series_Title_S01E01 en.srt", "Series Title - S01E01.en.srt")]
         [TestCase(@"Subs\S01E01.en.srt", "Series Title - S01E01.en.srt")]
         [TestCase(@"Subs\Series.Title.S01E01\2_en.srt", "Series Title - S01E01.en.srt")]
-        public void should_import_matching_subtitle_file(string filePath, string expectedOutputPath)
+        public async Task should_import_matching_subtitle_file(string filePath, string expectedOutputPath)
         {
             var files = new List<string> { Path.Combine(_episodeFolder, filePath).AsOsAgnostic() };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(1);
 
@@ -98,7 +99,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
         }
 
         [Test]
-        public void should_import_multiple_subtitle_files_per_language()
+        public async Task should_import_multiple_subtitle_files_per_language()
         {
             var files = new List<string>
             {
@@ -116,7 +117,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
                 "Series Title - S01E01.fr.srt",
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(expectedOutputs.Length);
 
@@ -127,7 +128,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
         }
 
         [Test]
-        public void should_import_multiple_subtitle_files_per_language_with_tags()
+        public async Task should_import_multiple_subtitle_files_per_language_with_tags()
         {
             var files = new List<string>
             {
@@ -145,7 +146,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
                 "Series Title - S01E01.en.forced.default.srt"
             };
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, files, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, files, true)).ToList();
 
             results.Count.Should().Be(expectedOutputs.Length);
 
@@ -158,7 +159,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
         [Test]
         [TestCase("sub.srt", "Series Title - S01E01.srt")]
         [TestCase(@"Subs\2_en.srt", "Series Title - S01E01.en.srt")]
-        public void should_import_unmatching_subtitle_file_if_only_episode(string filePath, string expectedOutputPath)
+        public async Task should_import_unmatching_subtitle_file_if_only_episode(string filePath, string expectedOutputPath)
         {
             var subtitleFile = Path.Combine(_episodeFolder, filePath).AsOsAgnostic();
 
@@ -176,7 +177,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
             Mocker.GetMock<IDetectSample>().Setup(s => s.IsSample(It.IsAny<Series>(), sampleFile, It.IsAny<bool>()))
                   .Returns(DetectSampleResult.Sample);
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, new List<string> { subtitleFile }, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, new List<string> { subtitleFile }, true)).ToList();
 
             results.Count.Should().Be(1);
 
@@ -188,7 +189,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
         [Test]
         [TestCase("sub.srt")]
         [TestCase(@"Subs\2_en.srt")]
-        public void should_not_import_unmatching_subtitle_file_if_multiple_episodes(string filePath)
+        public async Task should_not_import_unmatching_subtitle_file_if_multiple_episodes(string filePath)
         {
             var subtitleFile = Path.Combine(_episodeFolder, filePath).AsOsAgnostic();
 
@@ -201,7 +202,7 @@ namespace NzbDrone.Core.Test.Extras.Subtitles
             Mocker.GetMock<IDiskProvider>().Setup(s => s.GetFiles(It.IsAny<string>(), true))
                   .Returns(videoFiles);
 
-            var results = Subject.ImportFiles(_localEpisode, _episodeFile, new List<string> { subtitleFile }, true).ToList();
+            var results = (await Subject.ImportFiles(_localEpisode, _episodeFile, new List<string> { subtitleFile }, true)).ToList();
 
             results.Count.Should().Be(0);
         }

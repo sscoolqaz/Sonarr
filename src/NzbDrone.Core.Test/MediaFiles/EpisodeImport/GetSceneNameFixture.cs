@@ -47,7 +47,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
         {
             Mocker.GetMock<IMediaFileService>()
                   .Setup(s => s.GetFilesWithRelativePath(It.IsAny<int>(), It.IsAny<string>()))
-                  .Returns(new List<EpisodeFile>());
+                  .ReturnsAsync(new List<EpisodeFile>());
         }
 
         [Test]

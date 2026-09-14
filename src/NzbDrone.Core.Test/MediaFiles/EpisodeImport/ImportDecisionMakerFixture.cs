@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using FluentAssertions;
 using Moq;
@@ -83,7 +84,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
 
             Mocker.GetMock<IMediaFileService>()
                   .Setup(c => c.FilterExistingFiles(_videoFiles, It.IsAny<Series>()))
-                  .Returns(_videoFiles);
+                  .ReturnsAsync(_videoFiles);
         }
 
         private void GivenAugmentationSuccess()
@@ -97,13 +98,13 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
         }
 
         [Test]
-        public void should_call_all_specifications()
+        public async Task should_call_all_specifications()
         {
             var downloadClientItem = Builder<DownloadClientItem>.CreateNew().Build();
             GivenAugmentationSuccess();
             GivenSpecifications(_pass1, _pass2, _pass3, _fail1, _fail2, _fail3);
 
-            Subject.GetImportDecisions(_videoFiles, _series, downloadClientItem, null, null, false, true);
+            await Subject.GetImportDecisions(_videoFiles, _series, downloadClientItem, null, null, false, true);
 
             _fail1.Verify(c => c.IsSatisfiedBy(It.IsAny<LocalEpisode>(), downloadClientItem), Times.Once());
             _fail2.Verify(c => c.IsSatisfiedBy(It.IsAny<LocalEpisode>(), downloadClientItem), Times.Once());
@@ -114,48 +115,48 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
         }
 
         [Test]
-        public void should_return_rejected_if_single_specs_fail()
+        public async Task should_return_rejected_if_single_specs_fail()
         {
             GivenSpecifications(_fail1);
 
-            var result = Subject.GetImportDecisions(_videoFiles, _series);
+            var result = await Subject.GetImportDecisions(_videoFiles, _series);
 
             result.Single().Approved.Should().BeFalse();
         }
 
         [Test]
-        public void should_return_rejected_if_one_of_specs_fail()
+        public async Task should_return_rejected_if_one_of_specs_fail()
         {
             GivenSpecifications(_pass1, _fail1, _pass2, _pass3);
 
-            var result = Subject.GetImportDecisions(_videoFiles, _series);
+            var result = await Subject.GetImportDecisions(_videoFiles, _series);
 
             result.Single().Approved.Should().BeFalse();
         }
 
         [Test]
-        public void should_return_approved_if_all_specs_pass()
+        public async Task should_return_approved_if_all_specs_pass()
         {
             GivenAugmentationSuccess();
             GivenSpecifications(_pass1, _pass2, _pass3);
 
-            var result = Subject.GetImportDecisions(_videoFiles, _series);
+            var result = await Subject.GetImportDecisions(_videoFiles, _series);
 
             result.Single().Approved.Should().BeTrue();
         }
 
         [Test]
-        public void should_have_same_number_of_rejections_as_specs_that_failed()
+        public async Task should_have_same_number_of_rejections_as_specs_that_failed()
         {
             GivenAugmentationSuccess();
             GivenSpecifications(_pass1, _pass2, _pass3, _fail1, _fail2, _fail3);
 
-            var result = Subject.GetImportDecisions(_videoFiles, _series);
+            var result = await Subject.GetImportDecisions(_videoFiles, _series);
             result.Single().Rejections.Should().HaveCount(3);
         }
 
         [Test]
-        public void should_not_blowup_the_process_due_to_failed_parse()
+        public async Task should_not_blowup_the_process_due_to_failed_parse()
         {
             GivenSpecifications(_pass1);
 
@@ -172,7 +173,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
 
             GivenVideoFiles(_videoFiles);
 
-            Subject.GetImportDecisions(_videoFiles, _series);
+            await Subject.GetImportDecisions(_videoFiles, _series);
 
             Mocker.GetMock<IAggregationService>()
                   .Verify(c => c.Augment(It.IsAny<LocalEpisode>(), It.IsAny<DownloadClientItem>()), Times.Exactly(_videoFiles.Count));
@@ -180,7 +181,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
             ExceptionVerification.ExpectedErrors(3);
         }
 
-        public void should_not_throw_if_episodes_are_not_found()
+        public async Task should_not_throw_if_episodes_are_not_found()
         {
             GivenSpecifications(_pass1);
 
@@ -193,7 +194,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
 
             GivenVideoFiles(_videoFiles);
 
-            var decisions = Subject.GetImportDecisions(_videoFiles, _series);
+            var decisions = await Subject.GetImportDecisions(_videoFiles, _series);
 
             Mocker.GetMock<IAggregationService>()
                   .Verify(c => c.Augment(It.IsAny<LocalEpisode>(), It.IsAny<DownloadClientItem>()), Times.Exactly(_videoFiles.Count));
@@ -203,7 +204,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
         }
 
         [Test]
-        public void should_return_a_decision_when_exception_is_caught()
+        public async Task should_return_a_decision_when_exception_is_caught()
         {
             Mocker.GetMock<IAggregationService>()
                   .Setup(c => c.Augment(It.IsAny<LocalEpisode>(), It.IsAny<DownloadClientItem>()))
@@ -216,7 +217,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport
 
             GivenVideoFiles(_videoFiles);
 
-            Subject.GetImportDecisions(_videoFiles, _series).Should().HaveCount(1);
+            (await Subject.GetImportDecisions(_videoFiles, _series)).Should().HaveCount(1);
 
             ExceptionVerification.ExpectedErrors(1);
         }

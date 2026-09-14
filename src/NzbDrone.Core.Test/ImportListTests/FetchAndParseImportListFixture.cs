@@ -26,7 +26,7 @@ namespace NzbDrone.Core.Test.ImportListTests
 
             Mocker.GetMock<IImportListFactory>()
                   .Setup(v => v.AutomaticAddEnabled(It.IsAny<bool>()))
-                  .Returns(_importLists);
+                  .ReturnsAsync(_importLists);
 
             _listSeries = Builder<ImportListItemInfo>.CreateListOfSize(5)
                 .Build().ToList();
@@ -54,7 +54,7 @@ namespace NzbDrone.Core.Test.ImportListTests
             DateTime? lastSync = lastSyncOffset.HasValue ? DateTime.UtcNow.AddHours(lastSyncOffset.Value) : null;
             Mocker.GetMock<IImportListStatusService>()
                 .Setup(v => v.GetListStatus(id))
-                .Returns(new ImportListStatus() { LastInfoSync = lastSync });
+                .ReturnsAsync(new ImportListStatus() { LastInfoSync = lastSync });
 
             if (syncDeletedCount.HasValue)
             {

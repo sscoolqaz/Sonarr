@@ -45,7 +45,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.RequiresEpisodeTitle(_series, episodes))
-                  .Returns(true);
+                  .ReturnsAsync(true);
         }
 
         [Test]
@@ -89,7 +89,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IBuildFileNames>()
                   .Setup(s => s.RequiresEpisodeTitle(_series, _localEpisode.Episodes))
-                  .Returns(false);
+                  .ReturnsAsync(false);
 
             Subject.IsSatisfiedBy(_localEpisode, null).Accepted.Should().BeTrue();
         }
@@ -113,7 +113,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodesBySeason(It.IsAny<int>(), It.IsAny<int>()))
-                  .Returns(Builder<Episode>.CreateListOfSize(5).BuildList());
+                  .ReturnsAsync(Builder<Episode>.CreateListOfSize(5).BuildList());
 
             Subject.IsSatisfiedBy(_localEpisode, null).Accepted.Should().BeTrue();
         }
@@ -127,7 +127,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodesBySeason(It.IsAny<int>(), It.IsAny<int>()))
-                  .Returns(Builder<Episode>.CreateListOfSize(5)
+                  .ReturnsAsync(Builder<Episode>.CreateListOfSize(5)
                                            .All()
                                            .With(e => e.AirDateUtc == _localEpisode.Episodes.First().AirDateUtc)
                                            .BuildList());
@@ -146,7 +146,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodesBySeason(It.IsAny<int>(), It.IsAny<int>()))
-                  .Returns(Builder<Episode>.CreateListOfSize(5)
+                  .ReturnsAsync(Builder<Episode>.CreateListOfSize(5)
                                            .All()
                                            .With(e => e.AirDateUtc = _localEpisode.Episodes.First().AirDateUtc)
                                            .BuildList());
@@ -165,7 +165,7 @@ namespace NzbDrone.Core.Test.MediaFiles.EpisodeImport.Specifications
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodesBySeason(It.IsAny<int>(), It.IsAny<int>()))
-                  .Returns(Builder<Episode>.CreateListOfSize(5)
+                  .ReturnsAsync(Builder<Episode>.CreateListOfSize(5)
                                            .All()
                                            .With(e => e.Title  = "TBA")
                                            .With(e => e.AirDateUtc = null)

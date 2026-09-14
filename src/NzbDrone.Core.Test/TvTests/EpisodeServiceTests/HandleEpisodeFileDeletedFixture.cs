@@ -45,7 +45,7 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeServiceTests
 
             Mocker.GetMock<IEpisodeRepository>()
                   .Setup(s => s.GetEpisodeByFileId(_episodeFile.Id))
-                  .Returns(_episodes);
+                  .ReturnsAsync(_episodes);
         }
 
         private void GivenMultiEpisodeFile()
@@ -60,7 +60,7 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeServiceTests
 
             Mocker.GetMock<IEpisodeRepository>()
                   .Setup(s => s.GetEpisodeByFileId(_episodeFile.Id))
-                  .Returns(_episodes);
+                  .ReturnsAsync(_episodes);
         }
 
         [Test]

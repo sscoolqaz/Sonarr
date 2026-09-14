@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using FizzWare.NBuilder;
 using Moq;
 using NUnit.Framework;
@@ -56,7 +57,7 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodeBySeries(It.IsAny<int>()))
-                  .Returns(_episodes);
+                  .ReturnsAsync(_episodes);
         }
 
         private void GivenSpecials()
@@ -70,9 +71,9 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
         }
 
         [Test]
-        public void should_be_able_to_monitor_series_without_changing_episodes()
+        public async Task should_be_able_to_monitor_series_without_changing_episodes()
         {
-            Subject.SetEpisodeMonitoredStatus(_series, null);
+            await Subject.SetEpisodeMonitoredStatus(_series, null);
 
             Mocker.GetMock<ISeriesService>()
                   .Verify(v => v.UpdateSeries(It.IsAny<Series>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once());
@@ -82,16 +83,16 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
         }
 
         [Test]
-        public void should_be_able_to_monitor_all_episodes()
+        public async Task should_be_able_to_monitor_all_episodes()
         {
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions());
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions());
 
             Mocker.GetMock<IEpisodeService>()
                   .Verify(v => v.UpdateEpisodes(It.Is<List<Episode>>(l => l.All(e => e.Monitored))));
         }
 
         [Test]
-        public void should_be_able_to_monitor_missing_episodes_only()
+        public async Task should_be_able_to_monitor_missing_episodes_only()
         {
             var monitoringOptions = new MonitoringOptions
                                     {
@@ -99,14 +100,14 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
                                         IgnoreEpisodesWithoutFiles = false
                                     };
 
-            Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
+            await Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
 
             VerifyMonitored(e => !e.HasFile);
             VerifyNotMonitored(e => e.HasFile);
         }
 
         [Test]
-        public void should_be_able_to_monitor_new_episodes_only()
+        public async Task should_be_able_to_monitor_new_episodes_only()
         {
             var monitoringOptions = new MonitoringOptions
             {
@@ -114,7 +115,7 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
                 IgnoreEpisodesWithoutFiles = true
             };
 
-            Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
+            await Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
 
             VerifyMonitored(e => e.AirDateUtc.HasValue && e.AirDateUtc.Value.After(DateTime.UtcNow));
             VerifyMonitored(e => !e.AirDateUtc.HasValue);
@@ -122,7 +123,7 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
         }
 
         [Test]
-        public void should_not_monitor_missing_specials()
+        public async Task should_not_monitor_missing_specials()
         {
             GivenSpecials();
 
@@ -132,13 +133,13 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
                 IgnoreEpisodesWithoutFiles = false
             };
 
-            Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
+            await Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
 
             VerifyNotMonitored(e => e.SeasonNumber == 0);
         }
 
         [Test]
-        public void should_not_monitor_new_specials()
+        public async Task should_not_monitor_new_specials()
         {
             GivenSpecials();
 
@@ -148,13 +149,13 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
                 IgnoreEpisodesWithoutFiles = true
             };
 
-            Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
+            await Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
 
             VerifyNotMonitored(e => e.SeasonNumber == 0);
         }
 
         [Test]
-        public void should_not_monitor_season_when_all_episodes_are_monitored_except_latest_season()
+        public async Task should_not_monitor_season_when_all_episodes_are_monitored_except_latest_season()
         {
             _series.Seasons = Builder<Season>.CreateListOfSize(2)
                                              .All()
@@ -174,32 +175,32 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodeBySeries(It.IsAny<int>()))
-                  .Returns(_episodes);
+                  .ReturnsAsync(_episodes);
 
             var monitoringOptions = new MonitoringOptions
             {
                 IgnoreEpisodesWithoutFiles = true
             };
 
-            Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
+            await Subject.SetEpisodeMonitoredStatus(_series, monitoringOptions);
 
             VerifySeasonMonitored(n => n.SeasonNumber == 2);
             VerifySeasonNotMonitored(n => n.SeasonNumber == 1);
         }
 
         [Test]
-        public void should_ignore_episodes_when_season_is_not_monitored()
+        public async Task should_ignore_episodes_when_season_is_not_monitored()
         {
             _series.Seasons.ForEach(s => s.Monitored = false);
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions());
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions());
 
             Mocker.GetMock<IEpisodeService>()
                   .Verify(v => v.UpdateEpisodes(It.Is<List<Episode>>(l => l.All(e => !e.Monitored))));
         }
 
         [Test]
-        public void should_should_not_monitor_episodes_if_season_is_not_monitored()
+        public async Task should_should_not_monitor_episodes_if_season_is_not_monitored()
         {
             _series = Builder<Series>.CreateNew()
                                      .With(s => s.Seasons = Builder<Season>.CreateListOfSize(2)
@@ -224,9 +225,9 @@ namespace NzbDrone.Core.Test.TvTests.EpisodeMonitoredServiceTests
 
             Mocker.GetMock<IEpisodeService>()
                   .Setup(s => s.GetEpisodeBySeries(It.IsAny<int>()))
-                  .Returns(episodes);
+                  .ReturnsAsync(episodes);
 
-            Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions
+            await Subject.SetEpisodeMonitoredStatus(_series, new MonitoringOptions
                                                        {
                                                            IgnoreEpisodesWithFiles = true,
                                                            IgnoreEpisodesWithoutFiles = false
