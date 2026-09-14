@@ -128,7 +128,7 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                 if (trackedDownload is { State: TrackedDownloadState.Downloading or TrackedDownloadState.ImportBlocked })
                 {
                     _failedDownloadService.Check(trackedDownload);
-                    _completedDownloadService.Check(trackedDownload);
+                    _completedDownloadService.Check(trackedDownload).GetAwaiter().GetResult();
                 }
             }
             catch (Exception e)

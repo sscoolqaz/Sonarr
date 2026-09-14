@@ -21,7 +21,7 @@ namespace NzbDrone.Core.HealthCheck.Checks
 
         public override HealthCheck Check()
         {
-            var enabled = _indexerFactory.RssEnabled(false);
+            var enabled = _indexerFactory.RssEnabled(false).GetAwaiter().GetResult();
 
             if (enabled.Empty())
             {
@@ -32,7 +32,7 @@ namespace NzbDrone.Core.HealthCheck.Checks
                     "#no-indexers-available-with-rss-sync-enabled-sonarr-will-not-grab-new-releases-automatically");
             }
 
-            var active = _indexerFactory.RssEnabled(true);
+            var active = _indexerFactory.RssEnabled(true).GetAwaiter().GetResult();
 
             if (active.Empty())
             {

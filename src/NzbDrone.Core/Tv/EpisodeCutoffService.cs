@@ -25,8 +25,10 @@ namespace NzbDrone.Core.Tv
 
         public PagingSpec<Episode> EpisodesWhereCutoffUnmet(PagingSpec<Episode> pagingSpec, HashSet<int> seriesTags = null, List<int> quality = null)
         {
+            // IEpisodeCutoffService is kept synchronous - its only caller (EpisodeSearchService)
+            // already bridges around it. Bridge the now-async calls here instead.
             var qualitiesBelowCutoff = new List<QualitiesBelowCutoff>();
-            var profiles = _qualityProfileService.All();
+            var profiles = _qualityProfileService.All().GetAwaiter().GetResult();
 
             // Get all items less than the cutoff
             foreach (var profile in profiles)
@@ -48,7 +50,7 @@ namespace NzbDrone.Core.Tv
                 return pagingSpec;
             }
 
-            return _episodeRepository.EpisodesWhereCutoffUnmet(pagingSpec, qualitiesBelowCutoff, false, seriesTags, quality);
+            return _episodeRepository.EpisodesWhereCutoffUnmet(pagingSpec, qualitiesBelowCutoff, false, seriesTags, quality).GetAwaiter().GetResult();
         }
     }
 }

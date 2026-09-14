@@ -21,7 +21,7 @@ namespace NzbDrone.Core.HealthCheck.Checks
 
         public override HealthCheck Check()
         {
-            var automaticSearchEnabled = _indexerFactory.AutomaticSearchEnabled(false);
+            var automaticSearchEnabled = _indexerFactory.AutomaticSearchEnabled(false).GetAwaiter().GetResult();
 
             if (automaticSearchEnabled.Empty())
             {
@@ -32,7 +32,7 @@ namespace NzbDrone.Core.HealthCheck.Checks
                     "#no-indexers-available-with-automatic-search-enabled-sonarr-will-not-provide-any-automatic-search-results");
             }
 
-            var interactiveSearchEnabled = _indexerFactory.InteractiveSearchEnabled(false);
+            var interactiveSearchEnabled = _indexerFactory.InteractiveSearchEnabled(false).GetAwaiter().GetResult();
 
             if (interactiveSearchEnabled.Empty())
             {
@@ -43,7 +43,7 @@ namespace NzbDrone.Core.HealthCheck.Checks
                     "#no-indexers-available-with-interactive-search-enabled");
             }
 
-            var active = _indexerFactory.AutomaticSearchEnabled(true);
+            var active = _indexerFactory.AutomaticSearchEnabled(true).GetAwaiter().GetResult();
 
             if (active.Empty())
             {

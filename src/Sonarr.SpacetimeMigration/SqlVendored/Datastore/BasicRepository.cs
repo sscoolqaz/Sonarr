@@ -6,6 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 using Dapper;
 using NLog;
 using NzbDrone.Common.Instrumentation;
@@ -73,43 +74,51 @@ namespace NzbDrone.Core.Datastore
 
         protected List<TModel> Query(Expression<Func<TModel, bool>> where) => Query(Builder().Where(where));
 
-        public int Count()
+        // This is a one-time offline CLI migration tool reading a legacy SQLite file - the SQL
+        // calls below are genuinely synchronous ADO.NET/Dapper (not awaitable without a much
+        // bigger rewrite of the vendored SQL layer, which isn't warranted for a tool that runs
+        // once and exits). Public IBasicRepository<TModel> members wrap their already-computed
+        // result in Task.FromResult/Task.CompletedTask purely to satisfy the shared interface's
+        // signature - there is no real asynchrony here, and internal cross-calls unwrap those
+        // (always already-completed) Tasks with GetAwaiter().GetResult() rather than a second
+        // genuine wait.
+        public Task<int> Count()
         {
             using (var conn = _database.OpenConnection())
             {
-                return conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM \"{_table}\"");
+                return Task.FromResult(conn.ExecuteScalar<int>($"SELECT COUNT(*) FROM \"{_table}\""));
             }
         }
 
-        public virtual IEnumerable<TModel> All()
+        public virtual Task<IEnumerable<TModel>> All()
         {
-            return Query(Builder());
+            return Task.FromResult<IEnumerable<TModel>>(Query(Builder()));
         }
 
-        public TModel Find(int id)
+        public Task<TModel> Find(int id)
         {
             var model = Query(x => x.Id == id).FirstOrDefault();
 
-            return model;
+            return Task.FromResult(model);
         }
 
-        public TModel Get(int id)
+        public Task<TModel> Get(int id)
         {
-            var model = Find(id);
+            var model = Find(id).GetAwaiter().GetResult();
 
             if (model == null)
             {
                 throw new ModelNotFoundException(typeof(TModel), id);
             }
 
-            return model;
+            return Task.FromResult(model);
         }
 
-        public IEnumerable<TModel> Get(IEnumerable<int> ids)
+        public Task<IEnumerable<TModel>> Get(IEnumerable<int> ids)
         {
             if (!ids.Any())
             {
-                return Array.Empty<TModel>();
+                return Task.FromResult<IEnumerable<TModel>>(Array.Empty<TModel>());
             }
 
             var result = Query(x => ids.Contains(x.Id));
@@ -119,20 +128,20 @@ namespace NzbDrone.Core.Datastore
                 throw new ApplicationException($"Expected query to return {ids.Count()} rows but returned {result.Count}");
             }
 
-            return result;
+            return Task.FromResult<IEnumerable<TModel>>(result);
         }
 
-        public TModel SingleOrDefault()
+        public Task<TModel> SingleOrDefault()
         {
-            return All().SingleOrDefault();
+            return Task.FromResult(All().GetAwaiter().GetResult().SingleOrDefault());
         }
 
-        public TModel Single()
+        public Task<TModel> Single()
         {
-            return All().Single();
+            return Task.FromResult(All().GetAwaiter().GetResult().Single());
         }
 
-        public TModel Insert(TModel model)
+        public Task<TModel> Insert(TModel model)
         {
             if (model.Id != 0)
             {
@@ -146,7 +155,7 @@ namespace NzbDrone.Core.Datastore
 
             ModelCreated(model);
 
-            return model;
+            return Task.FromResult(model);
         }
 
         private string GetInsertSql()
@@ -194,7 +203,7 @@ namespace NzbDrone.Core.Datastore
             return model;
         }
 
-        public void InsertMany(IList<TModel> models)
+        public Task InsertMany(IList<TModel> models)
         {
             if (models.Any(x => x.Id != 0))
             {
@@ -213,9 +222,11 @@ namespace NzbDrone.Core.Datastore
                     tran.Commit();
                 }
             }
+
+            return Task.CompletedTask;
         }
 
-        public TModel Update(TModel model)
+        public Task<TModel> Update(TModel model)
         {
             if (model.Id == 0)
             {
@@ -229,10 +240,10 @@ namespace NzbDrone.Core.Datastore
 
             ModelUpdated(model);
 
-            return model;
+            return Task.FromResult(model);
         }
 
-        public void UpdateMany(IList<TModel> models)
+        public Task UpdateMany(IList<TModel> models)
         {
             if (models.Any(x => x.Id == 0))
             {
@@ -245,6 +256,8 @@ namespace NzbDrone.Core.Datastore
                 UpdateFields(conn, tran, models, _properties);
                 tran.Commit();
             }
+
+            return Task.CompletedTask;
         }
 
         protected void Delete(Expression<Func<TModel, bool>> where)
@@ -262,42 +275,45 @@ namespace NzbDrone.Core.Datastore
             }
         }
 
-        public void Delete(TModel model)
+        public Task Delete(TModel model)
         {
-            Delete(model.Id);
+            return Delete(model.Id);
         }
 
-        public void Delete(int id)
+        public Task Delete(int id)
         {
             Delete(x => x.Id == id);
+            return Task.CompletedTask;
         }
 
-        public void DeleteMany(IEnumerable<int> ids)
+        public Task DeleteMany(IEnumerable<int> ids)
         {
             if (ids.Any())
             {
                 Delete(x => ids.Contains(x.Id));
             }
+
+            return Task.CompletedTask;
         }
 
-        public void DeleteMany(List<TModel> models)
+        public Task DeleteMany(List<TModel> models)
         {
-            DeleteMany(models.Select(m => m.Id));
+            return DeleteMany(models.Select(m => m.Id));
         }
 
-        public TModel Upsert(TModel model)
+        public Task<TModel> Upsert(TModel model)
         {
             if (model.Id == 0)
             {
-                Insert(model);
-                return model;
+                Insert(model).GetAwaiter().GetResult();
+                return Task.FromResult(model);
             }
 
-            Update(model);
-            return model;
+            Update(model).GetAwaiter().GetResult();
+            return Task.FromResult(model);
         }
 
-        public void Purge(bool vacuum = false)
+        public Task Purge(bool vacuum = false)
         {
             using (var conn = _database.OpenConnection())
             {
@@ -308,6 +324,8 @@ namespace NzbDrone.Core.Datastore
             {
                 Vacuum();
             }
+
+            return Task.CompletedTask;
         }
 
         protected void Vacuum()
@@ -315,12 +333,12 @@ namespace NzbDrone.Core.Datastore
             _database.Vacuum();
         }
 
-        public bool HasItems()
+        public Task<bool> HasItems()
         {
-            return Count() > 0;
+            return Task.FromResult(Count().GetAwaiter().GetResult() > 0);
         }
 
-        public void SetFields(TModel model, params Expression<Func<TModel, object>>[] properties)
+        public Task SetFields(TModel model, params Expression<Func<TModel, object>>[] properties)
         {
             if (model.Id == 0)
             {
@@ -335,9 +353,11 @@ namespace NzbDrone.Core.Datastore
             }
 
             ModelUpdated(model);
+
+            return Task.CompletedTask;
         }
 
-        public void SetFields(IList<TModel> models, params Expression<Func<TModel, object>>[] properties)
+        public Task SetFields(IList<TModel> models, params Expression<Func<TModel, object>>[] properties)
         {
             if (models.Any(x => x.Id == 0))
             {
@@ -357,6 +377,8 @@ namespace NzbDrone.Core.Datastore
             {
                 ModelUpdated(model);
             }
+
+            return Task.CompletedTask;
         }
 
         private string GetUpdateSql(List<PropertyInfo> propertiesToUpdate)
@@ -403,12 +425,12 @@ namespace NzbDrone.Core.Datastore
         protected virtual SqlBuilder PagedBuilder() => Builder();
         protected virtual IEnumerable<TModel> PagedQuery(SqlBuilder sql) => Query(sql);
 
-        public virtual PagingSpec<TModel> GetPaged(PagingSpec<TModel> pagingSpec)
+        public virtual Task<PagingSpec<TModel>> GetPaged(PagingSpec<TModel> pagingSpec)
         {
             pagingSpec.Records = GetPagedRecords(PagedBuilder(), pagingSpec, PagedQuery);
             pagingSpec.TotalRecords = GetPagedRecordCount(PagedBuilder().SelectCount(), pagingSpec);
 
-            return pagingSpec;
+            return Task.FromResult(pagingSpec);
         }
 
         protected void AddFilters(SqlBuilder builder, PagingSpec<TModel> pagingSpec)

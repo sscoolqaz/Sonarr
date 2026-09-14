@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Extensions;
@@ -19,9 +20,9 @@ namespace NzbDrone.Core.Download
 {
     public interface ICompletedDownloadService
     {
-        void Check(TrackedDownload trackedDownload);
-        void Import(TrackedDownload trackedDownload);
-        bool VerifyImport(TrackedDownload trackedDownload, List<ImportResult> importResults);
+        Task Check(TrackedDownload trackedDownload);
+        Task Import(TrackedDownload trackedDownload);
+        Task<bool> VerifyImport(TrackedDownload trackedDownload, List<ImportResult> importResults);
     }
 
     public class CompletedDownloadService : ICompletedDownloadService
@@ -63,7 +64,7 @@ namespace NzbDrone.Core.Download
             _logger = logger;
         }
 
-        public void Check(TrackedDownload trackedDownload)
+        public async Task Check(TrackedDownload trackedDownload)
         {
             if (trackedDownload.DownloadItem.Status != DownloadItemStatus.Completed)
             {
@@ -78,7 +79,7 @@ namespace NzbDrone.Core.Download
                 return;
             }
 
-            var grabbedHistories = _historyService.FindByDownloadId(trackedDownload.DownloadItem.DownloadId).Where(h => h.EventType == EpisodeHistoryEventType.Grabbed).ToList();
+            var grabbedHistories = (await _historyService.FindByDownloadId(trackedDownload.DownloadItem.DownloadId)).Where(h => h.EventType == EpisodeHistoryEventType.Grabbed).ToList();
             var historyItem = grabbedHistories.MaxBy(h => h.Date);
 
             if (historyItem == null && trackedDownload.DownloadItem.Category.IsNullOrWhiteSpace())
@@ -92,19 +93,19 @@ namespace NzbDrone.Core.Download
                 return;
             }
 
-            var series = _parsingService.GetSeries(trackedDownload.DownloadItem.Title);
+            var series = await _parsingService.GetSeries(trackedDownload.DownloadItem.Title);
 
             if (series == null)
             {
                 if (historyItem != null)
                 {
-                    series = _seriesService.GetSeries(historyItem.SeriesId);
+                    series = await _seriesService.GetSeries(historyItem.SeriesId);
                 }
 
                 if (series == null)
                 {
                     trackedDownload.Warn("Series title mismatch; automatic import is not possible. Check the download troubleshooting entry on the wiki for common causes.");
-                    SetStateToImportBlocked(trackedDownload);
+                    await SetStateToImportBlocked(trackedDownload);
 
                     return;
                 }
@@ -116,7 +117,7 @@ namespace NzbDrone.Core.Download
                 if (seriesMatchType == SeriesMatchType.Id && releaseSource != ReleaseSourceType.InteractiveSearch)
                 {
                     trackedDownload.Warn("Found matching series via grab history, but release was matched to series by ID. Automatic import is not possible. See the FAQ for details.");
-                    SetStateToImportBlocked(trackedDownload);
+                    await SetStateToImportBlocked(trackedDownload);
 
                     return;
                 }
@@ -125,7 +126,7 @@ namespace NzbDrone.Core.Download
             trackedDownload.State = TrackedDownloadState.ImportPending;
         }
 
-        public void Import(TrackedDownload trackedDownload)
+        public async Task Import(TrackedDownload trackedDownload)
         {
             SetImportItem(trackedDownload);
 
@@ -137,7 +138,7 @@ namespace NzbDrone.Core.Download
             if (trackedDownload.RemoteEpisode == null)
             {
                 trackedDownload.Warn("Unable to parse download, automatic import is not possible.");
-                SetStateToImportBlocked(trackedDownload);
+                await SetStateToImportBlocked(trackedDownload);
 
                 return;
             }
@@ -145,12 +146,12 @@ namespace NzbDrone.Core.Download
             trackedDownload.State = TrackedDownloadState.Importing;
 
             var outputPath = trackedDownload.ImportItem.OutputPath.FullPath;
-            var importResults = _downloadedEpisodesImportService.ProcessPath(outputPath,
+            var importResults = await _downloadedEpisodesImportService.ProcessPath(outputPath,
                 ImportMode.Auto,
                 trackedDownload.RemoteEpisode.Series,
                 trackedDownload.ImportItem);
 
-            if (VerifyImport(trackedDownload, importResults))
+            if (await VerifyImport(trackedDownload, importResults))
             {
                 return;
             }
@@ -172,7 +173,7 @@ namespace NzbDrone.Core.Download
                 {
                     if (trackedDownload.State != TrackedDownloadState.FailedPending)
                     {
-                        SetStateToImportBlocked(trackedDownload);
+                        await SetStateToImportBlocked(trackedDownload);
                     }
 
                     return;
@@ -181,7 +182,7 @@ namespace NzbDrone.Core.Download
                 if (firstResult.ImportDecision.Rejections.FirstOrDefault()?.Reason == ImportRejectionReason.MultiSeason)
                 {
                     trackedDownload.Warn(new TrackedDownloadStatusMessage(trackedDownload.DownloadItem.Title, firstResult.Errors));
-                    SetStateToImportBlocked(trackedDownload);
+                    await SetStateToImportBlocked(trackedDownload);
                     return;
                 }
             }
@@ -205,18 +206,18 @@ namespace NzbDrone.Core.Download
             if (statusMessages.Any())
             {
                 trackedDownload.Warn(statusMessages.ToArray());
-                SetStateToImportBlocked(trackedDownload);
+                await SetStateToImportBlocked(trackedDownload);
             }
         }
 
-        public bool VerifyImport(TrackedDownload trackedDownload, List<ImportResult> importResults)
+        public async Task<bool> VerifyImport(TrackedDownload trackedDownload, List<ImportResult> importResults)
         {
             var allEpisodesImported = importResults.Where(c => c.Result == ImportResultType.Imported)
                                                    .SelectMany(c => c.ImportDecision.LocalEpisode.Episodes)
                                                    .Count() >= Math.Max(1,
                                           trackedDownload.RemoteEpisode.Episodes.Count);
 
-            var historyItems = _historyService.FindByDownloadId(trackedDownload.DownloadItem.DownloadId)
+            var historyItems = (await _historyService.FindByDownloadId(trackedDownload.DownloadItem.DownloadId))
                 .OrderByDescending(h => h.Date)
                 .ToList();
 
@@ -269,8 +270,8 @@ namespace NzbDrone.Core.Download
                            .Log();
                 }
 
-                var episodes = _episodeService.GetEpisodes(trackedDownload.RemoteEpisode.Episodes.Select(e => e.Id));
-                var files = _mediaFileService.GetFiles(episodes.Select(e => e.EpisodeFileId).Where(i => i > 0).Distinct());
+                var episodes = await _episodeService.GetEpisodes(trackedDownload.RemoteEpisode.Episodes.Select(e => e.Id));
+                var files = await _mediaFileService.GetFiles(episodes.Select(e => e.EpisodeFileId).Where(i => i > 0).Distinct());
 
                 trackedDownload.State = TrackedDownloadState.Imported;
                 _eventAggregator.PublishEvent(new DownloadCompletedEvent(trackedDownload, trackedDownload.RemoteEpisode.Series.Id, files, releaseInfo));
@@ -282,13 +283,13 @@ namespace NzbDrone.Core.Download
             return false;
         }
 
-        private void SetStateToImportBlocked(TrackedDownload trackedDownload)
+        private async Task SetStateToImportBlocked(TrackedDownload trackedDownload)
         {
             trackedDownload.State = TrackedDownloadState.ImportBlocked;
 
             if (!trackedDownload.HasNotifiedManualInteractionRequired)
             {
-                var grabbedHistories = _historyService.FindByDownloadId(trackedDownload.DownloadItem.DownloadId).Where(h => h.EventType == EpisodeHistoryEventType.Grabbed).ToList();
+                var grabbedHistories = (await _historyService.FindByDownloadId(trackedDownload.DownloadItem.DownloadId)).Where(h => h.EventType == EpisodeHistoryEventType.Grabbed).ToList();
 
                 trackedDownload.HasNotifiedManualInteractionRequired = true;
 

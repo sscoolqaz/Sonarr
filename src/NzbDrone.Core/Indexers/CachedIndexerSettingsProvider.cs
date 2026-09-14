@@ -39,7 +39,9 @@ public class CachedIndexerSettingsProvider : ICachedIndexerSettingsProvider, IHa
 
     private CachedIndexerSettings FetchIndexerSettings(int indexerId)
     {
-        var indexer = _indexerFactory.Find(indexerId);
+        // ICachedIndexerSettingsProvider is kept synchronous - its consumers (RejectedImportService,
+        // SeedConfigProvider) call it without await. Bridge the now-async repository read here.
+        var indexer = _indexerFactory.Find(indexerId).GetAwaiter().GetResult();
 
         if (indexer?.Settings is not IIndexerSettings indexerSettings)
         {

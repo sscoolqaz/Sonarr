@@ -35,7 +35,10 @@ namespace NzbDrone.Core.Download.History
 
         public bool DownloadAlreadyImported(string downloadId)
         {
-            var events = _repository.FindByDownloadId(downloadId);
+            // IDownloadHistoryService is kept synchronous - its other consumers
+            // (DownloadSeedConfigProvider, TrackedDownloadService, AugmentQualityFromReleaseName)
+            // aren't part of this conversion pass. Bridge the now-async repository reads here.
+            var events = _repository.FindByDownloadId(downloadId).GetAwaiter().GetResult();
 
             // Events are ordered by date descending, if a grabbed event comes before an imported event then it was never imported
             // or grabbed again after importing and should be reprocessed.
@@ -57,7 +60,7 @@ namespace NzbDrone.Core.Download.History
 
         public DownloadHistory GetLatestDownloadHistoryItem(string downloadId)
         {
-            var events = _repository.FindByDownloadId(downloadId);
+            var events = _repository.FindByDownloadId(downloadId).GetAwaiter().GetResult();
 
             // Events are ordered by date descending. We'll return the most recent expected event.
             foreach (var e in events)
@@ -89,6 +92,7 @@ namespace NzbDrone.Core.Download.History
         public DownloadHistory GetLatestGrab(string downloadId)
         {
             return _repository.FindByDownloadId(downloadId)
+                              .GetAwaiter().GetResult()
                               .FirstOrDefault(d => d.EventType == DownloadHistoryEventType.DownloadGrabbed);
         }
 
@@ -118,7 +122,7 @@ namespace NzbDrone.Core.Download.History
             history.Data.Add("DownloadClientName", message.DownloadClientName);
             history.Data.Add("CustomFormatScore", message.Episode.CustomFormatScore.ToString());
 
-            _repository.Insert(history);
+            _repository.Insert(history).GetAwaiter().GetResult();
         }
 
         public void Handle(EpisodeImportedEvent message)
@@ -135,7 +139,7 @@ namespace NzbDrone.Core.Download.History
 
             if (downloadId.IsNullOrWhiteSpace())
             {
-                downloadId = _historyService.FindDownloadId(message);
+                downloadId = _historyService.FindDownloadId(message).GetAwaiter().GetResult();
             }
 
             if (downloadId.IsNullOrWhiteSpace())
@@ -159,7 +163,7 @@ namespace NzbDrone.Core.Download.History
             history.Data.Add("SourcePath", message.EpisodeInfo.Path);
             history.Data.Add("DestinationPath", Path.Combine(message.EpisodeInfo.Series.Path, message.ImportedEpisode.RelativePath));
 
-            _repository.Insert(history);
+            _repository.Insert(history).GetAwaiter().GetResult();
         }
 
         public void Handle(DownloadCompletedEvent message)
@@ -180,7 +184,7 @@ namespace NzbDrone.Core.Download.History
             history.Data.Add("DownloadClient", downloadItem.DownloadClientInfo.Type);
             history.Data.Add("DownloadClientName", downloadItem.DownloadClientInfo.Name);
 
-            _repository.Insert(history);
+            _repository.Insert(history).GetAwaiter().GetResult();
         }
 
         public void Handle(DownloadFailedEvent message)
@@ -205,7 +209,7 @@ namespace NzbDrone.Core.Download.History
             history.Data.Add("DownloadClient", message.TrackedDownload.DownloadItem.DownloadClientInfo.Type);
             history.Data.Add("DownloadClientName", message.TrackedDownload.DownloadItem.DownloadClientInfo.Name);
 
-            _repository.Insert(history);
+            _repository.Insert(history).GetAwaiter().GetResult();
         }
 
         public void Handle(DownloadIgnoredEvent message)
@@ -224,12 +228,12 @@ namespace NzbDrone.Core.Download.History
             history.Data.Add("DownloadClient", message.DownloadClientInfo.Type);
             history.Data.Add("DownloadClientName", message.DownloadClientInfo.Name);
 
-            _repository.Insert(history);
+            _repository.Insert(history).GetAwaiter().GetResult();
         }
 
         public void Handle(SeriesDeletedEvent message)
         {
-            _repository.DeleteBySeriesIds(message.Series.Select(m => m.Id).ToList());
+            _repository.DeleteBySeriesIds(message.Series.Select(m => m.Id).ToList()).GetAwaiter().GetResult();
         }
     }
 }

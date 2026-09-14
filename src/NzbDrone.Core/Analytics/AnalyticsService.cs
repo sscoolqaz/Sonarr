@@ -30,7 +30,8 @@ namespace NzbDrone.Core.Analytics
         {
             get
             {
-                var lastRecord = _historyService.Paged(new PagingSpec<EpisodeHistory>() { Page = 0, PageSize = 1, SortKey = "date", SortDirection = SortDirection.Descending }, null, null);
+                // IsEnabled/InstallIsActive are property getters and can't be async - bridge here.
+                var lastRecord = _historyService.Paged(new PagingSpec<EpisodeHistory>() { Page = 0, PageSize = 1, SortKey = "date", SortDirection = SortDirection.Descending }, null, null).GetAwaiter().GetResult();
                 var monthAgo = DateTime.UtcNow.AddMonths(-1);
 
                 return lastRecord.Records.Any(v => v.Date > monthAgo);

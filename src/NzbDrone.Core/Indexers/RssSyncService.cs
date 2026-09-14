@@ -42,7 +42,7 @@ namespace NzbDrone.Core.Indexers
             var pendingReleases = _pendingReleaseService.GetPending();
 
             var reports = rssReleases.Concat(pendingReleases).ToList();
-            var decisions = _downloadDecisionMaker.GetRssDecision(reports);
+            var decisions = await _downloadDecisionMaker.GetRssDecision(reports);
             var processed = await _processDownloadDecisions.ProcessDecisions(decisions);
 
             if (processed.Pending.Any())

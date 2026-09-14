@@ -35,7 +35,9 @@ namespace NzbDrone.Core.Download
         {
             message ??= "Manually marked as failed";
 
-            var history = _historyService.Get(historyId);
+            // IFailedDownloadService is kept synchronous - controllers calling MarkAsFailed
+            // haven't been converted in this pass yet. Bridge the now-async history reads here.
+            var history = _historyService.Get(historyId).GetAwaiter().GetResult();
             var downloadId = history.DownloadId;
 
             if (downloadId.IsNullOrWhiteSpace())
@@ -168,6 +170,7 @@ namespace NzbDrone.Core.Download
         {
             // Sort by date so items are always in the same order
             return _historyService.Find(downloadId, EpisodeHistoryEventType.Grabbed)
+                .GetAwaiter().GetResult()
                 .OrderByDescending(h => h.Date)
                 .ToList();
         }

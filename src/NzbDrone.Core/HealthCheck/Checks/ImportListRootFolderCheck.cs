@@ -35,8 +35,8 @@ namespace NzbDrone.Core.HealthCheck.Checks
 
         public override HealthCheck Check()
         {
-            var importLists = _importListFactory.All();
-            var rootFolders = _rootFolderService.All();
+            var importLists = _importListFactory.All().GetAwaiter().GetResult();
+            var rootFolders = _rootFolderService.All().GetAwaiter().GetResult();
 
             var missingRootFolders = new Dictionary<string, List<ImportListDefinition>>();
 

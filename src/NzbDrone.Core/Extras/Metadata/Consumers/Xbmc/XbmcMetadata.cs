@@ -258,7 +258,7 @@ namespace NzbDrone.Core.Extras.Metadata.Consumers.Xbmc
                 });
 
                 doc.Save(xw);
-                xw.Flush();
+                await xw.FlushAsync();
 
                 xmlResult += sw.ToString();
             }

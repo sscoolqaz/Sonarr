@@ -20,7 +20,7 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
 
         public DownloadSpecDecision IsSatisfiedBy(RemoteEpisode subject, ReleaseDecisionInformation information)
         {
-            if (_blocklistService.Blocklisted(subject.Series.Id, subject.Release))
+            if (_blocklistService.Blocklisted(subject.Series.Id, subject.Release).GetAwaiter().GetResult())
             {
                 _logger.Debug("{0} is blocklisted, rejecting.", subject.Release.Title);
                 return DownloadSpecDecision.Reject(DownloadRejectionReason.Blocklisted, "Release is blocklisted");

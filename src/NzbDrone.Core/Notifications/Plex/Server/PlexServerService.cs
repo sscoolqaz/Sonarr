@@ -97,7 +97,7 @@ namespace NzbDrone.Core.Notifications.Plex.Server
 
         private void UpdateSections(Series series, List<PlexSection> sections, PlexServerSettings settings)
         {
-            var rootFolderPath = _rootFolderService.GetBestRootFolderPath(series.Path);
+            var rootFolderPath = _rootFolderService.GetBestRootFolderPath(series.Path).GetAwaiter().GetResult();
             var seriesRelativePath = rootFolderPath.GetRelativePath(series.Path);
 
             // Try to update a matching section location before falling back to updating all section locations.

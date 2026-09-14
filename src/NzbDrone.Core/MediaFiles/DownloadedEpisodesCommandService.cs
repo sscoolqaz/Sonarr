@@ -56,7 +56,7 @@ namespace NzbDrone.Core.MediaFiles
 
                     var importResults = await _downloadedEpisodesImportService.ProcessPath(message.Path, message.ImportMode, trackedDownload.RemoteEpisode.Series, trackedDownload.DownloadItem);
 
-                    _completedDownloadService.VerifyImport(trackedDownload, importResults);
+                    await _completedDownloadService.VerifyImport(trackedDownload, importResults);
 
                     return importResults;
                 }

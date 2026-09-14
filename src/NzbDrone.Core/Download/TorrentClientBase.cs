@@ -348,7 +348,7 @@ namespace NzbDrone.Core.Download
             var rejection = $"Caution:{Environment.NewLine}{string.Join(Environment.NewLine, rejections)}";
 
             _logger.Warn("Torrent for '{0}' rejected: {1}. Blocklisting release.", remoteEpisode.Release.Title, rejection);
-            _blocklistService.Block(remoteEpisode, rejection, "TorrentFileValidation");
+            _blocklistService.Block(remoteEpisode, rejection, "TorrentFileValidation").GetAwaiter().GetResult();
 
             throw new ReleaseBlockedException(remoteEpisode.Release, rejection);
         }
@@ -371,7 +371,7 @@ namespace NzbDrone.Core.Download
 
                 if (remoteEpisode.ReleaseSource != ReleaseSourceType.InteractiveSearch &&
                     indexerSettings?.RejectBlocklistedTorrentHashesWhileGrabbing == true &&
-                    _blocklistService.BlocklistedTorrentHash(remoteEpisode.Series.Id, hash))
+                    _blocklistService.BlocklistedTorrentHash(remoteEpisode.Series.Id, hash).GetAwaiter().GetResult())
                 {
                     throw new ReleaseBlockedException(remoteEpisode.Release, "Release previously added to blocklist");
                 }

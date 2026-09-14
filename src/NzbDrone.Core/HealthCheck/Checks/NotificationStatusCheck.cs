@@ -24,8 +24,8 @@ namespace NzbDrone.Core.HealthCheck.Checks
 
         public override HealthCheck Check()
         {
-            var enabledProviders = _providerFactory.GetAvailableProviders();
-            var backOffProviders = enabledProviders.Join(_providerStatusService.GetBlockedProviders(),
+            var enabledProviders = _providerFactory.GetAvailableProviders().GetAwaiter().GetResult();
+            var backOffProviders = enabledProviders.Join(_providerStatusService.GetBlockedProviders().GetAwaiter().GetResult(),
                     i => i.Definition.Id,
                     s => s.ProviderId,
                     (i, s) => new { Provider = i, Status = s })

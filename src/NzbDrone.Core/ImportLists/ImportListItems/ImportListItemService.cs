@@ -54,27 +54,29 @@ namespace NzbDrone.Core.ImportLists.ImportListItems
                 existingItem.ReleaseDate = item.ReleaseDate;
             });
 
-            _importListItemRepository.InsertMany(toAdd);
-            _importListItemRepository.UpdateMany(toUpdate);
-            _importListItemRepository.DeleteMany(existingListSeries);
+            // IImportListItemService is kept synchronous - FetchAndParseImportListService and
+            // ImportListSyncService call it without await. Bridge the now-async repository calls.
+            _importListItemRepository.InsertMany(toAdd).GetAwaiter().GetResult();
+            _importListItemRepository.UpdateMany(toUpdate).GetAwaiter().GetResult();
+            _importListItemRepository.DeleteMany(existingListSeries).GetAwaiter().GetResult();
 
             return existingListSeries.Count;
         }
 
         public List<ImportListItemInfo> All()
         {
-            return _importListItemRepository.All().ToList();
+            return _importListItemRepository.All().GetAwaiter().GetResult().ToList();
         }
 
         public List<ImportListItemInfo> GetAllForLists(List<int> listIds)
         {
-            return _importListItemRepository.GetAllForLists(listIds).ToList();
+            return _importListItemRepository.GetAllForLists(listIds).GetAwaiter().GetResult().ToList();
         }
 
         public void HandleAsync(ProviderDeletedEvent<IImportList> message)
         {
-            var seriesOnList = _importListItemRepository.GetAllForLists(new List<int> { message.ProviderId });
-            _importListItemRepository.DeleteMany(seriesOnList);
+            var seriesOnList = _importListItemRepository.GetAllForLists(new List<int> { message.ProviderId }).GetAwaiter().GetResult();
+            _importListItemRepository.DeleteMany(seriesOnList).GetAwaiter().GetResult();
         }
 
         private ImportListItemInfo FindItem(List<ImportListItemInfo> existingItems, ImportListItemInfo item)

@@ -27,8 +27,8 @@ namespace NzbDrone.Core.HealthCheck.Checks
 
         public override HealthCheck Check()
         {
-            var downloadClientsIds = _downloadClientFactory.All().Where(v => v.Enable).Select(v => v.Id).ToList();
-            var invalidIndexers = _indexerFactory.All()
+            var downloadClientsIds = _downloadClientFactory.All().GetAwaiter().GetResult().Where(v => v.Enable).Select(v => v.Id).ToList();
+            var invalidIndexers = _indexerFactory.All().GetAwaiter().GetResult()
                 .Where(v => v.Enable && v.DownloadClientId > 0 && !downloadClientsIds.Contains(v.DownloadClientId))
                 .ToList();
 

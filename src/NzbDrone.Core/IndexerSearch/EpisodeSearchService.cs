@@ -125,7 +125,7 @@ namespace NzbDrone.Core.IndexerSearch
 
             if (message.SeriesId.HasValue)
             {
-                episodes = _episodeService.GetEpisodeBySeries(message.SeriesId.Value)
+                episodes = _episodeService.GetEpisodeBySeries(message.SeriesId.Value).GetAwaiter().GetResult()
                                           .Where(e => e.Monitored == monitored &&
                                                  !e.HasFile &&
                                                  e.AirDateUtc.HasValue &&
@@ -166,7 +166,7 @@ namespace NzbDrone.Core.IndexerSearch
                     pagingSpec.FilterExpressions.Add(e => message.SeriesType.Contains(e.Series.SeriesType));
                 }
 
-                episodes = _episodeService.EpisodesWithoutFiles(pagingSpec, true, message.SeriesTags).Records.ToList();
+                episodes = _episodeService.EpisodesWithoutFiles(pagingSpec, true, message.SeriesTags).GetAwaiter().GetResult().Records.ToList();
             }
 
             var queue = GetQueuedEpisodeIds();

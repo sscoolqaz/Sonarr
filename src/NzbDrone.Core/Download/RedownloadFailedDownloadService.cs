@@ -58,8 +58,8 @@ namespace NzbDrone.Core.Download
                 return;
             }
 
-            var seasonNumber = _episodeService.GetEpisode(message.EpisodeIds.First()).SeasonNumber;
-            var episodesInSeason = _episodeService.GetEpisodesBySeason(message.SeriesId, seasonNumber);
+            var seasonNumber = _episodeService.GetEpisode(message.EpisodeIds.First()).GetAwaiter().GetResult().SeasonNumber;
+            var episodesInSeason = _episodeService.GetEpisodesBySeason(message.SeriesId, seasonNumber).GetAwaiter().GetResult();
 
             if (message.EpisodeIds.Count == episodesInSeason.Count)
             {
