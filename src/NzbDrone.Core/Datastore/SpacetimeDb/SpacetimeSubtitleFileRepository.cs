@@ -44,6 +44,50 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateSubtitleFile -= Handler);
         }
 
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteSubtitleFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteSubtitleFile -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int p1, int? p2, int? p3, string p4, SpacetimeDB.Timestamp p5, SpacetimeDB.Timestamp p6, string p7, string p8, int p9, string p10, string p11)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertSubtitleFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertSubtitleFile -= Handler);
+        }
+
         protected override SubtitleFile ToModel(StdbSubtitleFile row) => new SubtitleFile
         {
             Id = row.Id,

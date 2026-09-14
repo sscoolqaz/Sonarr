@@ -15,12 +15,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 {
     public class SpacetimeSeriesRepository : SpacetimeBasicRepository<Series, StdbSeries>, ISeriesRepository
     {
-        private readonly IQualityProfileRepository _qualityProfileRepository;
-
-        public SpacetimeSeriesRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator, IQualityProfileRepository qualityProfileRepository)
+        public SpacetimeSeriesRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
             : base(connection, eventAggregator)
         {
-            _qualityProfileRepository = qualityProfileRepository;
         }
 
         protected override RemoteTableHandle<EventContext, StdbSeries> Table => Conn.Connection.Db.Series;
@@ -49,6 +46,54 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateSeries -= Handler);
         }
 
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteSeries += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteSeries -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int p1, int p2, int p3, string p4, int p5, string p6, string p7, string p8, string p9, string p10, int p11, string p12, string p13, bool p14, int p15, int p16, bool p17, SpacetimeDB.Timestamp? p18, int p19, string p20, int p21, string p22, bool p23, string p24, string p25, int p26, string p27, string p28, string p29, string p30, SpacetimeDB.Timestamp p31, SpacetimeDB.Timestamp? p32, SpacetimeDB.Timestamp? p33, string p34, string p35, string p36, string p37, System.Collections.Generic.List<int> p38)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertSeries += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertSeries -= Handler);
+        }
+
+        // TODO: this is a full table scan per series (Conn.Connection.Db.SeriesTag.Iter().Where)
+        // - switch to an index-based lookup once a secondary index on SeriesTag.SeriesId is
+        // available in this SpacetimeDB.Runtime version (tracked alongside the module-side
+        // schema work).
         private List<int> TagIdsFor(int seriesId) =>
             Conn.RunOnActor(() => Conn.Connection.Db.SeriesTag.Iter().Where(t => t.SeriesId == seriesId).Select(t => t.TagId).ToList());
 
@@ -57,10 +102,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // already carries a populated QualityProfile - HistoryResourceMapper relies on this,
         // reading model.Series.QualityProfile.Value directly instead of re-fetching by id. There's
         // no Spacetime join to mirror that with, so it's fetched by hand here instead (same
-        // eager-attach approach as TagIdsFor below); a bare null LazyLoaded<T> field NREs on
+        // eager-attach approach as TagIdsFor above); a bare null LazyLoaded<T> field NREs on
         // .Value access, so this can't be left unpopulated the way RootFolderPath below can.
         // RootFolderPath itself is Ignore()'d in the real TableMapping (computed post-load
         // elsewhere), so it's left at its model default - there is no column to read it from.
+        //
+        // ToModel is an unchanged sync hook, always invoked from inside an already-actor-thread
+        // context (see SpacetimeBasicRepository.Query/All), so reading
+        // Conn.Connection.Db.QualityProfile directly here - the same shared RemoteTables/Db every
+        // repository already reaches via Conn.Connection.Db - is safe: this is an explicit direct
+        // table read on the actor thread, not a re-entrant call into another repository's own
+        // public async API (which used to be exactly what happened here, via
+        // IQualityProfileRepository.Find(...).GetAwaiter().GetResult() - only ever safe because
+        // Conn.RunOnActorAsync detects the reentrancy and runs inline instead of queuing/blocking,
+        // an implicit dependency this rewrite removes).
         protected override Series ToModel(StdbSeries row) => new Series
         {
             Id = row.Id,
@@ -80,13 +135,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Monitored = row.Monitored,
             MonitorNewItems = (NewItemMonitorTypes)row.MonitorNewItems,
             QualityProfileId = row.QualityProfileId,
-
-            // ToModel is an unchanged sync hook, always invoked from inside an already-actor-thread
-            // context (see SpacetimeBasicRepository.Query/All) - same reasoning as
-            // SpacetimeEpisodeRepository.ToModel's EpisodeFile lookup. GetAwaiter().GetResult()
-            // here unwraps a Task that RunOnActorAsync already completed synchronously (it detects
-            // it's already on the actor thread), not a real blocking wait.
-            QualityProfile = new LazyLoaded<QualityProfile>(_qualityProfileRepository.Find(row.QualityProfileId).GetAwaiter().GetResult()),
+            QualityProfile = MapQualityProfile(row.QualityProfileId),
             SeasonFolder = row.SeasonFolder,
             LastInfoSync = SpacetimeDateTime.ToDateTime(row.LastInfoSync),
             Runtime = row.Runtime,
@@ -110,6 +159,16 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             AddOptions = SpacetimeJson.Deserialize<AddSeriesOptions>(row.AddOptionsJson),
             Tags = new HashSet<int>(TagIdsFor(row.Id))
         };
+
+        // Direct table read (Conn.Connection.Db.QualityProfile), not a call into
+        // IQualityProfileRepository - see the big comment above ToModel for why. Only ever
+        // called from within ToModel, itself always invoked from inside an already-actor-thread
+        // RunOnActorAsync closure.
+        private LazyLoaded<QualityProfile> MapQualityProfile(int qualityProfileId)
+        {
+            var row = Conn.Connection.Db.QualityProfile.Id.Find(qualityProfileId);
+            return new LazyLoaded<QualityProfile>(row == null ? null : SpacetimeQualityProfileRepository.MapRow(row, Conn));
+        }
 
         protected override int GetRowId(StdbSeries row) => row.Id;
 

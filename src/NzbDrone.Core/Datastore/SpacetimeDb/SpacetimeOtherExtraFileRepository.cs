@@ -42,6 +42,50 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateOtherExtraFile -= Handler);
         }
 
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteOtherExtraFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteOtherExtraFile -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int p1, int? p2, int? p3, string p4, SpacetimeDB.Timestamp p5, SpacetimeDB.Timestamp p6, string p7)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertOtherExtraFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertOtherExtraFile -= Handler);
+        }
+
         protected override OtherExtraFile ToModel(StdbOtherExtraFile row) => new OtherExtraFile
         {
             Id = row.Id,

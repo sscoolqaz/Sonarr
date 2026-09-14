@@ -45,6 +45,50 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateImportListItem -= Handler);
         }
 
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteImportListItem += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteImportListItem -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int p1, string p2, int p3, int p4, int p5, string p6, int p7, int p8, SpacetimeDB.Timestamp p9)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertImportListItem += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertImportListItem -= Handler);
+        }
+
         // ImportList/Seasons are Ignore()'d in the SQL mapping too - not persisted here either.
         protected override ImportListItemInfo ToModel(StdbImportListItem row) => new ImportListItemInfo
         {

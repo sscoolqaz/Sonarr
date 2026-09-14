@@ -37,22 +37,29 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// via SubscribeToAllTables(), so querying it locally instead of asking the server again is
     /// both faster and the actually-idiomatic way to read from SpacetimeDB.
     ///
-    /// Writes: every write (Insert/Update/SetFields/Delete) is confirmed by matching a table row
-    /// event's CallerIdentity/CallerConnectionId against this connection's own (see
-    /// IsOwnConnectionEvent) - not by re-querying and guessing which row is "probably" ours. Update
-    /// additionally accepts a correlated reducer-committed result (via SubscribeOwnUpdateCommitted)
-    /// as alternate confirmation, because a no-op update (the new row content is identical to the
-    /// old) commits successfully but produces no row-delta event at all - waiting on the row event
-    /// alone would time out on a legitimate, successful write. The same channel also signals
-    /// failure (Status.Failed/OutOfEnergy) so a rejected reducer call surfaces as an immediate
-    /// exception instead of waiting out the full timeout. All callback registration/unregistration
-    /// and every Table/Db touch happens via Conn.RunOnActorAsync, which serializes it against the
-    /// connection's FrameTick() pump on one dedicated thread - the SDK's own generated
-    /// event-listener storage is an unsynchronized List/Dictionary, so registering or invoking a
-    /// callback from two different threads at once is a real race, not just a style concern.
-    /// Writes are additionally serialized per repository instance with _writeLock, so only one
-    /// entity's table is blocked at a time; a different entity's repository (sharing the same
-    /// underlying connection) writes independently.
+    /// Writes: every write (Insert/Update/SetFields/Delete) is confirmed by matching a
+    /// correlated event's CallerIdentity/CallerConnectionId against this connection's own (see
+    /// IsOwnConnectionEvent) - not by re-querying and guessing which row is "probably" ours.
+    /// Update and Delete are confirmed EXCLUSIVELY through the entity's reducer-committed result
+    /// (SubscribeOwnUpdateCommitted / SubscribeOwnDeleteCommitted) - that single channel already
+    /// reports Status.Committed for a genuine no-op update that would otherwise produce no
+    /// row-delta event at all, and reports failure (Status.Failed/OutOfEnergy) immediately for a
+    /// rejected reducer call, so a row-event watch alongside it would be redundant, not additive;
+    /// neither Update nor Delete registers a Table.OnUpdate/OnDelete handler. Insert is the one
+    /// write that still needs two channels: the server assigns the row's id itself
+    /// (auto-increment), and only the Table.OnInsert row event ever carries it back, so that
+    /// event remains the sole, authoritative source of a successful insert's id. Insert's own
+    /// reducer-committed channel (SubscribeOwnInsertCommitted) is wired for failure-fast only
+    /// (Status.Failed/OutOfEnergy) - its onCommitted callback is deliberately a no-op, so a
+    /// successful reducer-committed result can never race ahead of the row event and resolve the
+    /// wait before insertedRow has actually been populated. All callback registration/
+    /// unregistration and every Table/Db touch happens via Conn.RunOnActorAsync, which serializes
+    /// it against the connection's FrameTick() pump on one dedicated thread - the SDK's own
+    /// generated event-listener storage is an unsynchronized List/Dictionary, so registering or
+    /// invoking a callback from two different threads at once is a real race, not just a style
+    /// concern. Writes are additionally serialized per repository instance with _writeLock, so
+    /// only one entity's table is blocked at a time; a different entity's repository (sharing the
+    /// same underlying connection) writes independently.
     /// </summary>
     public abstract class SpacetimeBasicRepository<TModel, TStdbRow> : IBasicRepository<TModel>
         where TModel : ModelBase, new()
@@ -97,11 +104,34 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// <summary>
         /// Wires this entity's generated per-reducer result event (e.g.
         /// Conn.Connection.Reducers.OnUpdateTag) to onCommitted (Status.Committed) or onFailed
-        /// (Status.Failed / OutOfEnergy) - the second confirmation channel for Update (see class
-        /// remarks on why a row event alone isn't enough). Returns an IDisposable that unsubscribes;
-        /// called and disposed only from inside Conn.RunOnActorAsync.
+        /// (Status.Failed / OutOfEnergy) - the sole confirmation channel for Update (see class
+        /// remarks: this alone already handles the no-op-update case a row event would miss).
+        /// Returns an IDisposable that unsubscribes; called and disposed only from inside
+        /// Conn.RunOnActorAsync.
         /// </summary>
         protected abstract IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed);
+
+        /// <summary>
+        /// Wires this entity's generated per-reducer result event (e.g.
+        /// Conn.Connection.Reducers.OnDeleteTag) to onCommitted (Status.Committed, given the
+        /// deleted id) or onFailed (Status.Failed / OutOfEnergy) - the sole confirmation channel
+        /// for Delete (see class remarks: Delete needs no row event, only success/failure).
+        /// Returns an IDisposable that unsubscribes; called and disposed only from inside
+        /// Conn.RunOnActorAsync.
+        /// </summary>
+        protected abstract IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed);
+
+        /// <summary>
+        /// Wires this entity's generated per-reducer result event (e.g.
+        /// Conn.Connection.Reducers.OnInsertTag) to onCommitted (Status.Committed) or onFailed
+        /// (Status.Failed / OutOfEnergy) - a FAILURE-FAST-ONLY channel for Insert (see class
+        /// remarks: unlike Update/Delete, Insert cannot use this channel to signal success, since
+        /// it never carries the server-assigned id - only the Table.OnInsert row event does).
+        /// Callers must never treat onCommitted as authoritative for a successful insert. Returns
+        /// an IDisposable that unsubscribes; called and disposed only from inside
+        /// Conn.RunOnActorAsync.
+        /// </summary>
+        protected abstract IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed);
 
         protected virtual bool PublishModelEvents => false;
 
@@ -351,6 +381,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 // a polling-based "grab the current max id" approach would have to.
                 await Conn.RunOnActorAsync(() => Table.OnInsert += Handler);
 
+                // Failure-fast-only channel: a rejected insert reducer (Status.Failed/
+                // OutOfEnergy) would otherwise never produce a row event and would sit out the
+                // full WriteConfirmationTimeout instead of failing in milliseconds. onCommitted
+                // is deliberately a no-op - see SubscribeOwnInsertCommitted's remarks and this
+                // class's own class-level doc comment for why success must only ever be signaled
+                // by the OnInsert row event above (the sole source of the new row's id).
+                var insertCommittedSubscription = await Conn.RunOnActorAsync(() => SubscribeOwnInsertCommitted(
+                    onCommitted: () => { },
+                    onFailed: ex =>
+                    {
+                        failure = ex;
+                        confirmedTcs.TrySetResult(true);
+                    }));
+
                 try
                 {
                     InvokeInsertReducer(model);
@@ -369,7 +413,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 }
                 finally
                 {
-                    await Conn.RunOnActorAsync(() => Table.OnInsert -= Handler);
+                    await Conn.RunOnActorAsync(() =>
+                    {
+                        Table.OnInsert -= Handler;
+                        insertCommittedSubscription.Dispose();
+                    });
                 }
 
                 model.Id = GetRowId(insertedRow);
@@ -529,30 +577,24 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             PublishModelEvent(current, ModelAction.Updated);
         }
 
-        // Shared by Update() and SetFields(): invokes the given reducer call and waits until
-        // EITHER an OnUpdate row event, or this entity's own reducer-committed result, confirms
-        // it landed for the specific row id being updated - or throws immediately if the
-        // reducer-committed channel reports Status.Failed/OutOfEnergy. A genuine no-op update
-        // (the new row content is byte-identical to what was already there) commits successfully
-        // server-side but produces no row-delta event at all, since there is nothing to broadcast
-        // - waiting on the row event alone would time out on a legitimate write. Both handlers are
-        // filtered to events this connection itself caused (see IsOwnConnectionEvent) for the
-        // specific row id, not just "any update to this table", in case a different connection
-        // updates a different row while this one is waiting. Caller must already hold _writeLock.
+        // Shared by Update() and SetFields(): invokes the given reducer call and waits for this
+        // entity's own reducer-committed result to confirm it landed for the specific row id
+        // being updated - or throws immediately if that channel reports Status.Failed/
+        // OutOfEnergy. This channel alone is sufficient: it already reports Status.Committed for
+        // a genuine no-op update (byte-identical row content, which commits successfully
+        // server-side but produces no row-delta event at all) - that's the entire reason this
+        // channel exists rather than watching Table.OnUpdate - and by the time it fires, the
+        // corresponding row-delta (if any) has already been applied to the local cache within the
+        // same transaction processing cycle, so nothing is lost by not also watching the row
+        // event. The handler is filtered to events this connection itself caused (see
+        // IsOwnConnectionEvent, folded into SubscribeOwnUpdateCommitted's own implementation) for
+        // the specific row id, not just "any update to this table", in case a different
+        // connection updates a different row while this one is waiting. Caller must already hold
+        // _writeLock.
         private async Task InvokeAndWaitForUpdate(int id, Action invokeReducer)
         {
             Exception failure = null;
             var confirmedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-            void RowHandler(EventContext ctx, TStdbRow oldRow, TStdbRow newRow)
-            {
-                if (!IsOwnConnectionEvent(ctx) || GetRowId(newRow) != id)
-                {
-                    return;
-                }
-
-                confirmedTcs.TrySetResult(true);
-            }
 
             void CommittedHandler(int committedId)
             {
@@ -576,7 +618,6 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 confirmedTcs.TrySetResult(true);
             });
 
-            await Conn.RunOnActorAsync(() => Table.OnUpdate += RowHandler);
             var committedSubscription = await Conn.RunOnActorAsync(() => SubscribeOwnUpdateCommitted(CommittedHandler, FailureHandler));
 
             try
@@ -597,11 +638,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             }
             finally
             {
-                await Conn.RunOnActorAsync(() =>
-                {
-                    Table.OnUpdate -= RowHandler;
-                    committedSubscription.Dispose();
-                });
+                await Conn.RunOnActorAsync(() => committedSubscription.Dispose());
             }
         }
 
@@ -640,6 +677,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         public Task Delete(TModel model) => Delete(model.Id);
 
+        // Same pattern as InvokeAndWaitForUpdate above (see that method's remarks): confirmed
+        // exclusively via this entity's own reducer-committed result, not a Table.OnDelete row
+        // event. Delete doesn't need to read anything back off a row event the way Insert does
+        // for its id (there's nothing left to read once the row is gone), and unlike Update there
+        // is no legitimate "no-op delete" case to worry about either way - the reducer-committed
+        // channel's Status.Committed/Status.Failed/OutOfEnergy dispatch is already a complete
+        // confirmation signal on its own. Caller must already hold _writeLock.
         public async Task Delete(int id)
         {
             await _writeLock.WaitAsync();
@@ -649,13 +693,19 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 Exception failure = null;
                 var confirmedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                void Handler(EventContext ctx, TStdbRow row)
+                void CommittedHandler(int committedId)
                 {
-                    if (!IsOwnConnectionEvent(ctx) || GetRowId(row) != id)
+                    if (committedId != id)
                     {
                         return;
                     }
 
+                    confirmedTcs.TrySetResult(true);
+                }
+
+                void FailureHandler(Exception ex)
+                {
+                    failure = ex;
                     confirmedTcs.TrySetResult(true);
                 }
 
@@ -665,7 +715,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     confirmedTcs.TrySetResult(true);
                 });
 
-                await Conn.RunOnActorAsync(() => Table.OnDelete += Handler);
+                var committedSubscription = await Conn.RunOnActorAsync(() => SubscribeOwnDeleteCommitted(CommittedHandler, FailureHandler));
 
                 try
                 {
@@ -685,7 +735,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 }
                 finally
                 {
-                    await Conn.RunOnActorAsync(() => Table.OnDelete -= Handler);
+                    await Conn.RunOnActorAsync(() => committedSubscription.Dispose());
                 }
             }
             finally

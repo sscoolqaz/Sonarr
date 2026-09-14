@@ -44,6 +44,50 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateDelayProfile -= Handler);
         }
 
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteDelayProfile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteDelayProfile -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, bool p1, bool p2, int p3, int p4, int p5, int p6, bool p7, bool p8, int p9, string p10)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertDelayProfile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertDelayProfile -= Handler);
+        }
+
         protected override DelayProfile ToModel(StdbDelayProfile row) => new DelayProfile
         {
             Id = row.Id,

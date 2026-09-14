@@ -65,6 +65,50 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateEpisode -= Handler);
         }
 
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteEpisode += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteEpisode -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int p1, int p2, int p3, int p4, int p5, string p6, string p7, SpacetimeDB.Timestamp? p8, string p9, bool p10, int? p11, int? p12, int? p13, int? p14, int? p15, int? p16, int? p17, bool p18, string p19, string p20, SpacetimeDB.Timestamp? p21, int p22, string p23)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertEpisode += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertEpisode -= Handler);
+        }
+
         // SeriesTitle/Series/AbsoluteEpisodeNumberAdded are Ignore()'d in the real TableMapping -
         // no columns for them here either. EpisodeFile is LazyLoaded there too, but unlike
         // RootFolderPath-style Ignore()'d fields it's not safe to leave unpopulated:
@@ -72,20 +116,25 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // whenever includeEpisodeFile && EpisodeFileId != 0 (the default for most episode list/
         // detail requests), and a bare null LazyLoaded<T> NREs on .Value access - the same failure
         // mode QualityProfile had on SpacetimeSeriesRepository (see that file's comment).
+        //
+        // ToModel is an unchanged sync hook, always invoked from inside an already-actor-thread
+        // context (see SpacetimeBasicRepository.Query/All), so MapEpisodeFile below reads
+        // Conn.Connection.Db.EpisodeFile directly - the same shared RemoteTables/Db every
+        // repository already reaches via Conn.Connection.Db - rather than re-entering
+        // IMediaFileRepository's own public async API (which used to be exactly what happened
+        // here, via _mediaFileRepository.Find(...).GetAwaiter().GetResult() - only ever safe
+        // because Conn.RunOnActorAsync detects the reentrancy and runs inline instead of
+        // queuing/blocking, an implicit dependency this rewrite removes; _mediaFileRepository
+        // itself is still used elsewhere in this class for genuinely cross-request lookups like
+        // EpisodesWithFiles/EpisodesWhereCutoffUnmet, where there's no actor-thread reentrancy to
+        // worry about in the first place).
         protected override Episode ToModel(StdbEpisode row) => new Episode
         {
             Id = row.Id,
             SeriesId = row.SeriesId,
             TvdbId = row.TvdbId,
             EpisodeFileId = row.EpisodeFileId,
-
-            // ToModel is an unchanged sync hook, always invoked from inside an already-actor-thread
-            // context (see SpacetimeBasicRepository.Query/All). _mediaFileRepository.Find internally
-            // awaits Conn.RunOnActorAsync, which - detecting it's already running on the actor
-            // thread - returns an already-completed Task synchronously rather than queuing/blocking.
-            // GetAwaiter().GetResult() here therefore just unwraps that completed Task, not a real
-            // blocking wait.
-            EpisodeFile = row.EpisodeFileId != 0 ? new LazyLoaded<EpisodeFile>(_mediaFileRepository.Find(row.EpisodeFileId).GetAwaiter().GetResult()) : null,
+            EpisodeFile = row.EpisodeFileId != 0 ? MapEpisodeFile(row.EpisodeFileId) : null,
             SeasonNumber = row.SeasonNumber,
             EpisodeNumber = row.EpisodeNumber,
             Title = row.Title,
@@ -107,6 +156,16 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             Runtime = row.Runtime,
             FinaleType = row.FinaleType
         };
+
+        // Direct table read (Conn.Connection.Db.EpisodeFile), not a call into
+        // IMediaFileRepository - see the comment above ToModel for why. Only ever called from
+        // within ToModel, itself always invoked from inside an already-actor-thread
+        // RunOnActorAsync closure. Caller already checked EpisodeFileId != 0.
+        private LazyLoaded<EpisodeFile> MapEpisodeFile(int episodeFileId)
+        {
+            var row = Conn.Connection.Db.EpisodeFile.Id.Find(episodeFileId);
+            return new LazyLoaded<EpisodeFile>(row == null ? null : SpacetimeMediaFileRepository.MapRow(row));
+        }
 
         protected override int GetRowId(StdbEpisode row) => row.Id;
 

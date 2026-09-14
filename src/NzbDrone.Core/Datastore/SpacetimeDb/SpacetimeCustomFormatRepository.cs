@@ -55,7 +55,63 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateCustomFormat -= Handler);
         }
 
-        protected override CustomFormat ToModel(StdbCustomFormat row) => new CustomFormat
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteCustomFormat += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteCustomFormat -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, string p1, bool p2, string p3)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertCustomFormat += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertCustomFormat -= Handler);
+        }
+
+        protected override CustomFormat ToModel(StdbCustomFormat row) => MapRow(row);
+
+        /// <summary>
+        /// Pure row-to-model mapping with no dependency on Conn or any other repository/service -
+        /// exposed so a sibling repository's own ToModel (e.g.
+        /// SpacetimeQualityProfileRepository, populating its FormatItems) can read
+        /// SpacetimeDB.Types.CustomFormat rows straight off Conn.Connection.Db.CustomFormat and
+        /// map them directly, instead of re-entering this repository's own public async API
+        /// (ICustomFormatRepository/ICustomFormatService) from inside another repository's
+        /// already-actor-thread ToModel call - see SpacetimeQualityProfileRepository.MapRow's own
+        /// remarks for the full cross-repository-read reasoning.
+        /// </summary>
+        internal static CustomFormat MapRow(StdbCustomFormat row) => new CustomFormat
         {
             Id = row.Id,
             Name = row.Name,

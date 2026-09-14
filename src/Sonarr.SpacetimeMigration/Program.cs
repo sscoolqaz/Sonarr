@@ -161,11 +161,13 @@ namespace Sonarr.SpacetimeMigration
 
             var targetTags = target == null ? null : new SpacetimeTagRepository(target, eventAggregator);
 
-            // customFormatService here is never actually invoked by MigrateInsert (only by the
-            // normal ToModel/read path this tool never calls on the target side) - reusing the
-            // source-side instance just satisfies the constructor.
-            var targetQualityProfiles = target == null ? null : new SpacetimeQualityProfileRepository(target, eventAggregator, customFormatService);
-            var targetSeries = target == null ? null : new SpacetimeSeriesRepository(target, eventAggregator, targetQualityProfiles);
+            // SpacetimeQualityProfileRepository/SpacetimeSeriesRepository no longer take an
+            // ICustomFormatService/IQualityProfileRepository constructor dependency - both now
+            // read their sibling table (CustomFormat / QualityProfile) directly off
+            // Conn.Connection.Db from within ToModel instead of re-entering another
+            // repository's/service's own public API (see those classes' ToModel remarks).
+            var targetQualityProfiles = target == null ? null : new SpacetimeQualityProfileRepository(target, eventAggregator);
+            var targetSeries = target == null ? null : new SpacetimeSeriesRepository(target, eventAggregator);
             var targetMediaFiles = target == null ? null : new SpacetimeMediaFileRepository(target, eventAggregator);
             var targetEpisodes = target == null ? null : new SpacetimeEpisodeRepository(target, eventAggregator, targetMediaFiles, targetSeries, null);
             var targetHistory = target == null ? null : new SpacetimeHistoryRepository(target, eventAggregator, targetSeries, targetEpisodes, null);

@@ -17,21 +17,25 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
     /// Unit-tests SpacetimeBasicRepository's async plumbing in isolation, with a mocked
     /// ISpacetimeDbConnection instead of a live SpacetimeDB server. This deliberately does NOT
     /// duplicate SpacetimeWriteConfirmationFixture (which needs a real subscribed
-    /// RemoteTableHandle to correlate OnInsert/OnUpdate/OnDelete row events, and so can only run
-    /// against a live server) - it covers the parts of the base class that don't touch Table at
-    /// all: the per-instance write-serialization lock, the confirmation-wait's timeout-to-failure
-    /// translation, the RegisterPendingOperation fail-fast path, and PublishModelEvent's
-    /// PublishModelEvents/forcePublish gating.
+    /// RemoteTableHandle to correlate Insert's OnInsert row event - still the sole source of a
+    /// new row's server-assigned id - and so can only run against a live server) - it covers the
+    /// parts of the base class that don't touch Table at all: the per-instance
+    /// write-serialization lock, the confirmation-wait's timeout-to-failure translation, the
+    /// RegisterPendingOperation fail-fast path, and PublishModelEvent's PublishModelEvents/
+    /// forcePublish gating.
     ///
     /// InvokeAndWaitForReducerCommitted (the mechanism behind SpacetimeCommandRepository's bulk
     /// reducers, e.g. OrphanStarted) is used as the exercise surface for the lock/timeout/failure
-    /// behavior instead of Insert/Update/Delete, because those correlate confirmation via
-    /// Table.OnInsert/OnUpdate/OnDelete - and Table is a concrete generated
-    /// RemoteTableHandle&lt;EventContext, TStdbRow&gt; with no live-server-free way to raise those
-    /// events, so a fake Table would test the fake rather than the real class. Every write path
-    /// (Insert/Update/SetFields/Delete/InvokeAndWaitForMigrateInsert/InvokeAndWaitForReducerCommitted)
-    /// shares the exact same _writeLock/WaitForConfirmation/RegisterPendingOperation code, so
-    /// exercising it through the one Table-free path still covers the real shared logic.
+    /// behavior instead of Insert/Update/Delete directly. Update and Delete now share this exact
+    /// mechanism themselves (both confirm exclusively via their own reducer-committed result, no
+    /// row event at all), so exercising it here already covers their shared logic too; Insert
+    /// still additionally needs a live Table.OnInsert row event for the new row's id, which is a
+    /// concrete generated RemoteTableHandle&lt;EventContext, TStdbRow&gt; with no live-server-free
+    /// way to raise that event, so a fake Table would test the fake rather than the real class.
+    /// Every write path (Insert/Update/SetFields/Delete/InvokeAndWaitForMigrateInsert/
+    /// InvokeAndWaitForReducerCommitted) shares the exact same
+    /// _writeLock/WaitForConfirmation/RegisterPendingOperation code, so exercising it through the
+    /// one Table-free path still covers the real shared logic.
     /// </summary>
     [TestFixture]
     public class SpacetimeBasicRepositoryPlumbingFixture
@@ -295,6 +299,12 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
             protected override void InvokeDeleteReducer(int id) => throw new NotSupportedException();
 
             protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed) =>
+                throw new NotSupportedException();
+
+            protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed) =>
+                throw new NotSupportedException();
+
+            protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed) =>
                 throw new NotSupportedException();
 
             public Task RunBulkOp(Action invokeReducer, Func<Action, Action<Exception>, IDisposable> subscribeCommitted) =>

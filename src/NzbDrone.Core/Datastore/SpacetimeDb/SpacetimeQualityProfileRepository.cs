@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using NzbDrone.Core.CustomFormats;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Profiles;
 using NzbDrone.Core.Profiles.Qualities;
@@ -18,8 +17,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     {
         // FormatItems is stored as {format:<CustomFormat.Id>, score} pairs, not the full
         // CustomFormat object - mirrors CustomFormatIntConverter's storage shape exactly (the
-        // real repository's Query() override rehydrates the full object from
-        // ICustomFormatService.All() below, and skips formats that were since removed).
+        // real repository's Query() override rehydrates the full object from a direct
+        // Conn.Connection.Db.CustomFormat table read in MapRow below, and skips formats that
+        // were since removed).
         private struct FormatItemDto
         {
             public int Format { get; set; }
@@ -28,12 +28,9 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         private static readonly JsonSerializerOptions SerializerSettings = SpacetimeEmbeddedJson.Create();
 
-        private readonly ICustomFormatService _customFormatService;
-
-        public SpacetimeQualityProfileRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator, ICustomFormatService customFormatService)
+        public SpacetimeQualityProfileRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
             : base(connection, eventAggregator)
         {
-            _customFormatService = customFormatService;
         }
 
         protected override RemoteTableHandle<EventContext, StdbQualityProfile> Table => Conn.Connection.Db.QualityProfile;
@@ -62,15 +59,73 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateQualityProfile -= Handler);
         }
 
-        protected override QualityProfile ToModel(StdbQualityProfile row)
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
         {
-            // ToModel is an unchanged sync hook, always invoked from inside an already-actor-thread
-            // context (see SpacetimeBasicRepository.Query/All) - same reasoning as
-            // SpacetimeEpisodeRepository.ToModel's EpisodeFile lookup. ICustomFormatService.All()
-            // resolves through ICustomFormatRepository -> Conn.RunOnActorAsync, which - detecting
-            // it's already running on the actor thread - completes synchronously, so
-            // GetAwaiter().GetResult() here unwraps an already-completed Task, not a real block.
-            var cfs = _customFormatService.All().GetAwaiter().GetResult().ToDictionary(c => c.Id);
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteQualityProfile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteQualityProfile -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, string p1, bool p2, int p3, int p4, int p5, int p6, string p7, string p8)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertQualityProfile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertQualityProfile -= Handler);
+        }
+
+        protected override QualityProfile ToModel(StdbQualityProfile row) => MapRow(row, Conn);
+
+        /// <summary>
+        /// Row-to-model mapping that only depends on the given connection's Db (via
+        /// Conn.Connection.Db.CustomFormat), not on this repository instance or any other
+        /// repository/service - exposed so a sibling repository's own ToModel (e.g.
+        /// SpacetimeSeriesRepository, populating its LazyLoaded&lt;QualityProfile&gt;) can read a
+        /// SpacetimeDB.Types.QualityProfile row straight off Conn.Connection.Db.QualityProfile
+        /// and map it directly. This used to go through ICustomFormatService.All() (which itself
+        /// resolves through ICustomFormatRepository -> Conn.RunOnActorAsync) and, from Series,
+        /// through this repository's own public IQualityProfileRepository.Find - both only worked
+        /// because Conn.RunOnActorAsync detects it's already running on the actor thread and
+        /// completes synchronously instead of queuing/blocking, which is real but an implicit
+        /// dependency on that reentrancy detail rather than an explicit one. Reading
+        /// Conn.Connection.Db.CustomFormat.Iter() directly here (still safe only because every
+        /// caller of this method - this class's own ToModel, and SpacetimeSeriesRepository's - is
+        /// itself always invoked from inside an already-actor-thread RunOnActorAsync closure, per
+        /// SpacetimeBasicRepository.Query/All) makes the data-access path explicit instead of
+        /// leaning on that reentrancy holding.
+        /// </summary>
+        internal static QualityProfile MapRow(StdbQualityProfile row, ISpacetimeDbConnection conn)
+        {
+            var cfs = conn.Connection.Db.CustomFormat.Iter().Select(SpacetimeCustomFormatRepository.MapRow).ToDictionary(c => c.Id);
             var dtos = JsonSerializer.Deserialize<List<FormatItemDto>>(row.FormatItemsJson, SerializerSettings) ?? new List<FormatItemDto>();
             var formatItems = new List<ProfileFormatItem>();
 
@@ -98,8 +153,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override int GetRowId(StdbQualityProfile row) => row.Id;
 
-        // ToModel silently drops any FormatItemDto whose Format id no longer exists in
-        // ICustomFormatService (see the loop above) - so profile.FormatItems as returned by
+        // ToModel/MapRow silently drops any FormatItemDto whose Format id no longer exists in
+        // the CustomFormat table (see the loop above) - so profile.FormatItems as returned by
         // All()/Find() can never reveal a stale id for SpacetimeCleanupQualityProfileFormatItems
         // to detect and persist a removal for. This gives that task the raw, unfiltered ids
         // exactly as stored, bypassing the CustomFormat existence check.

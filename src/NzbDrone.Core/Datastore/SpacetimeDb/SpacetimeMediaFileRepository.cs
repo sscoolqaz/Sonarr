@@ -58,9 +58,68 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return new Unsubscriber(() => Conn.Connection.Reducers.OnUpdateEpisodeFile -= Handler);
         }
 
+        protected override IDisposable SubscribeOwnDeleteCommitted(Action<int> onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int id)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnDeleteEpisodeFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnDeleteEpisodeFile -= Handler);
+        }
+
+        protected override IDisposable SubscribeOwnInsertCommitted(Action onCommitted, Action<Exception> onFailed)
+        {
+            void Handler(ReducerEventContext ctx, int p1, int p2, string p3, long p4, SpacetimeDB.Timestamp p5, string p6, string p7, string p8, string p9, string p10, int p11, int p12, string p13, string p14, int p15)
+            {
+                if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                    ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                    ctx.Event.Status is Status.Committed)
+                {
+                    onCommitted();
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
+                }
+            }
+
+            Conn.Connection.Reducers.OnInsertEpisodeFile += Handler;
+            return new Unsubscriber(() => Conn.Connection.Reducers.OnInsertEpisodeFile -= Handler);
+        }
+
         // Path is Ignore()'d in the SQL mapping (computed from RelativePath + root folder at read
         // time); Series/Episodes are LazyLoaded there, not persisted directly - same here.
-        protected override EpisodeFile ToModel(StdbEpisodeFile row) => new EpisodeFile
+        protected override EpisodeFile ToModel(StdbEpisodeFile row) => MapRow(row);
+
+        /// <summary>
+        /// Pure row-to-model mapping with no dependency on Conn or any other repository - exposed
+        /// so a sibling repository's own ToModel (SpacetimeEpisodeRepository, populating its
+        /// EpisodeFile) can read SpacetimeDB.Types.EpisodeFile rows straight off
+        /// Conn.Connection.Db.EpisodeFile and map them directly, instead of re-entering this
+        /// repository's own public async API (IMediaFileRepository.Find) from inside another
+        /// repository's already-actor-thread ToModel call. That call previously worked only
+        /// because Conn.RunOnActorAsync detects reentrancy from the same actor thread and runs
+        /// inline rather than queuing/blocking - true, but an implicit dependency on that detail
+        /// holding rather than an explicit one; reading the raw generated table handle directly
+        /// (still safe here for exactly the same already-on-the-actor-thread reason) makes the
+        /// data-access path explicit instead.
+        /// </summary>
+        internal static EpisodeFile MapRow(StdbEpisodeFile row) => new EpisodeFile
         {
             Id = row.Id,
             SeriesId = row.SeriesId,

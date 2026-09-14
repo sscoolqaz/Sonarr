@@ -10,11 +10,13 @@ using NzbDrone.Core.Tags;
 namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
 {
     /// <summary>
-    /// Exercises SpacetimeBasicRepository's event-based write-confirmation mechanism: Insert,
-    /// Update, SetFields and Delete all subscribe to the table's OnInsert/OnUpdate/OnDelete
-    /// callback, correlate it to this connection's own reducer call via
-    /// ReducerEvent.CallerIdentity/CallerConnectionId, and only return once that confirmation
-    /// arrives. This can't be faked in isolation - it needs a live subscription and a real
+    /// Exercises SpacetimeBasicRepository's event-based write-confirmation mechanism. Insert
+    /// still subscribes to the table's OnInsert row-event callback (the only source of a new
+    /// row's server-assigned id), correlated to this connection's own reducer call via
+    /// ReducerEvent.CallerIdentity/CallerConnectionId; Update, SetFields and Delete confirm
+    /// exclusively through their entity's own reducer-committed result event instead (no row
+    /// event at all - see SpacetimeBasicRepository's class remarks for why). Either way, this
+    /// can't be faked in isolation - it needs a live subscription and a real
     /// RemoteTableHandle&lt;EventContext, TStdbRow&gt;, not a hand-rolled RemoteQuery double -
     /// so unlike the mechanism's predecessor (a polling-based heuristic, since replaced), this
     /// is only verifiable against a live server. Uses SpacetimeTagRepository as a simple, proven

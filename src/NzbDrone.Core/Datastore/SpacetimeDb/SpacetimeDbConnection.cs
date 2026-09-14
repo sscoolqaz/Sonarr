@@ -28,14 +28,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// Subscribes to every table up front, blocking the constructor until the initial sync
     /// completes - this is the actual reason to reach for SpacetimeDB's subscription model
     /// instead of treating it as a conventional request/response database: every
-    /// SpacetimeBasicRepository's Insert/SetFields correlates its own writes by matching a row
-    /// event's CallerIdentity/CallerConnectionId against this connection's own, which only ever
-    /// fires for tables this connection is subscribed to. The SDK's own docs steer larger,
-    /// bandwidth-constrained clients toward narrower per-query subscriptions instead of
-    /// SubscribeToAllTables - not a good fit here anyway, since write-correlation needs
-    /// insert/update visibility on every ported table, not a queryable subset - but it's worth
-    /// knowing this trades a slower app startup (one full sync of the whole database) for
-    /// correct, event-driven write confirmation instead of a polling heuristic.
+    /// SpacetimeBasicRepository's Insert/Update/Delete correlates its own writes by matching a
+    /// correlated event's CallerIdentity/CallerConnectionId against this connection's own, which
+    /// for Insert's row event only ever fires for tables this connection is subscribed to (Update/
+    /// Delete's own reducer-committed confirmation doesn't need a table subscription at all - see
+    /// SpacetimeBasicRepository's remarks). SubscribeToAllTables() is used here for simplicity at
+    /// this app's current ~40-entity scale, NOT because write-correlation strictly requires it:
+    /// narrower, explicit per-table subscriptions would deliver the exact same row events and
+    /// would work equally well for Insert's correlation. This is a "measure and revisit if row
+    /// counts/startup latency become an issue" choice, not a hard requirement - it trades a
+    /// slower app startup (one full sync of the whole database) for not having to keep a
+    /// per-table subscription list in sync with the entity list as it grows.
     /// </summary>
     public interface ISpacetimeDbConnection
     {
