@@ -35,7 +35,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override StdbEpisodeFile FindRowById(int id) => Conn.Connection.Db.EpisodeFile.Id.Find(id);
 
-        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed)
         {
             void Handler(ReducerEventContext ctx, int id, int p2, int p3, string p4, long p5, SpacetimeDB.Timestamp p6, string p7, string p8, string p9, string p10, string p11, int p12, int p13, string p14, string p15, int p16)
             {
@@ -44,6 +44,12 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     ctx.Event.Status is Status.Committed)
                 {
                     onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
                 }
             }
 

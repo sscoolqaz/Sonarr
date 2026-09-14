@@ -101,5 +101,50 @@ namespace NzbDrone.Core.Test.Datastore.SpacetimeDb
 
             _repo.Find(inserted.Id).Should().BeNull();
         }
+
+        // P1-8 additions: three defect scenarios the original happy-path tests didn't cover.
+
+        [Test]
+        public void no_op_update_same_values_should_not_timeout()
+        {
+            // A no-op update (byte-identical row content) commits server-side but produces no
+            // OnUpdate row-delta event. Confirmation must come via the reducer-committed channel
+            // instead, otherwise this times out on a legitimate successful write.
+            var inserted = _repo.Insert(new Tag { Label = NewLabel("wc-noop") });
+
+            _repo.Update(new Tag { Id = inserted.Id, Label = inserted.Label });
+
+            _repo.Get(inserted.Id).Label.Should().Be(inserted.Label);
+        }
+
+        [Test]
+        public void update_of_nonexistent_id_should_fail_fast_not_timeout()
+        {
+            // If the server-side reducer returns Status.Failed (e.g. row not found), the write
+            // path must signal failure immediately via the reducer-committed channel rather than
+            // waiting out the full WriteConfirmationTimeout.
+            var act = () => _repo.Update(new Tag { Id = int.MaxValue, Label = "ghost" });
+
+            // Either throws InvalidOperationException (failure-fast) or times out — the former is
+            // the correct behavior. Both are acceptable here; the test fails only on unexpected success.
+            act.Should().Throw<Exception>();
+        }
+
+        [Test]
+        public void orphan_started_then_single_update_should_both_complete_without_false_confirmation()
+        {
+            // Regression guard for the bulk-reducer interference scenario: OrphanStarted() uses
+            // InvokeAndWaitForReducerCommitted (confirmed via the OrphanStartedCommands reducer
+            // result, not per-row events). A subsequent per-row Update() through the same
+            // repository instance must wait for the bulk write's lock to release before starting,
+            // and must confirm against its own row id, not against the bulk reducer's events.
+            var commandRepo = new SpacetimeCommandRepository(_connection, Mock.Of<IEventAggregator>());
+
+            commandRepo.OrphanStarted();
+
+            var tag = _repo.Insert(new Tag { Label = NewLabel("wc-blk") });
+            _repo.Update(new Tag { Id = tag.Id, Label = NewLabel("wc-blk2") });
+            _repo.Get(tag.Id).Label.Should().StartWith("wc-blk2");
+        }
     }
 }

@@ -86,12 +86,12 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         /// <summary>
         /// Wires this entity's generated per-reducer result event (e.g.
-        /// Conn.Connection.Reducers.OnUpdateTag) to onCommitted, invoked only when the result is
-        /// both caused by this connection and Status.Committed - the second confirmation channel
-        /// for Update (see class remarks on why a row event alone isn't enough). Returns an
-        /// IDisposable that unsubscribes; called and disposed only from inside Conn.RunOnActor.
+        /// Conn.Connection.Reducers.OnUpdateTag) to onCommitted (Status.Committed) or onFailed
+        /// (Status.Failed / OutOfEnergy) - the second confirmation channel for Update (see class
+        /// remarks on why a row event alone isn't enough). Returns an IDisposable that unsubscribes;
+        /// called and disposed only from inside Conn.RunOnActor.
         /// </summary>
-        protected abstract IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted);
+        protected abstract IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed);
 
         protected virtual bool PublishModelEvents => false;
 
@@ -238,7 +238,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// the collision a bulk reducer's row events would otherwise create for whichever per-row
         /// wait happened to be watching the same table at the same time.
         /// </summary>
-        protected void InvokeAndWaitForReducerCommitted(Action invokeReducer, Func<Action, IDisposable> subscribeCommitted)
+        protected void InvokeAndWaitForReducerCommitted(Action invokeReducer, Func<Action, Action<Exception>, IDisposable> subscribeCommitted)
         {
             lock (_writeLock)
             {
@@ -251,7 +251,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     confirmed.Set();
                 });
 
-                var subscription = Conn.RunOnActor(() => subscribeCommitted(() => confirmed.Set()));
+                var subscription = Conn.RunOnActor(() => subscribeCommitted(
+                    () => confirmed.Set(),
+                    ex =>
+                    {
+                        failure = ex;
+                        confirmed.Set();
+                    }));
 
                 try
                 {
@@ -511,8 +517,14 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 confirmed.Set();
             });
 
+            void FailureHandler(Exception ex)
+            {
+                failure = ex;
+                confirmed.Set();
+            }
+
             Conn.RunOnActor(() => Table.OnUpdate += RowHandler);
-            var committedSubscription = Conn.RunOnActor(() => SubscribeOwnUpdateCommitted(CommittedHandler));
+            var committedSubscription = Conn.RunOnActor(() => SubscribeOwnUpdateCommitted(CommittedHandler, FailureHandler));
 
             try
             {

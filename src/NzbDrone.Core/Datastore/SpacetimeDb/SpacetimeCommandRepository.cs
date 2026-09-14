@@ -39,7 +39,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected override StdbCommand FindRowById(int id) => Conn.Connection.Db.Command.Id.Find(id);
 
-        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted)
+        protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed)
         {
             void Handler(ReducerEventContext ctx, int id, string p2, string p3, int p4, int p5, int p6, SpacetimeDB.Timestamp p7, SpacetimeDB.Timestamp? p8, SpacetimeDB.Timestamp? p9, long? p10, string p11, int p12)
             {
@@ -48,6 +48,12 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                     ctx.Event.Status is Status.Committed)
                 {
                     onCommitted(id);
+                }
+                else if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
+                         ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
+                         (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy))
+                {
+                    onFailed(new InvalidOperationException($"Reducer failed with status {ctx.Event.Status}"));
                 }
             }
 
@@ -141,15 +147,21 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         public void OrphanStarted() =>
             InvokeAndWaitForReducerCommitted(
                 () => Conn.Connection.Reducers.OrphanStartedCommands((int)CommandStatus.Orphaned, (int)CommandStatus.Started, SpacetimeDateTime.ToTimestamp(DateTime.UtcNow)),
-                onCommitted =>
+                (onCommitted, onFailed) =>
                 {
                     void Handler(ReducerEventContext ctx, int orphanedStatus, int startedStatus, SpacetimeDB.Timestamp endedAt)
                     {
                         if (ctx.Event.CallerIdentity == Conn.Connection.Identity &&
-                            ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId &&
-                            ctx.Event.Status is Status.Committed)
+                            ctx.Event.CallerConnectionId == Conn.Connection.ConnectionId)
                         {
-                            onCommitted();
+                            if (ctx.Event.Status is Status.Committed)
+                            {
+                                onCommitted();
+                            }
+                            else if (ctx.Event.Status is Status.Failed || ctx.Event.Status is Status.OutOfEnergy)
+                            {
+                                onFailed(new InvalidOperationException($"OrphanStartedCommands reducer failed with status {ctx.Event.Status}"));
+                            }
                         }
                     }
 
