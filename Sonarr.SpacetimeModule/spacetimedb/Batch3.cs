@@ -23,12 +23,14 @@ public static partial class Module
     [Reducer]
     public static void InsertDownloadHistory(ReducerContext ctx, int eventType, int seriesId, string downloadId, string sourceTitle, Timestamp date, int protocol, int indexerId, int downloadClientId, string releaseJson, string dataJson)
     {
+        RequireAuth(ctx);
         ctx.Db.DownloadHistory.Insert(new DownloadHistory { Id = 0, EventType = eventType, SeriesId = seriesId, DownloadId = downloadId, SourceTitle = sourceTitle, Date = date, Protocol = protocol, IndexerId = indexerId, DownloadClientId = downloadClientId, ReleaseJson = releaseJson, DataJson = dataJson });
     }
 
     [Reducer]
     public static void UpdateDownloadHistory(ReducerContext ctx, int id, int eventType, int seriesId, string downloadId, string sourceTitle, Timestamp date, int protocol, int indexerId, int downloadClientId, string releaseJson, string dataJson)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.DownloadHistory.Id.Find(id).HasValue, "DownloadHistory", id);
         ctx.Db.DownloadHistory.Id.Update(new DownloadHistory { Id = id, EventType = eventType, SeriesId = seriesId, DownloadId = downloadId, SourceTitle = sourceTitle, Date = date, Protocol = protocol, IndexerId = indexerId, DownloadClientId = downloadClientId, ReleaseJson = releaseJson, DataJson = dataJson });
     }
@@ -36,6 +38,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteDownloadHistory(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.DownloadHistory.Id.Delete(id), "DownloadHistory", id);
     }
 
@@ -53,12 +56,14 @@ public static partial class Module
     [Reducer]
     public static void InsertCustomFormat(ReducerContext ctx, string name, bool includeCustomFormatWhenRenaming, string specificationsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.CustomFormat.Insert(new CustomFormat { Id = 0, Name = name, IncludeCustomFormatWhenRenaming = includeCustomFormatWhenRenaming, SpecificationsJson = specificationsJson });
     }
 
     [Reducer]
     public static void UpdateCustomFormat(ReducerContext ctx, int id, string name, bool includeCustomFormatWhenRenaming, string specificationsJson)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.CustomFormat.Id.Find(id).HasValue, "CustomFormat", id);
         ctx.Db.CustomFormat.Id.Update(new CustomFormat { Id = id, Name = name, IncludeCustomFormatWhenRenaming = includeCustomFormatWhenRenaming, SpecificationsJson = specificationsJson });
     }
@@ -66,6 +71,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteCustomFormat(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.CustomFormat.Id.Delete(id), "CustomFormat", id);
     }
 
@@ -84,12 +90,14 @@ public static partial class Module
     [Reducer]
     public static void InsertAutoTag(ReducerContext ctx, string name, string specificationsJson, bool removeTagsAutomatically, string tagsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.AutoTag.Insert(new AutoTag { Id = 0, Name = name, SpecificationsJson = specificationsJson, RemoveTagsAutomatically = removeTagsAutomatically, TagsJson = tagsJson });
     }
 
     [Reducer]
     public static void UpdateAutoTag(ReducerContext ctx, int id, string name, string specificationsJson, bool removeTagsAutomatically, string tagsJson)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.AutoTag.Id.Find(id).HasValue, "AutoTag", id);
         ctx.Db.AutoTag.Id.Update(new AutoTag { Id = id, Name = name, SpecificationsJson = specificationsJson, RemoveTagsAutomatically = removeTagsAutomatically, TagsJson = tagsJson });
     }
@@ -97,6 +105,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteAutoTag(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.AutoTag.Id.Delete(id), "AutoTag", id);
     }
 
@@ -120,12 +129,14 @@ public static partial class Module
     [Reducer]
     public static void InsertImportListItem(ReducerContext ctx, int importListId, string title, int year, int tvdbId, int tmdbId, string imdbId, int malId, int aniListId, Timestamp releaseDate)
     {
+        RequireAuth(ctx);
         ctx.Db.ImportListItem.Insert(new ImportListItem { Id = 0, ImportListId = importListId, Title = title, Year = year, TvdbId = tvdbId, TmdbId = tmdbId, ImdbId = imdbId, MalId = malId, AniListId = aniListId, ReleaseDate = releaseDate });
     }
 
     [Reducer]
     public static void UpdateImportListItem(ReducerContext ctx, int id, int importListId, string title, int year, int tvdbId, int tmdbId, string imdbId, int malId, int aniListId, Timestamp releaseDate)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.ImportListItem.Id.Find(id).HasValue, "ImportListItem", id);
         ctx.Db.ImportListItem.Id.Update(new ImportListItem { Id = id, ImportListId = importListId, Title = title, Year = year, TvdbId = tvdbId, TmdbId = tmdbId, ImdbId = imdbId, MalId = malId, AniListId = aniListId, ReleaseDate = releaseDate });
     }
@@ -133,6 +144,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteImportListItem(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.ImportListItem.Id.Delete(id), "ImportListItem", id);
     }
 
@@ -158,12 +170,14 @@ public static partial class Module
     [Reducer]
     public static void InsertCommand(ReducerContext ctx, string name, string bodyJson, int priority, int status, int result, Timestamp queuedAt, Timestamp? startedAt, Timestamp? endedAt, long? durationTicks, string exception, int trigger)
     {
+        RequireAuth(ctx);
         ctx.Db.Command.Insert(new CommandRow { Id = 0, Name = name, BodyJson = bodyJson, Priority = priority, Status = status, Result = result, QueuedAt = queuedAt, StartedAt = startedAt, EndedAt = endedAt, DurationTicks = durationTicks, Exception = exception, Trigger = trigger });
     }
 
     [Reducer]
     public static void UpdateCommand(ReducerContext ctx, int id, string name, string bodyJson, int priority, int status, int result, Timestamp queuedAt, Timestamp? startedAt, Timestamp? endedAt, long? durationTicks, string exception, int trigger)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.Command.Id.Find(id).HasValue, "Command", id);
         ctx.Db.Command.Id.Update(new CommandRow { Id = id, Name = name, BodyJson = bodyJson, Priority = priority, Status = status, Result = result, QueuedAt = queuedAt, StartedAt = startedAt, EndedAt = endedAt, DurationTicks = durationTicks, Exception = exception, Trigger = trigger });
     }
@@ -171,12 +185,14 @@ public static partial class Module
     [Reducer]
     public static void DeleteCommand(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.Command.Id.Delete(id), "Command", id);
     }
 
     [Reducer]
     public static void OrphanStartedCommands(ReducerContext ctx, int orphanedStatus, int startedStatus, Timestamp endedAt)
     {
+        RequireAuth(ctx);
         foreach (var row in ctx.Db.Command.Iter())
         {
             if (row.Status == startedStatus)
@@ -207,12 +223,14 @@ public static partial class Module
     [Reducer]
     public static void InsertPendingRelease(ReducerContext ctx, int seriesId, string title, Timestamp added, string parsedEpisodeInfoJson, string releaseJson, int reason, string additionalInfoJson)
     {
+        RequireAuth(ctx);
         ctx.Db.PendingRelease.Insert(new PendingRelease { Id = 0, SeriesId = seriesId, Title = title, Added = added, ParsedEpisodeInfoJson = parsedEpisodeInfoJson, ReleaseJson = releaseJson, Reason = reason, AdditionalInfoJson = additionalInfoJson });
     }
 
     [Reducer]
     public static void UpdatePendingRelease(ReducerContext ctx, int id, int seriesId, string title, Timestamp added, string parsedEpisodeInfoJson, string releaseJson, int reason, string additionalInfoJson)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.PendingRelease.Id.Find(id).HasValue, "PendingRelease", id);
         ctx.Db.PendingRelease.Id.Update(new PendingRelease { Id = id, SeriesId = seriesId, Title = title, Added = added, ParsedEpisodeInfoJson = parsedEpisodeInfoJson, ReleaseJson = releaseJson, Reason = reason, AdditionalInfoJson = additionalInfoJson });
     }
@@ -220,6 +238,7 @@ public static partial class Module
     [Reducer]
     public static void DeletePendingRelease(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.PendingRelease.Id.Delete(id), "PendingRelease", id);
     }
 
@@ -238,12 +257,14 @@ public static partial class Module
     [Reducer]
     public static void InsertUpdateHistory(ReducerContext ctx, Timestamp date, string version, int eventType)
     {
+        RequireAuth(ctx);
         ctx.Db.UpdateHistory.Insert(new UpdateHistory { Id = 0, Date = date, Version = version, EventType = eventType });
     }
 
     [Reducer]
     public static void UpdateUpdateHistory(ReducerContext ctx, int id, Timestamp date, string version, int eventType)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.UpdateHistory.Id.Find(id).HasValue, "UpdateHistory", id);
         ctx.Db.UpdateHistory.Id.Update(new UpdateHistory { Id = id, Date = date, Version = version, EventType = eventType });
     }
@@ -251,6 +272,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteUpdateHistory(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.UpdateHistory.Id.Delete(id), "UpdateHistory", id);
     }
 }

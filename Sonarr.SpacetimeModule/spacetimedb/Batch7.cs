@@ -44,6 +44,7 @@ public static partial class Module
         int? airedBeforeSeasonNumber, int? airedBeforeEpisodeNumber, bool unverifiedSceneNumbering, string ratingsJson,
         string imagesJson, Timestamp? lastSearchTime, int runtime, string finaleType)
     {
+        RequireAuth(ctx);
         ctx.Db.Episode.Insert(new Episode
         {
             Id = 0, SeriesId = seriesId, TvdbId = tvdbId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
@@ -65,6 +66,7 @@ public static partial class Module
         int? airedBeforeSeasonNumber, int? airedBeforeEpisodeNumber, bool unverifiedSceneNumbering, string ratingsJson,
         string imagesJson, Timestamp? lastSearchTime, int runtime, string finaleType)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.Episode.Id.Find(id).HasValue, "Episode", id);
         ctx.Db.Episode.Id.Update(new Episode
         {
@@ -81,6 +83,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteEpisode(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.Episode.Id.Delete(id), "Episode", id);
     }
 
@@ -112,6 +115,7 @@ public static partial class Module
         int episodeId, int seriesId, string sourceTitle, string qualityJson, int qualityId, Timestamp date,
         int eventType, string dataJson, string languagesJson, string downloadId)
     {
+        RequireAuth(ctx);
         ctx.Db.EpisodeHistory.Insert(new EpisodeHistory
         {
             Id = 0, EpisodeId = episodeId, SeriesId = seriesId, SourceTitle = sourceTitle, QualityJson = qualityJson,
@@ -126,6 +130,7 @@ public static partial class Module
         int id, int episodeId, int seriesId, string sourceTitle, string qualityJson, int qualityId, Timestamp date,
         int eventType, string dataJson, string languagesJson, string downloadId)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.EpisodeHistory.Id.Find(id).HasValue, "EpisodeHistory", id);
         ctx.Db.EpisodeHistory.Id.Update(new EpisodeHistory
         {
@@ -138,6 +143,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteEpisodeHistory(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.EpisodeHistory.Id.Delete(id), "EpisodeHistory", id);
     }
 
@@ -172,6 +178,7 @@ public static partial class Module
         Timestamp? publishedDate, long? size, int protocol, string indexer, int indexerFlags, int releaseType,
         string message, string source, string torrentInfoHash, string languagesJson)
     {
+        RequireAuth(ctx);
         ctx.Db.Blocklist.Insert(new Blocklist
         {
             Id = 0, SeriesId = seriesId, EpisodeIdsJson = episodeIdsJson, SourceTitle = sourceTitle, QualityJson = qualityJson,
@@ -188,6 +195,7 @@ public static partial class Module
         Timestamp? publishedDate, long? size, int protocol, string indexer, int indexerFlags, int releaseType,
         string message, string source, string torrentInfoHash, string languagesJson)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.Blocklist.Id.Find(id).HasValue, "Blocklist", id);
         ctx.Db.Blocklist.Id.Update(new Blocklist
         {
@@ -201,6 +209,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteBlocklist(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         RequireFound(ctx.Db.Blocklist.Id.Delete(id), "Blocklist", id);
     }
 }

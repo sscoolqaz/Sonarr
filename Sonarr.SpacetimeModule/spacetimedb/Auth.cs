@@ -14,7 +14,19 @@ public static partial class Module
         public string ClientIdsCommaSeparated;
     }
 
-    [Table(Accessor = "TrustedConnection")]
+    // Public = true + a self-scoped RLS filter (below), not owner-only: confirmed live that an
+    // RLS filter on another table (User/Config in Batch1.cs) which JOINs this one is evaluated in
+    // the SUBSCRIBING CLIENT's own query context, not the module's - so the client needs its own
+    // read access to whatever this JOIN touches for the filter to resolve at all. Without this, a
+    // real connected client's own SubscribeToAllTables() failed outright with "no such table:
+    // trusted_connection ... it may be marked private" the moment User/Config's own filter tried
+    // to reference it, even for a client actually registered in it. The row-level filter below
+    // limits what "made Public" actually exposes: a caller can only ever see their OWN row here
+    // (never another connection's identity/subject/issuer), which is also exactly what makes the
+    // JOIN in User/Config's filters correct - a client's visibility of this table already reduces
+    // to "the one row matching my own identity, or nothing," so joining against it naturally
+    // produces the intended "all rows visible iff I have a live TrustedConnection entry" result.
+    [Table(Accessor = "TrustedConnection", Public = true)]
     public partial struct TrustedConnection
     {
         [PrimaryKey]
@@ -23,6 +35,13 @@ public static partial class Module
         public string Issuer;
         public Timestamp ConnectedAt;
     }
+
+#pragma warning disable STDB_UNSTABLE // ClientVisibilityFilter is an experimental SpacetimeDB feature - the confirmed, correct way to suppress this specific diagnostic, not a general warning suppression.
+    [SpacetimeDB.ClientVisibilityFilter]
+    public static readonly Filter TrustedConnectionVisibilityFilter = new Filter.Sql(
+        "SELECT trusted_connection.* FROM trusted_connection WHERE trusted_connection.identity = :sender"
+    );
+#pragma warning restore STDB_UNSTABLE
 
     private static ModuleAuthConfig? GetAuthConfig(ReducerContext ctx)
     {
@@ -63,6 +82,21 @@ public static partial class Module
 
         if (!config.HasValue)
         {
+            // First-run/migration mode: no OIDC issuer configured yet, so every connection is
+            // implicitly trusted (matches ClientConnected's own pre-existing "allow everyone"
+            // stance for the WebSocket gate). This ALSO has to register the connection in
+            // TrustedConnection, not just skip the auth check - the User/Config RLS filters
+            // (Batch1.cs) key off TrustedConnection membership, and would otherwise deny every
+            // caller, including this app's own connection, the moment auth is unconfigured.
+            ctx.Db.TrustedConnection.Identity.Delete(ctx.Sender);
+            ctx.Db.TrustedConnection.Insert(new TrustedConnection
+            {
+                Identity = ctx.Sender,
+                Subject = "unconfigured",
+                Issuer = "unconfigured",
+                ConnectedAt = ctx.Timestamp
+            });
+
             Log.Info("Auth not configured — allowing unauthenticated connection (first-run/migration mode)");
             return;
         }

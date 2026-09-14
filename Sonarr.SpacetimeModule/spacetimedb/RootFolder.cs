@@ -17,12 +17,14 @@ public static partial class Module
     [Reducer]
     public static void InsertRootFolder(ReducerContext ctx, string path)
     {
+        RequireAuth(ctx);
         ctx.Db.RootFolder.Insert(new RootFolder { Id = 0, Path = path });
     }
 
     [Reducer]
     public static void UpdateRootFolder(ReducerContext ctx, int id, string path)
     {
+        RequireAuth(ctx);
         var existing = ctx.Db.RootFolder.Id.Find(id);
         if (!existing.HasValue)
         {
@@ -35,6 +37,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteRootFolder(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         var deleted = ctx.Db.RootFolder.Id.Delete(id);
         if (!deleted)
         {

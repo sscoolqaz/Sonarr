@@ -20,6 +20,7 @@ public static partial class Module
     [Reducer]
     public static void MigrateInsertTag(ReducerContext ctx, int id, string label)
     {
+        RequireAuth(ctx);
         ctx.Db.Tag.Insert(new Tag { Id = id, Label = label });
     }
 
@@ -28,6 +29,7 @@ public static partial class Module
         ReducerContext ctx, int id, string name, bool upgradeAllowed, int cutoff, int minFormatScore,
         int cutoffFormatScore, int minUpgradeFormatScore, string formatItemsJson, string itemsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.QualityProfile.Insert(new QualityProfile
         {
             Id = id, Name = name, UpgradeAllowed = upgradeAllowed, Cutoff = cutoff, MinFormatScore = minFormatScore,
@@ -47,6 +49,7 @@ public static partial class Module
         Timestamp added, Timestamp? firstAired, Timestamp? lastAired, string originalLanguageJson,
         string originalCountry, string seasonsJson, string addOptionsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.Series.Insert(new Series
         {
             Id = id, TvdbId = tvdbId, TvRageId = tvRageId, TvMazeId = tvMazeId, ImdbId = imdbId, TmdbId = tmdbId,
@@ -68,6 +71,7 @@ public static partial class Module
         Timestamp dateAdded, string originalFilePath, string sceneName, string releaseGroup, string releaseHash,
         string qualityJson, int qualityId, int indexerFlags, string mediaInfoJson, string languagesJson, int releaseType)
     {
+        RequireAuth(ctx);
         ctx.Db.EpisodeFile.Insert(new EpisodeFile
         {
             Id = id, SeriesId = seriesId, SeasonNumber = seasonNumber, RelativePath = relativePath, Size = size,
@@ -87,6 +91,7 @@ public static partial class Module
         int? airedBeforeSeasonNumber, int? airedBeforeEpisodeNumber, bool unverifiedSceneNumbering, string ratingsJson,
         string imagesJson, Timestamp? lastSearchTime, int runtime, string finaleType)
     {
+        RequireAuth(ctx);
         ctx.Db.Episode.Insert(new Episode
         {
             Id = id, SeriesId = seriesId, TvdbId = tvdbId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
@@ -105,6 +110,7 @@ public static partial class Module
         int episodeId, int seriesId, string sourceTitle, string qualityJson, int qualityId, Timestamp date,
         int eventType, string dataJson, string languagesJson, string downloadId)
     {
+        RequireAuth(ctx);
         ctx.Db.EpisodeHistory.Insert(new EpisodeHistory
         {
             Id = id, EpisodeId = episodeId, SeriesId = seriesId, SourceTitle = sourceTitle, QualityJson = qualityJson,
@@ -120,6 +126,7 @@ public static partial class Module
         Timestamp? publishedDate, long? size, int protocol, string indexer, int indexerFlags, int releaseType,
         string message, string source, string torrentInfoHash, string languagesJson)
     {
+        RequireAuth(ctx);
         ctx.Db.Blocklist.Insert(new Blocklist
         {
             Id = id, SeriesId = seriesId, EpisodeIdsJson = episodeIdsJson, SourceTitle = sourceTitle, QualityJson = qualityJson,
@@ -136,12 +143,14 @@ public static partial class Module
     [Reducer]
     public static void MigrateInsertCustomFormat(ReducerContext ctx, int id, string name, bool includeCustomFormatWhenRenaming, string specificationsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.CustomFormat.Insert(new CustomFormat { Id = id, Name = name, IncludeCustomFormatWhenRenaming = includeCustomFormatWhenRenaming, SpecificationsJson = specificationsJson });
     }
 
     [Reducer]
     public static void MigrateInsertConfig(ReducerContext ctx, int id, string key, string value)
     {
+        RequireAuth(ctx);
         ctx.Db.Config.Insert(new Config { Id = id, Key = key, Value = value });
     }
 
@@ -151,6 +160,7 @@ public static partial class Module
         string customColonReplacementFormat, int multiEpisodeStyle, string standardEpisodeFormat, string dailyEpisodeFormat,
         string animeEpisodeFormat, string seriesFolderFormat, string seasonFolderFormat, string specialsFolderFormat)
     {
+        RequireAuth(ctx);
         ctx.Db.NamingConfig.Insert(new NamingConfig
         {
             Id = id, RenameEpisodes = renameEpisodes, ReplaceIllegalCharacters = replaceIllegalCharacters,
@@ -165,18 +175,21 @@ public static partial class Module
     [Reducer]
     public static void MigrateInsertRootFolder(ReducerContext ctx, int id, string path)
     {
+        RequireAuth(ctx);
         ctx.Db.RootFolder.Insert(new RootFolder { Id = id, Path = path });
     }
 
     [Reducer]
     public static void MigrateInsertRemotePathMapping(ReducerContext ctx, int id, string host, string remotePath, string localPath)
     {
+        RequireAuth(ctx);
         ctx.Db.RemotePathMapping.Insert(new RemotePathMapping { Id = id, Host = host, RemotePath = remotePath, LocalPath = localPath });
     }
 
     [Reducer]
     public static void MigrateInsertCustomFilter(ReducerContext ctx, int id, string type, string label, string filters)
     {
+        RequireAuth(ctx);
         ctx.Db.CustomFilter.Insert(new CustomFilter { Id = id, Type = type, Label = label, Filters = filters });
     }
 
@@ -186,6 +199,7 @@ public static partial class Module
         int torrentDelay, int order, bool bypassIfHighestQuality, bool bypassIfAboveCustomFormatScore,
         int minimumCustomFormatScore, string tagsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.DelayProfile.Insert(new DelayProfile
         {
             Id = id, EnableUsenet = enableUsenet, EnableTorrent = enableTorrent, PreferredProtocol = preferredProtocol,
@@ -201,6 +215,7 @@ public static partial class Module
         bool airDateRestriction, int airDateGracePeriod, bool allowSeasonPackWithoutAllEpisodesAired,
         string indexerIdsJson, string tagsJson, string excludedTagsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.ReleaseProfile.Insert(new ReleaseProfile
         {
             Id = id, Name = name, Enabled = enabled, RequiredJson = requiredJson, IgnoredJson = ignoredJson,
@@ -215,6 +230,7 @@ public static partial class Module
         ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
         bool enable, string tagsJson, string messageJson)
     {
+        RequireAuth(ctx);
         ctx.Db.IndexerDefinition.Insert(new IndexerDefinition
         {
             Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
@@ -227,6 +243,7 @@ public static partial class Module
         ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
         bool enable, string tagsJson, string messageJson)
     {
+        RequireAuth(ctx);
         ctx.Db.DownloadClientDefinition.Insert(new DownloadClientDefinition
         {
             Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
@@ -239,6 +256,7 @@ public static partial class Module
         ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
         bool enable, string tagsJson, string messageJson)
     {
+        RequireAuth(ctx);
         ctx.Db.ImportListDefinition.Insert(new ImportListDefinition
         {
             Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
@@ -251,6 +269,7 @@ public static partial class Module
         ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
         bool enable, string tagsJson, string messageJson)
     {
+        RequireAuth(ctx);
         ctx.Db.NotificationDefinition.Insert(new NotificationDefinition
         {
             Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
@@ -263,6 +282,7 @@ public static partial class Module
         ReducerContext ctx, int id, string name, string implementation, string configContract, string settingsJson,
         bool enable, string tagsJson, string messageJson)
     {
+        RequireAuth(ctx);
         ctx.Db.MetadataDefinition.Insert(new MetadataDefinition
         {
             Id = id, Name = name, Implementation = implementation, ConfigContract = configContract,
@@ -273,12 +293,14 @@ public static partial class Module
     [Reducer]
     public static void MigrateInsertImportListExclusion(ReducerContext ctx, int id, int tvdbId, string title)
     {
+        RequireAuth(ctx);
         ctx.Db.ImportListExclusion.Insert(new ImportListExclusion { Id = id, TvdbId = tvdbId, Title = title });
     }
 
     [Reducer]
     public static void MigrateInsertQualityDefinition(ReducerContext ctx, int id, string qualityJson, string title)
     {
+        RequireAuth(ctx);
         ctx.Db.QualityDefinition.Insert(new QualityDefinition { Id = id, QualityJson = qualityJson, Title = title });
     }
 
@@ -286,18 +308,21 @@ public static partial class Module
     public static void MigrateInsertAutoTag(
         ReducerContext ctx, int id, string name, string specificationsJson, bool removeTagsAutomatically, string tagsJson)
     {
+        RequireAuth(ctx);
         ctx.Db.AutoTag.Insert(new AutoTag { Id = id, Name = name, SpecificationsJson = specificationsJson, RemoveTagsAutomatically = removeTagsAutomatically, TagsJson = tagsJson });
     }
 
     [Reducer]
     public static void MigrateInsertUser(ReducerContext ctx, int id, string identifier, string username, string password, string salt, int iterations)
     {
+        RequireAuth(ctx);
         ctx.Db.User.Insert(new User { Id = id, Identifier = identifier, Username = username, Password = password, Salt = salt, Iterations = iterations });
     }
 
     [Reducer]
     public static void MigrateInsertUpdateHistory(ReducerContext ctx, int id, Timestamp date, string version, int eventType)
     {
+        RequireAuth(ctx);
         ctx.Db.UpdateHistory.Insert(new UpdateHistory { Id = id, Date = date, Version = version, EventType = eventType });
     }
 
@@ -306,6 +331,7 @@ public static partial class Module
         ReducerContext ctx, int id, int seriesId, string title, Timestamp added, string parsedEpisodeInfoJson,
         string releaseJson, int reason, string additionalInfoJson)
     {
+        RequireAuth(ctx);
         ctx.Db.PendingRelease.Insert(new PendingRelease
         {
             Id = id, SeriesId = seriesId, Title = title, Added = added, ParsedEpisodeInfoJson = parsedEpisodeInfoJson,
@@ -318,6 +344,7 @@ public static partial class Module
         ReducerContext ctx, int id, int eventType, int seriesId, string downloadId, string sourceTitle, Timestamp date,
         int protocol, int indexerId, int downloadClientId, string releaseJson, string dataJson)
     {
+        RequireAuth(ctx);
         ctx.Db.DownloadHistory.Insert(new DownloadHistory
         {
             Id = id, EventType = eventType, SeriesId = seriesId, DownloadId = downloadId, SourceTitle = sourceTitle,
@@ -331,6 +358,7 @@ public static partial class Module
         ReducerContext ctx, int id, int seriesId, int? episodeFileId, int? seasonNumber, string relativePath,
         Timestamp added, Timestamp lastUpdated, string extension, string hash, string consumer, int type)
     {
+        RequireAuth(ctx);
         ctx.Db.MetadataFile.Insert(new MetadataFile
         {
             Id = id, SeriesId = seriesId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
@@ -344,6 +372,7 @@ public static partial class Module
         ReducerContext ctx, int id, int seriesId, int? episodeFileId, int? seasonNumber, string relativePath,
         Timestamp added, Timestamp lastUpdated, string extension, string languageJson, int copy, string languageTagsJson, string title)
     {
+        RequireAuth(ctx);
         ctx.Db.SubtitleFile.Insert(new SubtitleFile
         {
             Id = id, SeriesId = seriesId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
@@ -357,6 +386,7 @@ public static partial class Module
         ReducerContext ctx, int id, int seriesId, int? episodeFileId, int? seasonNumber, string relativePath,
         Timestamp added, Timestamp lastUpdated, string extension)
     {
+        RequireAuth(ctx);
         ctx.Db.OtherExtraFile.Insert(new OtherExtraFile
         {
             Id = id, SeriesId = seriesId, EpisodeFileId = episodeFileId, SeasonNumber = seasonNumber,
@@ -368,6 +398,7 @@ public static partial class Module
     public static void MigrateInsertScheduledTask(
         ReducerContext ctx, int id, string typeName, int interval, Timestamp lastExecution, int priority, Timestamp lastStartTime)
     {
+        RequireAuth(ctx);
         ctx.Db.ScheduledTask.Insert(new ScheduledTask
         {
             Id = id, TypeName = typeName, Interval = interval, LastExecution = lastExecution, Priority = priority,

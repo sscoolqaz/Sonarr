@@ -16,6 +16,7 @@ public static partial class Module
     [Reducer]
     public static void InsertTag(ReducerContext ctx, string label)
     {
+        RequireAuth(ctx);
         ctx.Db.Tag.Insert(new Tag { Id = 0, Label = label });
     }
 
@@ -23,6 +24,7 @@ public static partial class Module
     [Reducer]
     public static void UpdateTag(ReducerContext ctx, int id, string label)
     {
+        RequireAuth(ctx);
         var existing = ctx.Db.Tag.Id.Find(id);
         if (!existing.HasValue)
         {
@@ -36,6 +38,7 @@ public static partial class Module
     [Reducer]
     public static void DeleteTag(ReducerContext ctx, int id)
     {
+        RequireAuth(ctx);
         var deleted = ctx.Db.Tag.Id.Delete(id);
         if (!deleted)
         {
