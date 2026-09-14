@@ -44,7 +44,11 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
             if (seriesRuntime == 0)
             {
                 var firstSeasonNumber = subject.Series.Seasons.Where(s => s.SeasonNumber > 0).Min(s => s.SeasonNumber);
-                var pilotEpisode = _episodeService.GetEpisodesBySeason(subject.Series.Id, firstSeasonNumber).First();
+
+                // IDownloadDecisionEngineSpecification.IsSatisfiedBy stays sync (widely-shared, 30+ implementers -
+                // see DownloadDecisionMaker report notes). Bridging is safe: runs off the request thread and
+                // ASP.NET Core carries no SynchronizationContext, so this can't deadlock.
+                var pilotEpisode = _episodeService.GetEpisodesBySeason(subject.Series.Id, firstSeasonNumber).GetAwaiter().GetResult().First();
 
                 if (subject.Episodes.First().SeasonNumber == pilotEpisode.SeasonNumber)
                 {

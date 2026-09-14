@@ -39,7 +39,11 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
 
         private IDictionary<string, IndexerStatus> FetchBlockedIndexer()
         {
-            return _indexerStatusService.GetBlockedProviders().ToDictionary(v => v.ProviderId.ToString());
+            // ICacheManager.GetCacheDictionary (NzbDrone.Common) only accepts a synchronous
+            // Func<IDictionary<...>> fetch delegate - a framework seam outside this pass's scope.
+            // Bridging here is safe: runs off the request thread, no SynchronizationContext to
+            // deadlock against.
+            return _indexerStatusService.GetBlockedProviders().GetAwaiter().GetResult().ToDictionary(v => v.ProviderId.ToString());
         }
     }
 }

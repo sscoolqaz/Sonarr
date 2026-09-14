@@ -24,7 +24,7 @@ namespace NzbDrone.Core.Indexers
 
         public async Task<List<ReleaseInfo>> Fetch()
         {
-            var indexers = _indexerFactory.RssEnabled();
+            var indexers = await _indexerFactory.RssEnabled();
 
             if (!indexers.Any())
             {

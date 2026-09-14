@@ -144,15 +144,15 @@ namespace NzbDrone.Core.Download
 
             if (remoteEpisode.Release.IndexerId > 0)
             {
-                indexer = _indexerFactory.GetInstance(_indexerFactory.Get(remoteEpisode.Release.IndexerId));
+                indexer = _indexerFactory.GetInstance(await _indexerFactory.Get(remoteEpisode.Release.IndexerId));
             }
 
             string downloadClientId;
             try
             {
                 downloadClientId = await downloadClient.Download(remoteEpisode, indexer);
-                _downloadClientStatusService.RecordSuccess(downloadClient.Definition.Id);
-                _indexerStatusService.RecordSuccess(remoteEpisode.Release.IndexerId);
+                await _downloadClientStatusService.RecordSuccess(downloadClient.Definition.Id);
+                await _indexerStatusService.RecordSuccess(remoteEpisode.Release.IndexerId);
             }
             catch (ReleaseUnavailableException)
             {
@@ -173,11 +173,11 @@ namespace NzbDrone.Core.Download
             {
                 if (ex.InnerException is TooManyRequestsException http429)
                 {
-                    _indexerStatusService.RecordFailure(remoteEpisode.Release.IndexerId, http429.RetryAfter);
+                    await _indexerStatusService.RecordFailure(remoteEpisode.Release.IndexerId, http429.RetryAfter);
                 }
                 else
                 {
-                    _indexerStatusService.RecordFailure(remoteEpisode.Release.IndexerId);
+                    await _indexerStatusService.RecordFailure(remoteEpisode.Release.IndexerId);
                 }
 
                 throw;

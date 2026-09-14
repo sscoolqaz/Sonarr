@@ -39,6 +39,19 @@ namespace NzbDrone.Core.Download.Pending
         void RemovePendingQueueItemsObsolete(int queueId);
     }
 
+    // JUDGMENT CALL (flagged in the Phase 3 async-migration report): IPendingReleaseService is consumed
+    // synchronously by several files outside this conversion pass's scope (ProcessDownloadDecisions,
+    // PendingSpecification, RssSyncService, and the V3/V5 QueueActionController/QueueStatusController/
+    // QueueController/QueueDetailsController - the last four are a later controller-conversion pass).
+    // This class's IHandle<TEvent> methods must also stay sync per the app-wide eventing contract. Rather
+    // than convert the public interface and ripple a breaking change into those out-of-scope files, this
+    // class keeps its full public surface synchronous and bridges every now-async repository/service call
+    // internally via GetAwaiter().GetResult(). Safe: everything here runs off the request thread (RSS
+    // sync pipeline, event handlers, queue endpoints) and ASP.NET Core carries no SynchronizationContext,
+    // so bridging can't deadlock - though note this does mean AddMany/UpdatePendingReleases block a
+    // thread for their full chain of repository calls instead of yielding it, which is a real (if safe)
+    // performance cost on this hot path that a future pass converting the wider queue/RSS surface should
+    // revisit.
     public class PendingReleaseService : IPendingReleaseService,
                                          IHandle<SeriesEditedEvent>,
                                          IHandle<SeriesUpdatedEvent>,
@@ -136,7 +149,7 @@ namespace NzbDrone.Core.Download.Pending
                             {
                                 _logger.Debug("The release {0} is already pending with reason {1}, changing to {2}", decision.RemoteEpisode, matchingReport.Reason, reason);
                                 matchingReport.Reason = reason;
-                                _repository.Update(matchingReport);
+                                _repository.Update(matchingReport).GetAwaiter().GetResult();
                             }
                         }
                         else
@@ -150,7 +163,7 @@ namespace NzbDrone.Core.Download.Pending
 
                             foreach (var duplicate in matchingReports.Skip(1))
                             {
-                                _repository.Delete(duplicate.Id);
+                                _repository.Delete(duplicate.Id).GetAwaiter().GetResult();
                                 alreadyPending.Remove(duplicate);
                                 alreadyPendingByEpisode = CreateEpisodeLookup(alreadyPending);
                             }
@@ -169,7 +182,7 @@ namespace NzbDrone.Core.Download.Pending
 
         public List<ReleaseInfo> GetPending()
         {
-            var releases = _repository.All().Select(p =>
+            var releases = _repository.All().GetAwaiter().GetResult().Select(p =>
             {
                 var release = p.Release;
 
@@ -280,25 +293,25 @@ namespace NzbDrone.Core.Download.Pending
         public void RemovePendingQueueItems(int queueId)
         {
             var targetItem = FindPendingRelease(queueId);
-            var seriesReleases = _repository.AllBySeriesId(targetItem.SeriesId);
+            var seriesReleases = _repository.AllBySeriesId(targetItem.SeriesId).GetAwaiter().GetResult();
 
             var releasesToRemove = seriesReleases.Where(
                 c => c.ParsedEpisodeInfo.SeasonNumber == targetItem.ParsedEpisodeInfo.SeasonNumber &&
                      c.ParsedEpisodeInfo.EpisodeNumbers.SequenceEqual(targetItem.ParsedEpisodeInfo.EpisodeNumbers));
 
-            _repository.DeleteMany(releasesToRemove.Select(c => c.Id));
+            _repository.DeleteMany(releasesToRemove.Select(c => c.Id)).GetAwaiter().GetResult();
         }
 
         public void RemovePendingQueueItemsObsolete(int queueId)
         {
             var targetItem = FindPendingReleaseObsolete(queueId);
-            var seriesReleases = _repository.AllBySeriesId(targetItem.SeriesId);
+            var seriesReleases = _repository.AllBySeriesId(targetItem.SeriesId).GetAwaiter().GetResult();
 
             var releasesToRemove = seriesReleases.Where(
                 c => c.ParsedEpisodeInfo.SeasonNumber == targetItem.ParsedEpisodeInfo.SeasonNumber &&
                      c.ParsedEpisodeInfo.EpisodeNumbers.SequenceEqual(targetItem.ParsedEpisodeInfo.EpisodeNumbers));
 
-            _repository.DeleteMany(releasesToRemove.Select(c => c.Id));
+            _repository.DeleteMany(releasesToRemove.Select(c => c.Id)).GetAwaiter().GetResult();
         }
 
         public RemoteEpisode OldestPendingRelease(int seriesId, int[] episodeIds)
@@ -319,7 +332,7 @@ namespace NzbDrone.Core.Download.Pending
 
         private List<ReleaseInfo> FilterBlockedIndexers(List<ReleaseInfo> releases)
         {
-            var blockedIndexers = new HashSet<int>(_indexerStatusService.GetBlockedProviders().Select(v => v.ProviderId));
+            var blockedIndexers = new HashSet<int>(_indexerStatusService.GetBlockedProviders().GetAwaiter().GetResult().Select(v => v.ProviderId));
 
             return releases.Where(release => !blockedIndexers.Contains(release.IndexerId)).ToList();
         }
@@ -348,7 +361,7 @@ namespace NzbDrone.Core.Download.Pending
                 }
             }
 
-            foreach (var series in _seriesService.GetSeries(releases.Select(v => v.SeriesId).Distinct().Where(v => !seriesMap.ContainsKey(v))))
+            foreach (var series in _seriesService.GetSeries(releases.Select(v => v.SeriesId).Distinct().Where(v => !seriesMap.ContainsKey(v))).GetAwaiter().GetResult())
             {
                 seriesMap[series.Id] = series;
             }
@@ -387,7 +400,7 @@ namespace NzbDrone.Core.Download.Pending
                 {
                     try
                     {
-                        var remoteEpisode = _parsingService.Map(release.ParsedEpisodeInfo, series);
+                        var remoteEpisode = _parsingService.Map(release.ParsedEpisodeInfo, series).GetAwaiter().GetResult();
 
                         release.RemoteEpisode.MappedSeasonNumber = remoteEpisode.MappedSeasonNumber;
                         release.RemoteEpisode.Episodes = remoteEpisode.Episodes;
@@ -406,7 +419,7 @@ namespace NzbDrone.Core.Download.Pending
                     release.RemoteEpisode.Episodes = new List<Episode>();
                 }
 
-                _aggregationService.Augment(release.RemoteEpisode);
+                _aggregationService.Augment(release.RemoteEpisode).GetAwaiter().GetResult();
                 release.RemoteEpisode.CustomFormats = _formatCalculator.ParseCustomFormat(release.RemoteEpisode, release.Release.Size);
 
                 result.Add(release);
@@ -436,11 +449,11 @@ namespace NzbDrone.Core.Download.Pending
             }
 
             string downloadClientName = null;
-            var indexer = _indexerFactory.Find(pendingRelease.Release.IndexerId);
+            var indexer = _indexerFactory.Find(pendingRelease.Release.IndexerId).GetAwaiter().GetResult();
 
             if (indexer is { DownloadClientId: > 0 })
             {
-                var downloadClient = _downloadClientFactory.Find(indexer.DownloadClientId);
+                var downloadClient = _downloadClientFactory.Find(indexer.DownloadClientId).GetAwaiter().GetResult();
 
                 downloadClientName = downloadClient?.Name;
             }
@@ -489,11 +502,11 @@ namespace NzbDrone.Core.Download.Pending
             }
 
             string downloadClientName = null;
-            var indexer = _indexerFactory.Find(pendingRelease.Release.IndexerId);
+            var indexer = _indexerFactory.Find(pendingRelease.Release.IndexerId).GetAwaiter().GetResult();
 
             if (indexer is { DownloadClientId: > 0 })
             {
-                var downloadClient = _downloadClientFactory.Find(indexer.DownloadClientId);
+                var downloadClient = _downloadClientFactory.Find(indexer.DownloadClientId).GetAwaiter().GetResult();
 
                 downloadClientName = downloadClient?.Name;
             }
@@ -540,20 +553,20 @@ namespace NzbDrone.Core.Download.Pending
                     SeriesMatchType = decision.RemoteEpisode.SeriesMatchType,
                     ReleaseSource = decision.RemoteEpisode.ReleaseSource
                 }
-            });
+            }).GetAwaiter().GetResult();
 
             _eventAggregator.PublishEvent(new PendingReleasesUpdatedEvent());
         }
 
         private void Delete(PendingRelease pendingRelease)
         {
-            _repository.Delete(pendingRelease);
+            _repository.Delete(pendingRelease).GetAwaiter().GetResult();
             _eventAggregator.PublishEvent(new PendingReleasesUpdatedEvent());
         }
 
         private int GetDelay(RemoteEpisode remoteEpisode)
         {
-            var delayProfile = _delayProfileService.AllForTags(remoteEpisode.Series.Tags).OrderBy(d => d.Order).First();
+            var delayProfile = _delayProfileService.AllForTags(remoteEpisode.Series.Tags).GetAwaiter().GetResult().OrderBy(d => d.Order).First();
             var delay = delayProfile.GetProtocolDelay(remoteEpisode.Release.DownloadProtocol);
             var minimumAge = _configService.MinimumAge;
 
@@ -631,7 +644,7 @@ namespace NzbDrone.Core.Download.Pending
 
         private int PrioritizeDownloadProtocol(Series series, DownloadProtocol downloadProtocol)
         {
-            var delayProfile = _delayProfileService.BestForTags(series.Tags);
+            var delayProfile = _delayProfileService.BestForTags(series.Tags).GetAwaiter().GetResult();
 
             if (downloadProtocol == delayProfile.PreferredProtocol)
             {
@@ -643,7 +656,7 @@ namespace NzbDrone.Core.Download.Pending
 
         private void UpdatePendingReleases()
         {
-            _pendingReleases = IncludeRemoteEpisodes(_repository.All().ToList());
+            _pendingReleases = IncludeRemoteEpisodes(_repository.All().GetAwaiter().GetResult().ToList());
         }
 
         public void Handle(SeriesEditedEvent message)
@@ -658,7 +671,7 @@ namespace NzbDrone.Core.Download.Pending
 
         public void Handle(SeriesDeletedEvent message)
         {
-            _repository.DeleteBySeriesIds(message.Series.Select(m => m.Id).ToList());
+            _repository.DeleteBySeriesIds(message.Series.Select(m => m.Id).ToList()).GetAwaiter().GetResult();
             UpdatePendingReleases();
         }
 

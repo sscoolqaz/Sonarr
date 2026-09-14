@@ -28,7 +28,12 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
             _logger.Debug("Checking if release meets restrictions: {0}", subject);
 
             var title = subject.Release.Title;
-            var releaseProfiles = _releaseProfileService.EnabledForTags(subject.Series.Tags, subject.Release.IndexerId);
+
+            // IDownloadDecisionEngineSpecification.IsSatisfiedBy is a widely-shared sync interface (30+
+            // implementers app-wide) that we deliberately did not convert to async - see DownloadDecisionMaker
+            // report notes. EventAggregator-style bridging is safe here too: this runs off the request thread
+            // (search/RSS sync pipeline), and ASP.NET Core carries no SynchronizationContext, so this can't deadlock.
+            var releaseProfiles = _releaseProfileService.EnabledForTags(subject.Series.Tags, subject.Release.IndexerId).GetAwaiter().GetResult();
 
             var required = releaseProfiles.Where(r => r.Required.Any());
             var ignored = releaseProfiles.Where(r => r.Ignored.Any());

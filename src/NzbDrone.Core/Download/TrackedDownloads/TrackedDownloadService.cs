@@ -26,6 +26,14 @@ namespace NzbDrone.Core.Download.TrackedDownloads
         void UpdateTrackable(List<TrackedDownload> trackedDownloads);
     }
 
+    // JUDGMENT CALL (flagged in the Phase 3 async-migration report): ITrackedDownloadService is consumed
+    // synchronously by several files outside this conversion pass's scope (DownloadEventHub,
+    // DownloadProcessingService, FailedDownloadService, the MediaFiles/EpisodeImport pass, and the V3/V5
+    // QueueControllers). This class's IHandle<TEvent> methods must also stay sync per the app-wide
+    // eventing contract. Rather than convert the public interface and ripple a breaking change into those
+    // out-of-scope files, this class keeps its public surface synchronous and bridges the now-async
+    // parsing/series/aggregation calls internally via GetAwaiter().GetResult(). Safe: runs off the
+    // request thread, no SynchronizationContext to deadlock against.
     public class TrackedDownloadService : ITrackedDownloadService,
                                           IHandle<EpisodeGrabbedEvent>,
                                           IHandle<EpisodeInfoRefreshedEvent>,
@@ -132,11 +140,11 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                 if (parsedEpisodeInfo != null)
                 {
                     trackedDownload.RemoteEpisode = downloadHistory is { EventType: DownloadHistoryEventType.DownloadImported }
-                        ? _parsingService.Map(parsedEpisodeInfo, _seriesService.GetSeries(downloadHistory.SeriesId))
-                        : _parsingService.Map(parsedEpisodeInfo, 0, 0, null);
+                        ? _parsingService.Map(parsedEpisodeInfo, _seriesService.GetSeries(downloadHistory.SeriesId).GetAwaiter().GetResult()).GetAwaiter().GetResult()
+                        : _parsingService.Map(parsedEpisodeInfo, 0, 0, null).GetAwaiter().GetResult();
                 }
 
-                var historyItems = _historyService.FindByDownloadId(downloadItem.DownloadId)
+                var historyItems = _historyService.FindByDownloadId(downloadItem.DownloadId).GetAwaiter().GetResult()
                     .OrderByDescending(h => h.Date)
                     .ToList();
 
@@ -155,14 +163,14 @@ namespace NzbDrone.Core.Download.TrackedDownloads
                         // Try parsing the original source title and if that fails, try parsing it as a special
                         // TODO: Pass the TVDB ID and TVRage IDs in as well so we have a better chance for finding the item
                         parsedEpisodeInfo = Parser.Parser.ParseTitle(firstHistoryItem.SourceTitle) ??
-                                            _parsingService.ParseSpecialEpisodeTitle(parsedEpisodeInfo, firstHistoryItem.SourceTitle, 0, 0, null);
+                                            _parsingService.ParseSpecialEpisodeTitle(parsedEpisodeInfo, firstHistoryItem.SourceTitle, 0, 0, null).GetAwaiter().GetResult();
 
                         if (parsedEpisodeInfo != null)
                         {
                             trackedDownload.RemoteEpisode = _parsingService.Map(parsedEpisodeInfo,
                                 firstHistoryItem.SeriesId,
                                 historyItems.Where(v => v.EventType == EpisodeHistoryEventType.Grabbed)
-                                    .Select(h => h.EpisodeId).Distinct());
+                                    .Select(h => h.EpisodeId).Distinct()).GetAwaiter().GetResult();
                         }
                     }
 
@@ -186,7 +194,7 @@ namespace NzbDrone.Core.Download.TrackedDownloads
 
                 if (trackedDownload.RemoteEpisode != null)
                 {
-                    _aggregationService.Augment(trackedDownload.RemoteEpisode);
+                    _aggregationService.Augment(trackedDownload.RemoteEpisode).GetAwaiter().GetResult();
 
                     // Calculate custom formats
                     trackedDownload.RemoteEpisode.CustomFormats = _formatCalculator.ParseCustomFormat(trackedDownload.RemoteEpisode, downloadItem.TotalSize);
@@ -254,9 +262,9 @@ namespace NzbDrone.Core.Download.TrackedDownloads
         {
             var parsedEpisodeInfo = Parser.Parser.ParseTitle(trackedDownload.DownloadItem.Title);
 
-            trackedDownload.RemoteEpisode = parsedEpisodeInfo == null ? null : _parsingService.Map(parsedEpisodeInfo, 0, 0, null);
+            trackedDownload.RemoteEpisode = parsedEpisodeInfo == null ? null : _parsingService.Map(parsedEpisodeInfo, 0, 0, null).GetAwaiter().GetResult();
 
-            _aggregationService.Augment(trackedDownload.RemoteEpisode);
+            _aggregationService.Augment(trackedDownload.RemoteEpisode).GetAwaiter().GetResult();
         }
 
         private static TrackedDownloadState GetStateFromHistory(DownloadHistoryEventType eventType)

@@ -143,7 +143,7 @@ namespace NzbDrone.Core.Indexers
                 ReleaseInfo lastReleaseInfo = null;
                 if (isRecent)
                 {
-                    lastReleaseInfo = _indexerStatusService.GetLastRssSyncReleaseInfo(Definition.Id);
+                    lastReleaseInfo = await _indexerStatusService.GetLastRssSyncReleaseInfo(Definition.Id);
                 }
 
                 for (var i = 0; i < pageableRequestChain.Tiers; i++)
@@ -216,20 +216,20 @@ namespace NzbDrone.Core.Indexers
                     }
 
                     lastReleaseInfo = ordered.First();
-                    _indexerStatusService.UpdateRssSyncStatus(Definition.Id, lastReleaseInfo);
+                    await _indexerStatusService.UpdateRssSyncStatus(Definition.Id, lastReleaseInfo);
                 }
 
-                _indexerStatusService.RecordSuccess(Definition.Id);
+                await _indexerStatusService.RecordSuccess(Definition.Id);
             }
             catch (WebException webException)
             {
                 if (webException.Status is WebExceptionStatus.NameResolutionFailure or WebExceptionStatus.ConnectFailure)
                 {
-                    _indexerStatusService.RecordConnectionFailure(Definition.Id);
+                    await _indexerStatusService.RecordConnectionFailure(Definition.Id);
                 }
                 else
                 {
-                    _indexerStatusService.RecordFailure(Definition.Id);
+                    await _indexerStatusService.RecordFailure(Definition.Id);
                 }
 
                 if (webException.Message.Contains("502") || webException.Message.Contains("503") ||
@@ -245,13 +245,13 @@ namespace NzbDrone.Core.Indexers
             catch (TooManyRequestsException ex)
             {
                 var retryTime = ex.RetryAfter != TimeSpan.Zero ? ex.RetryAfter : minimumBackoff;
-                _indexerStatusService.RecordFailure(Definition.Id, retryTime);
+                await _indexerStatusService.RecordFailure(Definition.Id, retryTime);
 
                 _logger.Warn("API Request Limit reached for {0}. Disabled for {1}", this, retryTime);
             }
             catch (HttpException ex)
             {
-                _indexerStatusService.RecordFailure(Definition.Id);
+                await _indexerStatusService.RecordFailure(Definition.Id);
                 if (ex.Response.HasHttpServerError)
                 {
                     _logger.Warn("Unable to connect to {0} at [{1}]. Indexer's server is unavailable. Try again later. {2}", this, url, ex.Message);
@@ -264,18 +264,18 @@ namespace NzbDrone.Core.Indexers
             catch (RequestLimitReachedException ex)
             {
                 var retryTime = ex.RetryAfter != TimeSpan.Zero ? ex.RetryAfter : minimumBackoff;
-                _indexerStatusService.RecordFailure(Definition.Id, retryTime);
+                await _indexerStatusService.RecordFailure(Definition.Id, retryTime);
 
                 _logger.Warn("API Request Limit reached for {0}. Disabled for {1}", this, retryTime);
             }
             catch (ApiKeyException)
             {
-                _indexerStatusService.RecordFailure(Definition.Id);
+                await _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn("Invalid API Key for {0} {1}", this, url);
             }
             catch (CloudFlareCaptchaException ex)
             {
-                _indexerStatusService.RecordFailure(Definition.Id);
+                await _indexerStatusService.RecordFailure(Definition.Id);
                 ex.WithData("FeedUrl", url);
                 if (ex.IsExpired)
                 {
@@ -288,17 +288,17 @@ namespace NzbDrone.Core.Indexers
             }
             catch (TaskCanceledException ex)
             {
-                _indexerStatusService.RecordFailure(Definition.Id);
+                await _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn(ex, "Unable to connect to indexer, possibly due to a timeout. {0}", url);
             }
             catch (IndexerException ex)
             {
-                _indexerStatusService.RecordFailure(Definition.Id);
+                await _indexerStatusService.RecordFailure(Definition.Id);
                 _logger.Warn(ex, "{0}", url);
             }
             catch (Exception ex)
             {
-                _indexerStatusService.RecordFailure(Definition.Id);
+                await _indexerStatusService.RecordFailure(Definition.Id);
                 ex.WithData("FeedUrl", url);
                 _logger.Error(ex, "An error occurred while processing feed. {0}", url);
             }

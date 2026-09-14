@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
@@ -55,14 +56,14 @@ namespace NzbDrone.Core.ImportLists
             _logger = logger;
         }
 
-        private bool AllListsSuccessfulWithAPendingClean()
+        private async Task<bool> AllListsSuccessfulWithAPendingClean()
         {
-            var lists = _importListFactory.AutomaticAddEnabled(false);
+            var lists = await _importListFactory.AutomaticAddEnabled(false);
             var anyRemoved = false;
 
             foreach (var list in lists)
             {
-                var status = _importListStatusService.GetListStatus(list.Definition.Id);
+                var status = await _importListStatusService.GetListStatus(list.Definition.Id);
 
                 if (status.DisabledTill.HasValue)
                 {
@@ -82,9 +83,9 @@ namespace NzbDrone.Core.ImportLists
             return anyRemoved;
         }
 
-        private void SyncAll()
+        private async Task SyncAll()
         {
-            if (_importListFactory.AutomaticAddEnabled().Empty())
+            if ((await _importListFactory.AutomaticAddEnabled()).Empty())
             {
                 _logger.Debug("No import lists with automatic add enabled");
 
@@ -97,12 +98,12 @@ namespace NzbDrone.Core.ImportLists
 
             var listItems = result.Series.ToList();
 
-            ProcessListItems(listItems);
+            await ProcessListItems(listItems);
 
-            TryCleanLibrary();
+            await TryCleanLibrary();
         }
 
-        private void SyncList(ImportListDefinition definition)
+        private async Task SyncList(ImportListDefinition definition)
         {
             _logger.ProgressInfo("Starting Import List Refresh for List {0}", definition.Name);
 
@@ -110,12 +111,12 @@ namespace NzbDrone.Core.ImportLists
 
             var listItems = result.Series.ToList();
 
-            ProcessListItems(listItems);
+            await ProcessListItems(listItems);
 
-            TryCleanLibrary();
+            await TryCleanLibrary();
         }
 
-        private void ProcessListItems(List<ImportListItemInfo> items)
+        private async Task ProcessListItems(List<ImportListItemInfo> items)
         {
             var seriesToAdd = new List<Series>();
 
@@ -130,10 +131,10 @@ namespace NzbDrone.Core.ImportLists
 
             var reportNumber = 1;
 
-            var listExclusions = _importListExclusionService.All();
-            var importLists = _importListFactory.All();
+            var listExclusions = await _importListExclusionService.All();
+            var importLists = await _importListFactory.All();
 
-            var existingSeriesIds = _seriesService.AllSeriesTvdbIds();
+            var existingSeriesIds = await _seriesService.AllSeriesTvdbIds();
 
             var existingSeriesToUpdate = new Dictionary<int, HashSet<int>>();
 
@@ -277,8 +278,8 @@ namespace NzbDrone.Core.ImportLists
                 }
             }
 
-            _addSeriesService.AddSeries(seriesToAdd, true);
-            UpdateTagsOnPendingSeries(existingSeriesToUpdate);
+            await _addSeriesService.AddSeries(seriesToAdd, true);
+            await UpdateTagsOnPendingSeries(existingSeriesToUpdate);
 
             _logger.ProgressInfo("Import List Sync Completed. Items found: {0}, Series added: {1}", items.Count, seriesToAdd.Count);
         }
@@ -303,14 +304,14 @@ namespace NzbDrone.Core.ImportLists
             }
         }
 
-        private void UpdateTagsOnPendingSeries(Dictionary<int, HashSet<int>> existingSeriesToUpdate)
+        private async Task UpdateTagsOnPendingSeries(Dictionary<int, HashSet<int>> existingSeriesToUpdate)
         {
             if (existingSeriesToUpdate.Count == 0)
             {
                 return;
             }
 
-            var possibleSeriesToUpdate = _seriesService.GetSeries(existingSeriesToUpdate.Keys);
+            var possibleSeriesToUpdate = await _seriesService.GetSeries(existingSeriesToUpdate.Keys);
             var seriesWithUpdatedTags = new List<Series>();
 
             foreach (var series in possibleSeriesToUpdate)
@@ -330,35 +331,39 @@ namespace NzbDrone.Core.ImportLists
                 }
             }
 
-            _seriesService.UpdateTags(seriesWithUpdatedTags);
+            await _seriesService.UpdateTags(seriesWithUpdatedTags);
         }
 
         public void Execute(ImportListSyncCommand message)
         {
+            // IExecute<TCommand>.Execute is a shared app-wide command-processing interface we must not
+            // change - bridging is safe here: runs off the request thread, no SynchronizationContext to
+            // deadlock against.
             if (message.DefinitionId.HasValue)
             {
-                SyncList(_importListFactory.Get(message.DefinitionId.Value));
+                var definition = _importListFactory.Get(message.DefinitionId.Value).GetAwaiter().GetResult();
+                SyncList(definition).GetAwaiter().GetResult();
             }
             else
             {
-                SyncAll();
+                SyncAll().GetAwaiter().GetResult();
             }
         }
 
-        private void TryCleanLibrary()
+        private async Task TryCleanLibrary()
         {
             if (_configService.ListSyncLevel == ListSyncLevelType.Disabled)
             {
                 return;
             }
 
-            if (AllListsSuccessfulWithAPendingClean())
+            if (await AllListsSuccessfulWithAPendingClean())
             {
-                CleanLibrary();
+                await CleanLibrary();
             }
         }
 
-        private void CleanLibrary()
+        private async Task CleanLibrary()
         {
             if (_configService.ListSyncLevel == ListSyncLevelType.Disabled)
             {
@@ -366,7 +371,7 @@ namespace NzbDrone.Core.ImportLists
             }
 
             var seriesToUpdate = new List<Series>();
-            var seriesInLibrary = _seriesService.GetAllSeries();
+            var seriesInLibrary = await _seriesService.GetAllSeries();
             var allListItems = _importListItemService.All();
 
             foreach (var series in seriesInLibrary)
@@ -401,13 +406,16 @@ namespace NzbDrone.Core.ImportLists
                 }
             }
 
-            _seriesService.UpdateSeries(seriesToUpdate, true);
-            _importListStatusService.MarkListsAsCleaned();
+            await _seriesService.UpdateSeries(seriesToUpdate, true);
+            await _importListStatusService.MarkListsAsCleaned();
         }
 
         public void HandleAsync(ProviderDeletedEvent<IImportList> message)
         {
-            TryCleanLibrary();
+            // IHandleAsync<TEvent>.HandleAsync is a shared app-wide eventing interface we must not change
+            // (void return, despite the name) - bridging is safe here: runs off the request thread, no
+            // SynchronizationContext to deadlock against.
+            TryCleanLibrary().GetAwaiter().GetResult();
         }
     }
 }

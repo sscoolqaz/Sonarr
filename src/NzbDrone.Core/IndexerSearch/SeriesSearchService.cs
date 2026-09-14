@@ -32,7 +32,10 @@ namespace NzbDrone.Core.IndexerSearch
 
         public void Execute(SeriesSearchCommand message)
         {
-            var series = _seriesService.GetSeries(message.SeriesId);
+            // IExecute<TCommand>.Execute is a shared app-wide command-processing interface we must not
+            // change - bridging is safe here (this file already bridges the release-search/decision calls
+            // below the same way): runs off the request thread, no SynchronizationContext to deadlock against.
+            var series = _seriesService.GetSeries(message.SeriesId).GetAwaiter().GetResult();
             var downloadedCount = 0;
             var userInvokedSearch = message.Trigger == CommandTrigger.Manual;
             var profile = series.QualityProfile.Value;
@@ -41,7 +44,7 @@ namespace NzbDrone.Core.IndexerSearch
             {
                 _logger.Debug("No seasons of {0} are monitored, searching for all monitored episodes", series.Title);
 
-                var episodes = _episodeService.GetEpisodeBySeries(series.Id)
+                var episodes = _episodeService.GetEpisodeBySeries(series.Id).GetAwaiter().GetResult()
                     .Where(e => e.Monitored &&
                                 !e.HasFile &&
                                 e.AirDateUtc.HasValue &&

@@ -25,7 +25,10 @@ namespace NzbDrone.Core.HealthCheck.Checks
 
         public override HealthCheck Check()
         {
-            var jackettAllProviders = _providerFactory.All()
+            // IProvideHealthCheck.Check() is a synchronous base (HealthCheckBase, 28 implementers app-wide,
+            // outside this pass's scope) - bridging is safe here: runs off the request thread, no
+            // SynchronizationContext to deadlock against.
+            var jackettAllProviders = _providerFactory.All().GetAwaiter().GetResult()
                 .Where(
                     i => i.Enable &&
                          i.ConfigContract.Equals("TorznabSettings") &&

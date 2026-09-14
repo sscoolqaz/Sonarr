@@ -48,7 +48,11 @@ namespace NzbDrone.Core.ImportLists.Simkl
                 RefreshToken();
             }
 
-            var lastFetch = _importListStatusService.GetListStatus(Definition.Id).LastInfoSync;
+            // IImportList.Fetch() is a synchronous plugin-style interface shared by ~9 base/concrete
+            // implementations app-wide, most outside this pass's scope (see FetchAndParseImportListService's
+            // judgment-call note) - bridging is safe here: runs off the request thread, no
+            // SynchronizationContext to deadlock against.
+            var lastFetch = _importListStatusService.GetListStatus(Definition.Id).GetAwaiter().GetResult().LastInfoSync;
             var lastActivity = GetLastActivity();
 
             // Check to see if user has any activity since last sync, if not return empty to avoid work
@@ -182,7 +186,7 @@ namespace NzbDrone.Core.ImportLists.Simkl
 
                     if (Definition.Id > 0)
                     {
-                        _importListRepository.UpdateSettings((ImportListDefinition)Definition);
+                        _importListRepository.UpdateSettings((ImportListDefinition)Definition).GetAwaiter().GetResult();
                     }
                 }
             }

@@ -41,7 +41,10 @@ namespace NzbDrone.Core.HealthCheck.Checks
             // Only check clients not in failure status, those get another message
             var clients = _downloadClientProvider.GetDownloadClients(true);
 
-            var rootFolders = _rootFolderService.All();
+            // IProvideHealthCheck.Check() is a synchronous base (HealthCheckBase, 28 implementers app-wide,
+            // outside this pass's scope) - bridging is safe here: runs off the request thread, no
+            // SynchronizationContext to deadlock against.
+            var rootFolders = _rootFolderService.All().GetAwaiter().GetResult();
 
             foreach (var client in clients)
             {

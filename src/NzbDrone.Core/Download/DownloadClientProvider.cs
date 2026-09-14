@@ -63,7 +63,13 @@ namespace NzbDrone.Core.Download
 
         public IEnumerable<IDownloadClient> GetDownloadClients(bool filterBlockedClients = false)
         {
-            var enabledClients = _downloadClientFactory.GetAvailableProviders();
+            // IProvideDownloadClient is consumed synchronously by several files outside this conversion
+            // pass's scope (DownloadEventHub, ProvideImportItemService, multiple HealthCheck classes, and
+            // the V3/V5 QueueControllers, which are a later controller-conversion pass) - keeping this
+            // interface sync and bridging the now-async factory/status-service calls internally avoids
+            // rippling a breaking signature change into those files. Safe: runs off the request thread,
+            // no SynchronizationContext to deadlock against. Flagged in the conversion report.
+            var enabledClients = _downloadClientFactory.GetAvailableProviders().GetAwaiter().GetResult();
 
             if (filterBlockedClients)
             {
@@ -113,7 +119,7 @@ namespace NzbDrone.Core.Download
 
         public IDownloadClient Get(int id)
         {
-            return _downloadClientFactory.GetAvailableProviders().Single(d => d.Definition.Id == id);
+            return _downloadClientFactory.GetAvailableProviders().GetAwaiter().GetResult().Single(d => d.Definition.Id == id);
         }
 
         public void ReportSuccessfulDownloadClient(DownloadProtocol downloadProtocol, int downloadClientId)
@@ -123,7 +129,7 @@ namespace NzbDrone.Core.Download
 
         public DownloadClientDefinition ResolveDownloadClient(int? downloadClientId, string downloadClientName)
         {
-            var all = _downloadClientFactory.All();
+            var all = _downloadClientFactory.All().GetAwaiter().GetResult();
             var clientByName = downloadClientName.IsNullOrWhiteSpace() ? null : all.FirstOrDefault(c => c.Name.EqualsIgnoreCase(downloadClientName));
             var clientById = downloadClientId.HasValue ? all.FirstOrDefault(c => c.Id == downloadClientId.Value) : null;
 
@@ -159,7 +165,7 @@ namespace NzbDrone.Core.Download
 
         private IEnumerable<IDownloadClient> FilterBlockedDownloadClients(IEnumerable<IDownloadClient> clients)
         {
-            var blockedClients = _downloadClientStatusService.GetBlockedProviders().ToDictionary(v => v.ProviderId, v => v);
+            var blockedClients = _downloadClientStatusService.GetBlockedProviders().GetAwaiter().GetResult().ToDictionary(v => v.ProviderId, v => v);
 
             foreach (var client in clients)
             {
@@ -179,8 +185,8 @@ namespace NzbDrone.Core.Download
             // Defaulting to an empty HashSet ensures this is always checked.
             tags ??= new HashSet<int>();
 
-            var blockedProviders = new HashSet<int>(_downloadClientStatusService.GetBlockedProviders().Select(v => v.ProviderId));
-            var availableProviders = _downloadClientFactory.GetAvailableProviders().Where(v => v.Protocol == downloadProtocol).ToList();
+            var blockedProviders = new HashSet<int>(_downloadClientStatusService.GetBlockedProviders().GetAwaiter().GetResult().Select(v => v.ProviderId));
+            var availableProviders = _downloadClientFactory.GetAvailableProviders().GetAwaiter().GetResult().Where(v => v.Protocol == downloadProtocol).ToList();
 
             if (availableProviders.Empty())
             {
@@ -200,7 +206,7 @@ namespace NzbDrone.Core.Download
 
             if (indexerId > 0)
             {
-                var indexer = _indexerFactory.Find(indexerId);
+                var indexer = _indexerFactory.Find(indexerId).GetAwaiter().GetResult();
 
                 if (indexer is { DownloadClientId: > 0 })
                 {

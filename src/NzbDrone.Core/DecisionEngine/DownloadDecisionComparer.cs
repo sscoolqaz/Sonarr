@@ -87,9 +87,11 @@ namespace NzbDrone.Core.DecisionEngine
 
         private int CompareProtocol(DownloadDecision x, DownloadDecision y)
         {
+            // IComparer<T>.Compare is a synchronous BCL interface - a framework seam we can't make async.
+            // Bridging is safe here: runs off the request thread, no SynchronizationContext to deadlock against.
             var result = CompareBy(x.RemoteEpisode, y.RemoteEpisode, remoteEpisode =>
             {
-                var delayProfile = _delayProfileService.BestForTags(remoteEpisode.Series.Tags);
+                var delayProfile = _delayProfileService.BestForTags(remoteEpisode.Series.Tags).GetAwaiter().GetResult();
                 var downloadProtocol = remoteEpisode.Release.DownloadProtocol;
                 return downloadProtocol == delayProfile.PreferredProtocol;
             });

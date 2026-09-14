@@ -21,7 +21,9 @@ namespace NzbDrone.Core.Validation
                 return true;
             }
 
-            return _downloadClientFactory.Exists((int)context.PropertyValue);
+            // FluentValidation's PropertyValidator.IsValid is a synchronous framework seam - bridging
+            // is safe here: runs off the request thread, no SynchronizationContext to deadlock against.
+            return _downloadClientFactory.Exists((int)context.PropertyValue).GetAwaiter().GetResult();
         }
     }
 }

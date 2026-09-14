@@ -26,7 +26,11 @@ namespace NzbDrone.Core.Indexers.BroadcastheNet
         {
             var requestGenerator = new BroadcastheNetRequestGenerator { Settings = Settings, PageSize = PageSize };
 
-            var releaseInfo = _indexerStatusService.GetLastRssSyncReleaseInfo(Definition.Id);
+            // GetRequestGenerator() is a synchronous abstract method on HttpIndexerBase shared by 11
+            // concrete indexer implementations app-wide, only this one in this pass's scope - bridging
+            // here avoids rippling a breaking signature change into the other 10. Safe: runs off the
+            // request thread, no SynchronizationContext to deadlock against.
+            var releaseInfo = _indexerStatusService.GetLastRssSyncReleaseInfo(Definition.Id).GetAwaiter().GetResult();
 
             if (releaseInfo != null && int.TryParse(releaseInfo.Guid.Replace("BTN-", string.Empty), out var torrentId))
             {

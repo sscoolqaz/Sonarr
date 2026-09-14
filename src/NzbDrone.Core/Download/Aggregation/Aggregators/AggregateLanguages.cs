@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Core.Indexers;
@@ -22,7 +23,7 @@ namespace NzbDrone.Core.Download.Aggregation.Aggregators
             _logger = logger;
         }
 
-        public RemoteEpisode Aggregate(RemoteEpisode remoteEpisode)
+        public async Task<RemoteEpisode> Aggregate(RemoteEpisode remoteEpisode)
         {
             var parsedEpisodeInfo = remoteEpisode.ParsedEpisodeInfo;
             var releaseInfo = remoteEpisode.Release;
@@ -82,12 +83,12 @@ namespace NzbDrone.Core.Download.Aggregation.Aggregators
 
                 if (releaseInfo is { IndexerId: > 0 })
                 {
-                    indexer = _indexerFactory.Find(releaseInfo.IndexerId);
+                    indexer = await _indexerFactory.Find(releaseInfo.IndexerId);
                 }
 
                 if (indexer == null && releaseInfo.Indexer?.IsNotNullOrWhiteSpace() == true)
                 {
-                    indexer = _indexerFactory.FindByName(releaseInfo.Indexer);
+                    indexer = await _indexerFactory.FindByName(releaseInfo.Indexer);
                 }
 
                 if (indexer?.Settings is IIndexerSettings settings && settings.MultiLanguages.Any() && Parser.Parser.HasMultipleLanguages(releaseInfo.Title))

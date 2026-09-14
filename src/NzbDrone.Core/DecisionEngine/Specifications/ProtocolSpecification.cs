@@ -22,7 +22,10 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
 
         public virtual DownloadSpecDecision IsSatisfiedBy(RemoteEpisode subject, ReleaseDecisionInformation information)
         {
-            var delayProfile = _delayProfileService.BestForTags(subject.Series.Tags);
+            // IDownloadDecisionEngineSpecification.IsSatisfiedBy stays sync (widely-shared, 30+ implementers -
+            // see DownloadDecisionMaker report notes). Bridging is safe: runs off the request thread and
+            // ASP.NET Core carries no SynchronizationContext, so this can't deadlock.
+            var delayProfile = _delayProfileService.BestForTags(subject.Series.Tags).GetAwaiter().GetResult();
 
             if (subject.Release.DownloadProtocol == DownloadProtocol.Usenet && !delayProfile.EnableUsenet)
             {

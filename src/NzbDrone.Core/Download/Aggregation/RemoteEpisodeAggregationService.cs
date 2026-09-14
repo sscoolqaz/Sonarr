@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Download.Aggregation.Aggregators;
 using NzbDrone.Core.Parser.Model;
@@ -8,7 +9,7 @@ namespace NzbDrone.Core.Download.Aggregation
 {
     public interface IRemoteEpisodeAggregationService
     {
-        RemoteEpisode Augment(RemoteEpisode remoteEpisode);
+        Task<RemoteEpisode> Augment(RemoteEpisode remoteEpisode);
     }
 
     public class RemoteEpisodeAggregationService : IRemoteEpisodeAggregationService
@@ -23,7 +24,7 @@ namespace NzbDrone.Core.Download.Aggregation
             _logger = logger;
         }
 
-        public RemoteEpisode Augment(RemoteEpisode remoteEpisode)
+        public async Task<RemoteEpisode> Augment(RemoteEpisode remoteEpisode)
         {
             if (remoteEpisode == null)
             {
@@ -34,7 +35,7 @@ namespace NzbDrone.Core.Download.Aggregation
             {
                 try
                 {
-                    augmenter.Aggregate(remoteEpisode);
+                    await augmenter.Aggregate(remoteEpisode);
                 }
                 catch (Exception ex)
                 {

@@ -31,7 +31,11 @@ namespace NzbDrone.Core.DecisionEngine.Specifications.RssSync
             IndexerDefinition indexer;
             try
             {
-                indexer = _indexerFactory.Get(subject.Release.IndexerId);
+                // IDownloadDecisionEngineSpecification.IsSatisfiedBy stays sync (widely-shared, 30+ implementers -
+                // see DownloadDecisionMaker report notes). Bridging is safe: runs off the request thread and
+                // ASP.NET Core carries no SynchronizationContext, so this can't deadlock. GetAwaiter().GetResult()
+                // rethrows the original exception (not wrapped), so the ModelNotFoundException catch still works.
+                indexer = _indexerFactory.Get(subject.Release.IndexerId).GetAwaiter().GetResult();
             }
             catch (ModelNotFoundException)
             {

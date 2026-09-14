@@ -14,6 +14,14 @@ namespace NzbDrone.Core.ImportLists
         ImportListFetchResult FetchSingleList(ImportListDefinition definition);
     }
 
+    // JUDGMENT CALL (flagged in the Phase 3 async-migration report): IImportList.Fetch() (the plugin-style
+    // per-provider interface, ~9 base/concrete implementations spanning AniList/Trakt/Rss/MyAnimeList/
+    // Plex/Simkl/Custom/Sonarr and their own subclasses) is NOT part of the already-completed ThingiProvider
+    // conversion and is large enough that converting it would expand this pass far outside its declared
+    // scope (only SimklImportBase.cs is assigned here). Kept synchronous; this class's own two public
+    // methods stay synchronous too (they already use TaskFactory.StartNew + Task.WaitAll as a deliberate
+    // blocking-parallel-fetch pattern, unrelated to async/await), bridging the now-async status-service
+    // calls internally. Safe: runs off the request thread, no SynchronizationContext to deadlock against.
     public class FetchAndParseImportListService : IFetchAndParseImportList
     {
         private readonly IImportListFactory _importListFactory;
@@ -33,7 +41,7 @@ namespace NzbDrone.Core.ImportLists
         {
             var result = new ImportListFetchResult();
 
-            var importLists = _importListFactory.AutomaticAddEnabled();
+            var importLists = _importListFactory.AutomaticAddEnabled().GetAwaiter().GetResult();
 
             if (!importLists.Any())
             {
@@ -49,7 +57,7 @@ namespace NzbDrone.Core.ImportLists
             foreach (var importList in importLists)
             {
                 var importListLocal = importList;
-                var importListStatus = _importListStatusService.GetListStatus(importListLocal.Definition.Id).LastInfoSync;
+                var importListStatus = _importListStatusService.GetListStatus(importListLocal.Definition.Id).GetAwaiter().GetResult().LastInfoSync;
 
                 if (importListStatus.HasValue)
                 {
@@ -78,7 +86,7 @@ namespace NzbDrone.Core.ImportLists
                                      importListReports.ForEach(s => s.ImportListId = importList.Definition.Id);
                                      result.Series.AddRange(importListReports);
                                      var removed = _importListItemService.SyncSeriesForList(importListReports, importList.Definition.Id);
-                                     _importListStatusService.UpdateListSyncStatus(importList.Definition.Id, removed > 0);
+                                     _importListStatusService.UpdateListSyncStatus(importList.Definition.Id, removed > 0).GetAwaiter().GetResult();
                                  }
 
                                  result.AnyFailure |= fetchResult.AnyFailure;
@@ -135,7 +143,7 @@ namespace NzbDrone.Core.ImportLists
                             importListReports.ForEach(s => s.ImportListId = importList.Definition.Id);
                             result.Series.AddRange(importListReports);
                             var removed = _importListItemService.SyncSeriesForList(importListReports, importList.Definition.Id);
-                            _importListStatusService.UpdateListSyncStatus(importList.Definition.Id, removed > 0);
+                            _importListStatusService.UpdateListSyncStatus(importList.Definition.Id, removed > 0).GetAwaiter().GetResult();
                         }
 
                         result.AnyFailure |= fetchResult.AnyFailure;

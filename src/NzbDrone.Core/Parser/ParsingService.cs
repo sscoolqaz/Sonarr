@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
@@ -13,13 +14,13 @@ namespace NzbDrone.Core.Parser
 {
     public interface IParsingService
     {
-        Series GetSeries(string title);
-        RemoteEpisode Map(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null);
-        RemoteEpisode Map(ParsedEpisodeInfo parsedEpisodeInfo, Series series);
-        RemoteEpisode Map(ParsedEpisodeInfo parsedEpisodeInfo, int seriesId, IEnumerable<int> episodeIds);
-        List<Episode> GetEpisodes(ParsedEpisodeInfo parsedEpisodeInfo, Series series, bool sceneSource, SearchCriteriaBase searchCriteria = null);
-        ParsedEpisodeInfo ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null);
-        ParsedEpisodeInfo ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, Series series);
+        Task<Series> GetSeries(string title);
+        Task<RemoteEpisode> Map(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null);
+        Task<RemoteEpisode> Map(ParsedEpisodeInfo parsedEpisodeInfo, Series series);
+        Task<RemoteEpisode> Map(ParsedEpisodeInfo parsedEpisodeInfo, int seriesId, IEnumerable<int> episodeIds);
+        Task<List<Episode>> GetEpisodes(ParsedEpisodeInfo parsedEpisodeInfo, Series series, bool sceneSource, SearchCriteriaBase searchCriteria = null);
+        Task<ParsedEpisodeInfo> ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null);
+        Task<ParsedEpisodeInfo> ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, Series series);
     }
 
     public class ParsingService : IParsingService
@@ -40,39 +41,39 @@ namespace NzbDrone.Core.Parser
             _logger = logger;
         }
 
-        public Series GetSeries(string title)
+        public async Task<Series> GetSeries(string title)
         {
             var parsedEpisodeInfo = Parser.ParseTitle(title);
 
             if (parsedEpisodeInfo == null)
             {
-                return _seriesService.FindByTitle(title);
+                return await _seriesService.FindByTitle(title);
             }
 
-            var tvdbId = _sceneMappingService.FindTvdbId(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
+            var tvdbId = await _sceneMappingService.FindTvdbId(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
 
             if (tvdbId.HasValue)
             {
-                return _seriesService.FindByTvdbId(tvdbId.Value);
+                return await _seriesService.FindByTvdbId(tvdbId.Value);
             }
 
-            var series = _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitle);
+            var series = await _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitle);
 
             if (series == null && parsedEpisodeInfo.SeriesTitleInfo.AllTitles != null)
             {
-                series = GetSeriesByAllTitles(parsedEpisodeInfo);
+                series = await GetSeriesByAllTitles(parsedEpisodeInfo);
             }
 
             if (series == null)
             {
-                series = _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitleInfo.TitleWithoutYear,
+                series = await _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitleInfo.TitleWithoutYear,
                                                     parsedEpisodeInfo.SeriesTitleInfo.Year);
             }
 
             return series;
         }
 
-        private Series GetSeriesByAllTitles(ParsedEpisodeInfo parsedEpisodeInfo)
+        private async Task<Series> GetSeriesByAllTitles(ParsedEpisodeInfo parsedEpisodeInfo)
         {
             var year = parsedEpisodeInfo.SeriesTitleInfo.Year;
             Series foundSeries = null;
@@ -85,25 +86,25 @@ namespace NzbDrone.Core.Parser
 
                 if (year > 0)
                 {
-                    series = _seriesService.FindByTitle(title, year);
+                    series = await _seriesService.FindByTitle(title, year);
 
                     // Fall back to title + year being part of the title, this will allow
                     // matching series with the same name that include the year in the title.
                     if (series == null)
                     {
-                        series = _seriesService.FindByTitle($"{title} {year}");
+                        series = await _seriesService.FindByTitle($"{title} {year}");
                     }
                 }
                 else
                 {
-                    series = _seriesService.FindByTitle(title);
+                    series = await _seriesService.FindByTitle(title);
                 }
 
                 var tvdbId = series?.TvdbId;
 
                 if (series == null)
                 {
-                    tvdbId = _sceneMappingService.FindTvdbId(title, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
+                    tvdbId = await _sceneMappingService.FindTvdbId(title, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
                 }
 
                 if (!tvdbId.HasValue)
@@ -128,21 +129,21 @@ namespace NzbDrone.Core.Parser
 
             if (foundSeries == null && foundTvdbId.HasValue)
             {
-                foundSeries = _seriesService.FindByTvdbId(foundTvdbId.Value);
+                foundSeries = await _seriesService.FindByTvdbId(foundTvdbId.Value);
             }
 
             return foundSeries;
         }
 
-        private Series GetSeriesAliasTitleAndYear(ParsedEpisodeInfo parsedEpisodeInfo)
+        private async Task<Series> GetSeriesAliasTitleAndYear(ParsedEpisodeInfo parsedEpisodeInfo)
         {
             var year = parsedEpisodeInfo.SeriesTitleInfo.Year;
             var titleWithoutyear = parsedEpisodeInfo.SeriesTitleInfo.TitleWithoutYear;
-            var tvdbId = _sceneMappingService.FindTvdbId(titleWithoutyear, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
+            var tvdbId = await _sceneMappingService.FindTvdbId(titleWithoutyear, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
 
             if (tvdbId.HasValue)
             {
-                var series = _seriesService.FindByTvdbId(tvdbId.Value);
+                var series = await _seriesService.FindByTvdbId(tvdbId.Value);
 
                 if (series != null && series.Year == year)
                 {
@@ -153,29 +154,29 @@ namespace NzbDrone.Core.Parser
             return null;
         }
 
-        public RemoteEpisode Map(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null)
+        public Task<RemoteEpisode> Map(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null)
         {
             return Map(parsedEpisodeInfo, tvdbId, tvRageId, imdbId, null, searchCriteria);
         }
 
-        public RemoteEpisode Map(ParsedEpisodeInfo parsedEpisodeInfo, Series series)
+        public Task<RemoteEpisode> Map(ParsedEpisodeInfo parsedEpisodeInfo, Series series)
         {
             return Map(parsedEpisodeInfo, 0, 0, null, series, null);
         }
 
-        public RemoteEpisode Map(ParsedEpisodeInfo parsedEpisodeInfo, int seriesId, IEnumerable<int> episodeIds)
+        public async Task<RemoteEpisode> Map(ParsedEpisodeInfo parsedEpisodeInfo, int seriesId, IEnumerable<int> episodeIds)
         {
             return new RemoteEpisode
                    {
                        ParsedEpisodeInfo = parsedEpisodeInfo,
-                       Series = _seriesService.GetSeries(seriesId),
-                       Episodes = _episodeService.GetEpisodes(episodeIds)
+                       Series = await _seriesService.GetSeries(seriesId),
+                       Episodes = await _episodeService.GetEpisodes(episodeIds)
                    };
         }
 
-        private RemoteEpisode Map(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, Series series, SearchCriteriaBase searchCriteria)
+        private async Task<RemoteEpisode> Map(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, Series series, SearchCriteriaBase searchCriteria)
         {
-            var sceneMapping = _sceneMappingService.FindSceneMapping(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
+            var sceneMapping = await _sceneMappingService.FindSceneMapping(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
 
             var remoteEpisode = new RemoteEpisode
             {
@@ -209,7 +210,7 @@ namespace NzbDrone.Core.Parser
 
             if (series == null)
             {
-                var seriesMatch = FindSeries(parsedEpisodeInfo, tvdbId, tvRageId, imdbId, sceneMapping, searchCriteria);
+                var seriesMatch = await FindSeries(parsedEpisodeInfo, tvdbId, tvRageId, imdbId, sceneMapping, searchCriteria);
 
                 if (seriesMatch != null)
                 {
@@ -224,7 +225,7 @@ namespace NzbDrone.Core.Parser
 
                 if (ValidateParsedEpisodeInfo.ValidateForSeriesType(parsedEpisodeInfo, series))
                 {
-                    remoteEpisode.Episodes = GetEpisodes(parsedEpisodeInfo, series, remoteEpisode.MappedSeasonNumber, sceneSource, searchCriteria);
+                    remoteEpisode.Episodes = await GetEpisodes(parsedEpisodeInfo, series, remoteEpisode.MappedSeasonNumber, sceneSource, searchCriteria);
                 }
             }
 
@@ -244,25 +245,25 @@ namespace NzbDrone.Core.Parser
             return remoteEpisode;
         }
 
-        public List<Episode> GetEpisodes(ParsedEpisodeInfo parsedEpisodeInfo, Series series, bool sceneSource, SearchCriteriaBase searchCriteria = null)
+        public async Task<List<Episode>> GetEpisodes(ParsedEpisodeInfo parsedEpisodeInfo, Series series, bool sceneSource, SearchCriteriaBase searchCriteria = null)
         {
             if (sceneSource)
             {
-                var remoteEpisode = Map(parsedEpisodeInfo, 0, 0, null, series, searchCriteria);
+                var remoteEpisode = await Map(parsedEpisodeInfo, 0, 0, null, series, searchCriteria);
 
                 return remoteEpisode.Episodes;
             }
 
-            return GetEpisodes(parsedEpisodeInfo, series, parsedEpisodeInfo.SeasonNumber, sceneSource, searchCriteria);
+            return await GetEpisodes(parsedEpisodeInfo, series, parsedEpisodeInfo.SeasonNumber, sceneSource, searchCriteria);
         }
 
-        private List<Episode> GetEpisodes(ParsedEpisodeInfo parsedEpisodeInfo, Series series, int mappedSeasonNumber, bool sceneSource, SearchCriteriaBase searchCriteria)
+        private async Task<List<Episode>> GetEpisodes(ParsedEpisodeInfo parsedEpisodeInfo, Series series, int mappedSeasonNumber, bool sceneSource, SearchCriteriaBase searchCriteria)
         {
             if (parsedEpisodeInfo.FullSeason)
             {
                 if (series.UseSceneNumbering && sceneSource)
                 {
-                    var episodes = _episodeService.GetEpisodesBySceneSeason(series.Id, mappedSeasonNumber);
+                    var episodes = await _episodeService.GetEpisodesBySceneSeason(series.Id, mappedSeasonNumber);
 
                     // If episodes were found by the scene season number return them, otherwise fallback to look-up by season number
                     if (episodes.Any())
@@ -271,12 +272,12 @@ namespace NzbDrone.Core.Parser
                     }
                 }
 
-                return _episodeService.GetEpisodesBySeason(series.Id, mappedSeasonNumber);
+                return await _episodeService.GetEpisodesBySeason(series.Id, mappedSeasonNumber);
             }
 
             if (parsedEpisodeInfo.IsDaily)
             {
-                var episodeInfo = GetDailyEpisode(series, parsedEpisodeInfo.AirDate, parsedEpisodeInfo.DailyPart, searchCriteria);
+                var episodeInfo = await GetDailyEpisode(series, parsedEpisodeInfo.AirDate, parsedEpisodeInfo.DailyPart, searchCriteria);
 
                 if (episodeInfo != null)
                 {
@@ -288,17 +289,17 @@ namespace NzbDrone.Core.Parser
 
             if (parsedEpisodeInfo.IsAbsoluteNumbering)
             {
-                return GetAnimeEpisodes(series, parsedEpisodeInfo, mappedSeasonNumber, sceneSource, searchCriteria);
+                return await GetAnimeEpisodes(series, parsedEpisodeInfo, mappedSeasonNumber, sceneSource, searchCriteria);
             }
 
             if (parsedEpisodeInfo.IsPossibleSceneSeasonSpecial)
             {
-                var parsedSpecialEpisodeInfo = ParseSpecialEpisodeTitle(parsedEpisodeInfo, parsedEpisodeInfo.ReleaseTitle, series);
+                var parsedSpecialEpisodeInfo = await ParseSpecialEpisodeTitle(parsedEpisodeInfo, parsedEpisodeInfo.ReleaseTitle, series);
 
                 if (parsedSpecialEpisodeInfo != null)
                 {
                     // Use the season number and disable scene source since the season/episode numbers that were returned are not scene numbers
-                    return GetStandardEpisodes(series, parsedSpecialEpisodeInfo, parsedSpecialEpisodeInfo.SeasonNumber, false, searchCriteria);
+                    return await GetStandardEpisodes(series, parsedSpecialEpisodeInfo, parsedSpecialEpisodeInfo.SeasonNumber, false, searchCriteria);
                 }
             }
 
@@ -307,49 +308,49 @@ namespace NzbDrone.Core.Parser
                 return new List<Episode>();
             }
 
-            return GetStandardEpisodes(series, parsedEpisodeInfo, mappedSeasonNumber, sceneSource, searchCriteria);
+            return await GetStandardEpisodes(series, parsedEpisodeInfo, mappedSeasonNumber, sceneSource, searchCriteria);
         }
 
-        public ParsedEpisodeInfo ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null)
+        public async Task<ParsedEpisodeInfo> ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, int tvdbId, int tvRageId, string imdbId, SearchCriteriaBase searchCriteria = null)
         {
             if (searchCriteria != null)
             {
                 if (tvdbId != 0 && tvdbId == searchCriteria.Series.TvdbId)
                 {
-                    return ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, searchCriteria.Series);
+                    return await ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, searchCriteria.Series);
                 }
 
                 if (tvRageId != 0 && tvRageId == searchCriteria.Series.TvRageId)
                 {
-                    return ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, searchCriteria.Series);
+                    return await ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, searchCriteria.Series);
                 }
 
                 if (imdbId.IsNotNullOrWhiteSpace() && imdbId.Equals(searchCriteria.Series.ImdbId, StringComparison.Ordinal))
                 {
-                    return ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, searchCriteria.Series);
+                    return await ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, searchCriteria.Series);
                 }
             }
 
-            var series = GetSeries(releaseTitle);
+            var series = await GetSeries(releaseTitle);
 
             if (series == null)
             {
-                series = _seriesService.FindByTitleInexact(releaseTitle);
+                series = await _seriesService.FindByTitleInexact(releaseTitle);
             }
 
             if (series == null && tvdbId > 0)
             {
-                series = _seriesService.FindByTvdbId(tvdbId);
+                series = await _seriesService.FindByTvdbId(tvdbId);
             }
 
             if (series == null && tvRageId > 0)
             {
-                series = _seriesService.FindByTvRageId(tvRageId);
+                series = await _seriesService.FindByTvRageId(tvRageId);
             }
 
             if (series == null && imdbId.IsNotNullOrWhiteSpace())
             {
-                series = _seriesService.FindByImdbId(imdbId);
+                series = await _seriesService.FindByImdbId(imdbId);
             }
 
             if (series == null)
@@ -358,22 +359,24 @@ namespace NzbDrone.Core.Parser
                 return null;
             }
 
-            return ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, series);
+            return await ParseSpecialEpisodeTitle(parsedEpisodeInfo, releaseTitle, series);
         }
 
-        public ParsedEpisodeInfo ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, Series series)
+        public async Task<ParsedEpisodeInfo> ParseSpecialEpisodeTitle(ParsedEpisodeInfo parsedEpisodeInfo, string releaseTitle, Series series)
         {
             // SxxE00 episodes are sometimes mapped via TheXEM, don't use episode title parsing in that case.
             if (parsedEpisodeInfo != null && parsedEpisodeInfo.IsPossibleSceneSeasonSpecial && series.UseSceneNumbering)
             {
-                if (_episodeService.FindEpisodesBySceneNumbering(series.Id, parsedEpisodeInfo.SeasonNumber, 0).Any())
+                var sceneEpisodes = await _episodeService.FindEpisodesBySceneNumbering(series.Id, parsedEpisodeInfo.SeasonNumber, 0);
+
+                if (sceneEpisodes.Any())
                 {
                     return parsedEpisodeInfo;
                 }
             }
 
             // find special episode in series season 0
-            var episode = _episodeService.FindEpisodeByTitle(series.Id, 0, releaseTitle);
+            var episode = await _episodeService.FindEpisodeByTitle(series.Id, 0, releaseTitle);
 
             if (episode != null)
             {
@@ -402,7 +405,7 @@ namespace NzbDrone.Core.Parser
             return null;
         }
 
-        private FindSeriesResult FindSeries(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, SceneMapping sceneMapping, SearchCriteriaBase searchCriteria)
+        private async Task<FindSeriesResult> FindSeries(ParsedEpisodeInfo parsedEpisodeInfo, int tvdbId, int tvRageId, string imdbId, SceneMapping sceneMapping, SearchCriteriaBase searchCriteria)
         {
             Series series = null;
 
@@ -413,7 +416,7 @@ namespace NzbDrone.Core.Parser
                     return new FindSeriesResult(searchCriteria.Series, SeriesMatchType.Alias);
                 }
 
-                series = _seriesService.FindByTvdbId(sceneMapping.TvdbId);
+                series = await _seriesService.FindByTvdbId(sceneMapping.TvdbId);
 
                 if (series == null)
                 {
@@ -469,7 +472,7 @@ namespace NzbDrone.Core.Parser
             }
 
             var matchType = SeriesMatchType.Unknown;
-            series = _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitle);
+            series = await _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitle);
 
             if (series != null)
             {
@@ -478,25 +481,25 @@ namespace NzbDrone.Core.Parser
 
             if (series == null && parsedEpisodeInfo.SeriesTitleInfo.AllTitles != null)
             {
-                series = GetSeriesByAllTitles(parsedEpisodeInfo);
+                series = await GetSeriesByAllTitles(parsedEpisodeInfo);
                 matchType = SeriesMatchType.Title;
             }
 
             if (series == null && parsedEpisodeInfo.SeriesTitleInfo.Year > 0)
             {
-                series = _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitleInfo.TitleWithoutYear, parsedEpisodeInfo.SeriesTitleInfo.Year);
+                series = await _seriesService.FindByTitle(parsedEpisodeInfo.SeriesTitleInfo.TitleWithoutYear, parsedEpisodeInfo.SeriesTitleInfo.Year);
                 matchType = SeriesMatchType.Title;
 
                 if (series == null)
                 {
-                    series = GetSeriesAliasTitleAndYear(parsedEpisodeInfo);
+                    series = await GetSeriesAliasTitleAndYear(parsedEpisodeInfo);
                     matchType = SeriesMatchType.Alias;
                 }
             }
 
             if (series == null && tvdbId > 0)
             {
-                series = _seriesService.FindByTvdbId(tvdbId);
+                series = await _seriesService.FindByTvdbId(tvdbId);
 
                 if (series != null)
                 {
@@ -513,7 +516,7 @@ namespace NzbDrone.Core.Parser
 
             if (series == null && tvRageId > 0 && tvdbId <= 0)
             {
-                series = _seriesService.FindByTvRageId(tvRageId);
+                series = await _seriesService.FindByTvRageId(tvRageId);
 
                 if (series != null)
                 {
@@ -530,7 +533,7 @@ namespace NzbDrone.Core.Parser
 
             if (series == null && imdbId.IsNotNullOrWhiteSpace() && tvdbId <= 0)
             {
-                series = _seriesService.FindByImdbId(imdbId);
+                series = await _seriesService.FindByImdbId(imdbId);
 
                 if (series != null)
                 {
@@ -554,7 +557,7 @@ namespace NzbDrone.Core.Parser
             return new FindSeriesResult(series, matchType);
         }
 
-        private Episode GetDailyEpisode(Series series, string airDate, int? part, SearchCriteriaBase searchCriteria)
+        private async Task<Episode> GetDailyEpisode(Series series, string airDate, int? part, SearchCriteriaBase searchCriteria)
         {
             Episode episodeInfo = null;
 
@@ -566,17 +569,17 @@ namespace NzbDrone.Core.Parser
 
             if (episodeInfo == null)
             {
-                episodeInfo = _episodeService.FindEpisode(series.Id, airDate, part);
+                episodeInfo = await _episodeService.FindEpisode(series.Id, airDate, part);
             }
 
             return episodeInfo;
         }
 
-        private List<Episode> GetAnimeEpisodes(Series series, ParsedEpisodeInfo parsedEpisodeInfo, int seasonNumber, bool sceneSource, SearchCriteriaBase searchCriteria)
+        private async Task<List<Episode>> GetAnimeEpisodes(Series series, ParsedEpisodeInfo parsedEpisodeInfo, int seasonNumber, bool sceneSource, SearchCriteriaBase searchCriteria)
         {
             var result = new List<Episode>();
 
-            var sceneSeasonNumber = _sceneMappingService.GetSceneSeasonNumber(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle);
+            var sceneSeasonNumber = await _sceneMappingService.GetSceneSeasonNumber(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle);
 
             foreach (var absoluteEpisodeNumber in parsedEpisodeInfo.AbsoluteEpisodeNumbers)
             {
@@ -584,7 +587,7 @@ namespace NzbDrone.Core.Parser
 
                 if (parsedEpisodeInfo.Special)
                 {
-                    var episode = _episodeService.FindEpisode(series.Id, 0, absoluteEpisodeNumber);
+                    var episode = await _episodeService.FindEpisode(series.Id, 0, absoluteEpisodeNumber);
                     episodes.AddIfNotNull(episode);
                 }
                 else if (sceneSource)
@@ -594,27 +597,27 @@ namespace NzbDrone.Core.Parser
                     // If this needs to be reverted tests will need to be added
                     if (sceneSeasonNumber.HasValue)
                     {
-                        episodes = _episodeService.FindEpisodesBySceneNumbering(series.Id, sceneSeasonNumber.Value, absoluteEpisodeNumber);
+                        episodes = await _episodeService.FindEpisodesBySceneNumbering(series.Id, sceneSeasonNumber.Value, absoluteEpisodeNumber);
 
                         if (episodes.Empty())
                         {
-                            var episode = _episodeService.FindEpisode(series.Id, sceneSeasonNumber.Value, absoluteEpisodeNumber);
+                            var episode = await _episodeService.FindEpisode(series.Id, sceneSeasonNumber.Value, absoluteEpisodeNumber);
                             episodes.AddIfNotNull(episode);
                         }
                     }
                     else if (parsedEpisodeInfo.SeasonNumber > 1 && parsedEpisodeInfo.EpisodeNumbers.Empty())
                     {
-                        episodes = _episodeService.FindEpisodesBySceneNumbering(series.Id, parsedEpisodeInfo.SeasonNumber, absoluteEpisodeNumber);
+                        episodes = await _episodeService.FindEpisodesBySceneNumbering(series.Id, parsedEpisodeInfo.SeasonNumber, absoluteEpisodeNumber);
 
                         if (episodes.Empty())
                         {
-                            var episode = _episodeService.FindEpisode(series.Id, parsedEpisodeInfo.SeasonNumber, absoluteEpisodeNumber);
+                            var episode = await _episodeService.FindEpisode(series.Id, parsedEpisodeInfo.SeasonNumber, absoluteEpisodeNumber);
                             episodes.AddIfNotNull(episode);
                         }
                     }
                     else
                     {
-                        episodes = _episodeService.FindEpisodesBySceneNumbering(series.Id, absoluteEpisodeNumber);
+                        episodes = await _episodeService.FindEpisodesBySceneNumbering(series.Id, absoluteEpisodeNumber);
 
                         // Don't allow multiple results without a scene name mapping.
                         if (episodes.Count > 1)
@@ -626,7 +629,7 @@ namespace NzbDrone.Core.Parser
 
                 if (episodes.Empty())
                 {
-                    var episode = _episodeService.FindEpisode(series.Id, absoluteEpisodeNumber);
+                    var episode = await _episodeService.FindEpisode(series.Id, absoluteEpisodeNumber);
                     episodes.AddIfNotNull(episode);
                 }
 
@@ -645,7 +648,7 @@ namespace NzbDrone.Core.Parser
             return result;
         }
 
-        private List<Episode> GetStandardEpisodes(Series series, ParsedEpisodeInfo parsedEpisodeInfo, int mappedSeasonNumber, bool sceneSource, SearchCriteriaBase searchCriteria)
+        private async Task<List<Episode>> GetStandardEpisodes(Series series, ParsedEpisodeInfo parsedEpisodeInfo, int mappedSeasonNumber, bool sceneSource, SearchCriteriaBase searchCriteria)
         {
             var result = new List<Episode>();
 
@@ -668,7 +671,7 @@ namespace NzbDrone.Core.Parser
 
                     if (!episodes.Any())
                     {
-                        episodes = _episodeService.FindEpisodesBySceneNumbering(series.Id, mappedSeasonNumber, episodeNumber);
+                        episodes = await _episodeService.FindEpisodesBySceneNumbering(series.Id, mappedSeasonNumber, episodeNumber);
                     }
 
                     if (episodes != null && episodes.Any())
@@ -693,7 +696,7 @@ namespace NzbDrone.Core.Parser
 
                 if (episodeInfo == null)
                 {
-                    episodeInfo = _episodeService.FindEpisode(series.Id, mappedSeasonNumber, episodeNumber);
+                    episodeInfo = await _episodeService.FindEpisode(series.Id, mappedSeasonNumber, episodeNumber);
                 }
 
                 if (episodeInfo != null)

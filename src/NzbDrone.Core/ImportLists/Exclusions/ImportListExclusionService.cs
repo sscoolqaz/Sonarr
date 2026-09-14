@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Tv.Events;
@@ -8,14 +9,14 @@ namespace NzbDrone.Core.ImportLists.Exclusions
 {
     public interface IImportListExclusionService
     {
-        ImportListExclusion Add(ImportListExclusion importListExclusion);
-        List<ImportListExclusion> All();
-        PagingSpec<ImportListExclusion> Paged(PagingSpec<ImportListExclusion> pagingSpec);
-        void Delete(int id);
-        void Delete(List<int> ids);
-        ImportListExclusion Get(int id);
-        ImportListExclusion FindByTvdbId(int tvdbId);
-        ImportListExclusion Update(ImportListExclusion importListExclusion);
+        Task<ImportListExclusion> Add(ImportListExclusion importListExclusion);
+        Task<List<ImportListExclusion>> All();
+        Task<PagingSpec<ImportListExclusion>> Paged(PagingSpec<ImportListExclusion> pagingSpec);
+        Task Delete(int id);
+        Task Delete(List<int> ids);
+        Task<ImportListExclusion> Get(int id);
+        Task<ImportListExclusion> FindByTvdbId(int tvdbId);
+        Task<ImportListExclusion> Update(ImportListExclusion importListExclusion);
     }
 
     public class ImportListExclusionService : IImportListExclusionService, IHandleAsync<SeriesDeletedEvent>
@@ -27,42 +28,42 @@ namespace NzbDrone.Core.ImportLists.Exclusions
             _repo = repo;
         }
 
-        public ImportListExclusion Add(ImportListExclusion importListExclusion)
+        public Task<ImportListExclusion> Add(ImportListExclusion importListExclusion)
         {
             return _repo.Insert(importListExclusion);
         }
 
-        public ImportListExclusion Update(ImportListExclusion importListExclusion)
+        public Task<ImportListExclusion> Update(ImportListExclusion importListExclusion)
         {
             return _repo.Update(importListExclusion);
         }
 
-        public void Delete(int id)
+        public Task Delete(int id)
         {
-            _repo.Delete(id);
+            return _repo.Delete(id);
         }
 
-        public void Delete(List<int> ids)
+        public Task Delete(List<int> ids)
         {
-            _repo.DeleteMany(ids);
+            return _repo.DeleteMany(ids);
         }
 
-        public ImportListExclusion Get(int id)
+        public Task<ImportListExclusion> Get(int id)
         {
             return _repo.Get(id);
         }
 
-        public ImportListExclusion FindByTvdbId(int tvdbId)
+        public Task<ImportListExclusion> FindByTvdbId(int tvdbId)
         {
             return _repo.FindByTvdbId(tvdbId);
         }
 
-        public List<ImportListExclusion> All()
+        public async Task<List<ImportListExclusion>> All()
         {
-            return _repo.All().ToList();
+            return (await _repo.All()).ToList();
         }
 
-        public PagingSpec<ImportListExclusion> Paged(PagingSpec<ImportListExclusion> pagingSpec)
+        public Task<PagingSpec<ImportListExclusion>> Paged(PagingSpec<ImportListExclusion> pagingSpec)
         {
             return _repo.GetPaged(pagingSpec);
         }
@@ -78,7 +79,10 @@ namespace NzbDrone.Core.ImportLists.Exclusions
 
             foreach (var series in message.Series.DistinctBy(s => s.TvdbId))
             {
-                var existingExclusion = _repo.FindByTvdbId(series.TvdbId);
+                // IHandleAsync<TEvent>.HandleAsync is a shared app-wide eventing interface we must not
+                // change (void return, despite the name) - bridging is safe here: runs off the request
+                // thread, no SynchronizationContext to deadlock against.
+                var existingExclusion = _repo.FindByTvdbId(series.TvdbId).GetAwaiter().GetResult();
 
                 if (existingExclusion != null)
                 {
@@ -92,7 +96,7 @@ namespace NzbDrone.Core.ImportLists.Exclusions
                 });
             }
 
-            _repo.InsertMany(exclusionsToAdd);
+            _repo.InsertMany(exclusionsToAdd).GetAwaiter().GetResult();
         }
     }
 }

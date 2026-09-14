@@ -21,7 +21,13 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
 
             foreach (var episodeFileId in episodeFileIds)
             {
-                var episodesInFile = _episodeService.GetEpisodesByFileId(episodeFileId);
+                // Kept sync deliberately: this class is a shared helper consumed by both
+                // SameEpisodesGrabSpecification (IDownloadDecisionEngineSpecification, sync by design -
+                // see DownloadDecisionMaker report notes) and SameEpisodesImportSpecification
+                // (IImportDecisionEngineSpecification, outside this pass's scope). Bridging the one
+                // async repo call here avoids rippling an interface change into another agent's files.
+                // Safe: runs off the request thread, no SynchronizationContext to deadlock against.
+                var episodesInFile = _episodeService.GetEpisodesByFileId(episodeFileId).GetAwaiter().GetResult();
 
                 if (episodesInFile.Select(e => e.Id).Except(episodeIds).Any())
                 {

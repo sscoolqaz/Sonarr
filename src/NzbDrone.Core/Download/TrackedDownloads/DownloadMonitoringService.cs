@@ -63,7 +63,10 @@ namespace NzbDrone.Core.Download.TrackedDownloads
             _refreshDebounce.Pause();
             try
             {
-                var downloadClients = _downloadClientFactory.DownloadHandlingEnabled();
+                // IExecute<TCommand>.Execute is a synchronous app-wide contract, and Refresh() is also driven
+                // by the Debouncer's synchronous callback - bridging is safe: runs off the request thread, no
+                // SynchronizationContext to deadlock against.
+                var downloadClients = _downloadClientFactory.DownloadHandlingEnabled().GetAwaiter().GetResult();
 
                 var trackedDownloads = new List<TrackedDownload>();
 
@@ -93,13 +96,13 @@ namespace NzbDrone.Core.Download.TrackedDownloads
             {
                 downloadClientItems = downloadClient.GetItems().ToList();
 
-                _downloadClientStatusService.RecordSuccess(downloadClient.Definition.Id);
+                _downloadClientStatusService.RecordSuccess(downloadClient.Definition.Id).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
                 // TODO: Stop tracking items for the offline client
 
-                _downloadClientStatusService.RecordFailure(downloadClient.Definition.Id);
+                _downloadClientStatusService.RecordFailure(downloadClient.Definition.Id).GetAwaiter().GetResult();
                 _logger.Warn(ex, "Unable to retrieve queue and history items from " + downloadClient.Definition.Name);
             }
 

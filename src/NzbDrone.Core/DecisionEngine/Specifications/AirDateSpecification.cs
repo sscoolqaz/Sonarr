@@ -27,7 +27,10 @@ namespace NzbDrone.Core.DecisionEngine.Specifications
         {
             _logger.Debug("Checking if release meets air date restrictions: {0}", subject);
 
-            var releaseProfiles = _releaseProfileService.EnabledForTags(subject.Series.Tags, subject.Release.IndexerId);
+            // IDownloadDecisionEngineSpecification.IsSatisfiedBy stays sync (widely-shared, 30+ implementers -
+            // see DownloadDecisionMaker report notes). Bridging is safe: runs off the request thread and
+            // ASP.NET Core carries no SynchronizationContext, so this can't deadlock.
+            var releaseProfiles = _releaseProfileService.EnabledForTags(subject.Series.Tags, subject.Release.IndexerId).GetAwaiter().GetResult();
 
             if (releaseProfiles.Empty())
             {

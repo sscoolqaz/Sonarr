@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.Extensions;
 using NzbDrone.Common.Instrumentation.Extensions;
@@ -17,8 +18,8 @@ namespace NzbDrone.Core.DecisionEngine
 {
     public interface IMakeDownloadDecision
     {
-        List<DownloadDecision> GetRssDecision(List<ReleaseInfo> reports, bool pushedRelease = false);
-        List<DownloadDecision> GetSearchDecision(List<ReleaseInfo> reports, SearchCriteriaBase searchCriteriaBase);
+        Task<List<DownloadDecision>> GetRssDecision(List<ReleaseInfo> reports, bool pushedRelease = false);
+        Task<List<DownloadDecision>> GetSearchDecision(List<ReleaseInfo> reports, SearchCriteriaBase searchCriteriaBase);
     }
 
     public class DownloadDecisionMaker : IMakeDownloadDecision
@@ -45,18 +46,20 @@ namespace NzbDrone.Core.DecisionEngine
             _logger = logger;
         }
 
-        public List<DownloadDecision> GetRssDecision(List<ReleaseInfo> reports, bool pushedRelease = false)
+        public Task<List<DownloadDecision>> GetRssDecision(List<ReleaseInfo> reports, bool pushedRelease = false)
         {
-            return GetDecisions(reports, pushedRelease).ToList();
+            return GetDecisions(reports, pushedRelease);
         }
 
-        public List<DownloadDecision> GetSearchDecision(List<ReleaseInfo> reports, SearchCriteriaBase searchCriteriaBase)
+        public Task<List<DownloadDecision>> GetSearchDecision(List<ReleaseInfo> reports, SearchCriteriaBase searchCriteriaBase)
         {
-            return GetDecisions(reports, false, searchCriteriaBase).ToList();
+            return GetDecisions(reports, false, searchCriteriaBase);
         }
 
-        private IEnumerable<DownloadDecision> GetDecisions(List<ReleaseInfo> reports, bool pushedRelease, SearchCriteriaBase searchCriteria = null)
+        private async Task<List<DownloadDecision>> GetDecisions(List<ReleaseInfo> reports, bool pushedRelease, SearchCriteriaBase searchCriteria = null)
         {
+            var result = new List<DownloadDecision>();
+
             if (reports.Any())
             {
                 _logger.ProgressInfo("Processing {0} releases", reports.Count);
@@ -80,7 +83,7 @@ namespace NzbDrone.Core.DecisionEngine
 
                     if (parsedEpisodeInfo == null || parsedEpisodeInfo.IsPossibleSpecialEpisode)
                     {
-                        var specialEpisodeInfo = _parsingService.ParseSpecialEpisodeTitle(parsedEpisodeInfo, report.Title, report.TvdbId, report.TvRageId, report.ImdbId, searchCriteria);
+                        var specialEpisodeInfo = await _parsingService.ParseSpecialEpisodeTitle(parsedEpisodeInfo, report.Title, report.TvdbId, report.TvRageId, report.ImdbId, searchCriteria);
 
                         if (specialEpisodeInfo != null)
                         {
@@ -90,13 +93,13 @@ namespace NzbDrone.Core.DecisionEngine
 
                     if (parsedEpisodeInfo != null && !parsedEpisodeInfo.SeriesTitle.IsNullOrWhiteSpace())
                     {
-                        var remoteEpisode = _parsingService.Map(parsedEpisodeInfo, report.TvdbId, report.TvRageId, report.ImdbId, searchCriteria);
+                        var remoteEpisode = await _parsingService.Map(parsedEpisodeInfo, report.TvdbId, report.TvRageId, report.ImdbId, searchCriteria);
                         remoteEpisode.Release = report;
                         remoteEpisode.ReleaseSource = GetReleaseSource(pushedRelease, searchCriteria);
 
                         if (remoteEpisode.Series == null)
                         {
-                            var matchingTvdbId = _sceneMappingService.FindTvdbId(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
+                            var matchingTvdbId = await _sceneMappingService.FindTvdbId(parsedEpisodeInfo.SeriesTitle, parsedEpisodeInfo.ReleaseTitle, parsedEpisodeInfo.SeasonNumber);
 
                             if (matchingTvdbId.HasValue)
                             {
@@ -113,7 +116,7 @@ namespace NzbDrone.Core.DecisionEngine
                         }
                         else
                         {
-                            _aggregationService.Augment(remoteEpisode);
+                            await _aggregationService.Augment(remoteEpisode);
 
                             remoteEpisode.CustomFormats = _formatCalculator.ParseCustomFormat(remoteEpisode, remoteEpisode.Release.Size);
                             remoteEpisode.CustomFormatScore = remoteEpisode?.Series?.QualityProfile?.Value.CalculateCustomFormatScore(remoteEpisode.CustomFormats) ?? 0;
@@ -172,9 +175,11 @@ namespace NzbDrone.Core.DecisionEngine
                         _logger.Debug("Release '{0}' from '{1}' accepted", report.Title, report.Indexer);
                     }
 
-                    yield return decision;
+                    result.Add(decision);
                 }
             }
+
+            return result;
         }
 
         private DownloadDecision GetDecisionForReport(RemoteEpisode remoteEpisode, ReleaseDecisionInformation information)

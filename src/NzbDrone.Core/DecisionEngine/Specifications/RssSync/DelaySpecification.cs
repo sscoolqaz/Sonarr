@@ -37,8 +37,11 @@ namespace NzbDrone.Core.DecisionEngine.Specifications.RssSync
                 return DownloadSpecDecision.Accept();
             }
 
+            // IDownloadDecisionEngineSpecification.IsSatisfiedBy stays sync (widely-shared, 30+ implementers -
+            // see DownloadDecisionMaker report notes). Bridging is safe: runs off the request thread and
+            // ASP.NET Core carries no SynchronizationContext, so this can't deadlock.
             var qualityProfile = subject.Series.QualityProfile.Value;
-            var delayProfile = _delayProfileService.BestForTags(subject.Series.Tags);
+            var delayProfile = _delayProfileService.BestForTags(subject.Series.Tags).GetAwaiter().GetResult();
             var delay = delayProfile.GetProtocolDelay(subject.Release.DownloadProtocol);
             var isPreferredProtocol = subject.Release.DownloadProtocol == delayProfile.PreferredProtocol;
             var preferPropersAndRepacks = _configService.DownloadPropersAndRepacks == ProperDownloadTypes.PreferAndUpgrade;
@@ -97,6 +100,8 @@ namespace NzbDrone.Core.DecisionEngine.Specifications.RssSync
 
             var episodeIds = subject.Episodes.Select(e => e.Id);
 
+            // IPendingReleaseService stays fully synchronous (see PendingReleaseService's own judgment-call
+            // note) - no bridging needed for this call.
             var oldest = _pendingReleaseService.OldestPendingRelease(subject.Series.Id, episodeIds.ToArray());
 
             if (oldest != null && oldest.Release.AgeMinutes > delay)
