@@ -1,0 +1,7 @@
+.dev-scratch/
+.git/
+_output/
+_tests/
+docker/spacetimedb-dev/data/
+docker/spacetimedb-dev/keys/
+docker/spacetimedb-dev/sonarr-config/
