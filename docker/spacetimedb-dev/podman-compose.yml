@@ -28,7 +28,7 @@ services:
       - /stdb-keys/id_ecdsa
       - --non-interactive
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./data:/stdb-data
       - ./keys:/stdb-keys

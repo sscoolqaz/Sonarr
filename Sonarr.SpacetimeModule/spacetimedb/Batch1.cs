@@ -93,6 +93,21 @@ public static partial class Module
     }
 
     // --- User ---
+    // SECURITY: Public = true, and this table holds password hash/salt/iterations. Known,
+    // deliberate limitation: SpacetimeDB's HTTP SQL endpoint (POST /v1/database/<name>/sql)
+    // can read any Public table from any caller with network access to the SpacetimeDB port -
+    // no WebSocket connection or ClientConnected auth check applies to that endpoint. The only
+    // mitigation in place today is network-level: the SpacetimeDB port must never be
+    // published/exposed outside an isolated internal network (see the loopback-only binding in
+    // docker/spacetimedb-dev/podman-compose.yml for the dev-mode fix; any production
+    // compose/deployment config must apply the same restriction). The real fix - row-level
+    // security scoped to the TrustedConnection table that Auth.cs's ClientConnected reducer
+    // populates on authenticated connect, or a server-side read-reducer redesign of
+    // SpacetimeUserRepository - is a follow-up, not yet implemented, because C#
+    // SpacetimeDB.Runtime 2.10's RLS support was unconfirmed as of this session. Do not flip
+    // Public to false without one of those in place: both repository classes read exclusively
+    // via the client's local subscription cache, so a non-public table with no RLS grant would
+    // silently stop delivering rows and break login for every client.
     [Table(Accessor = "User", Public = true)]
     public partial struct User
     {
@@ -125,6 +140,22 @@ public static partial class Module
     }
 
     // --- Config ---
+    // SECURITY: Public = true, and this table holds arbitrary key/value settings - in real
+    // Sonarr usage this includes indexer/notification-provider API keys. Known, deliberate
+    // limitation: SpacetimeDB's HTTP SQL endpoint (POST /v1/database/<name>/sql) can read any
+    // Public table from any caller with network access to the SpacetimeDB port - no WebSocket
+    // connection or ClientConnected auth check applies to that endpoint. The only mitigation in
+    // place today is network-level: the SpacetimeDB port must never be published/exposed
+    // outside an isolated internal network (see the loopback-only binding in
+    // docker/spacetimedb-dev/podman-compose.yml for the dev-mode fix; any production
+    // compose/deployment config must apply the same restriction). The real fix - row-level
+    // security scoped to the TrustedConnection table that Auth.cs's ClientConnected reducer
+    // populates on authenticated connect, or a server-side read-reducer redesign of
+    // SpacetimeConfigRepository - is a follow-up, not yet implemented, because C#
+    // SpacetimeDB.Runtime 2.10's RLS support was unconfirmed as of this session. Do not flip
+    // Public to false without one of those in place: both repository classes read exclusively
+    // via the client's local subscription cache, so a non-public table with no RLS grant would
+    // silently stop delivering rows and break every provider integration.
     [Table(Accessor = "Config", Public = true)]
     public partial struct Config
     {
