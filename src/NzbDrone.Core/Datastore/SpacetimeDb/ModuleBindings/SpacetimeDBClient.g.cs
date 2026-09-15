@@ -30,7 +30,6 @@ namespace SpacetimeDB.Types
             AddTable(AutoTag = new(conn));
             AddTable(Blocklist = new(conn));
             AddTable(Command = new(conn));
-            AddTable(Config = new(conn));
             AddTable(CustomFilter = new(conn));
             AddTable(CustomFormat = new(conn));
             AddTable(DelayProfile = new(conn));
@@ -65,9 +64,10 @@ namespace SpacetimeDB.Types
             AddTable(SeriesTag = new(conn));
             AddTable(SubtitleFile = new(conn));
             AddTable(Tag = new(conn));
+            AddTable(TrustedConfigs = new(conn));
             AddTable(TrustedConnection = new(conn));
+            AddTable(TrustedUsers = new(conn));
             AddTable(UpdateHistory = new(conn));
-            AddTable(User = new(conn));
         }
     }
 
@@ -553,7 +553,6 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.AutoTag().ToSql(),
             new QueryBuilder().From.Blocklist().ToSql(),
             new QueryBuilder().From.Command().ToSql(),
-            new QueryBuilder().From.Config().ToSql(),
             new QueryBuilder().From.CustomFilter().ToSql(),
             new QueryBuilder().From.CustomFormat().ToSql(),
             new QueryBuilder().From.DelayProfile().ToSql(),
@@ -588,9 +587,10 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.SeriesTag().ToSql(),
             new QueryBuilder().From.SubtitleFile().ToSql(),
             new QueryBuilder().From.Tag().ToSql(),
+            new QueryBuilder().From.TrustedConfigs().ToSql(),
             new QueryBuilder().From.TrustedConnection().ToSql(),
+            new QueryBuilder().From.TrustedUsers().ToSql(),
             new QueryBuilder().From.UpdateHistory().ToSql(),
-            new QueryBuilder().From.User().ToSql(),
         }
         ;
     }
@@ -600,7 +600,6 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<AutoTag, AutoTagCols, AutoTagIxCols> AutoTag() => new("auto_tag", new AutoTagCols("auto_tag"), new AutoTagIxCols("auto_tag"));
         public global::SpacetimeDB.Table<Blocklist, BlocklistCols, BlocklistIxCols> Blocklist() => new("blocklist", new BlocklistCols("blocklist"), new BlocklistIxCols("blocklist"));
         public global::SpacetimeDB.Table<CommandRow, CommandCols, CommandIxCols> Command() => new("command", new CommandCols("command"), new CommandIxCols("command"));
-        public global::SpacetimeDB.Table<Config, ConfigCols, ConfigIxCols> Config() => new("config", new ConfigCols("config"), new ConfigIxCols("config"));
         public global::SpacetimeDB.Table<CustomFilter, CustomFilterCols, CustomFilterIxCols> CustomFilter() => new("custom_filter", new CustomFilterCols("custom_filter"), new CustomFilterIxCols("custom_filter"));
         public global::SpacetimeDB.Table<CustomFormat, CustomFormatCols, CustomFormatIxCols> CustomFormat() => new("custom_format", new CustomFormatCols("custom_format"), new CustomFormatIxCols("custom_format"));
         public global::SpacetimeDB.Table<DelayProfile, DelayProfileCols, DelayProfileIxCols> DelayProfile() => new("delay_profile", new DelayProfileCols("delay_profile"), new DelayProfileIxCols("delay_profile"));
@@ -635,9 +634,10 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<SeriesTag, SeriesTagCols, SeriesTagIxCols> SeriesTag() => new("series_tag", new SeriesTagCols("series_tag"), new SeriesTagIxCols("series_tag"));
         public global::SpacetimeDB.Table<SubtitleFile, SubtitleFileCols, SubtitleFileIxCols> SubtitleFile() => new("subtitle_file", new SubtitleFileCols("subtitle_file"), new SubtitleFileIxCols("subtitle_file"));
         public global::SpacetimeDB.Table<Tag, TagCols, TagIxCols> Tag() => new("tag", new TagCols("tag"), new TagIxCols("tag"));
+        public global::SpacetimeDB.Table<Config, TrustedConfigsCols, TrustedConfigsIxCols> TrustedConfigs() => new("trusted_configs", new TrustedConfigsCols("trusted_configs"), new TrustedConfigsIxCols("trusted_configs"));
         public global::SpacetimeDB.Table<TrustedConnection, TrustedConnectionCols, TrustedConnectionIxCols> TrustedConnection() => new("trusted_connection", new TrustedConnectionCols("trusted_connection"), new TrustedConnectionIxCols("trusted_connection"));
+        public global::SpacetimeDB.Table<User, TrustedUsersCols, TrustedUsersIxCols> TrustedUsers() => new("trusted_users", new TrustedUsersCols("trusted_users"), new TrustedUsersIxCols("trusted_users"));
         public global::SpacetimeDB.Table<UpdateHistory, UpdateHistoryCols, UpdateHistoryIxCols> UpdateHistory() => new("update_history", new UpdateHistoryCols("update_history"), new UpdateHistoryIxCols("update_history"));
-        public global::SpacetimeDB.Table<User, UserCols, UserIxCols> User() => new("user", new UserCols("user"), new UserIxCols("user"));
     }
 
     public sealed class TypedSubscriptionBuilder

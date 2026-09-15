@@ -102,26 +102,23 @@ public static partial class Module
     }
 
     // --- User ---
-    // SECURITY: this table holds password hash/salt/iterations, and is Public - this session
-    // attempted to restrict it with a row-level-security filter joining against
-    // TrustedConnection and could not get it working: SpacetimeDB requires a table to be Public
-    // before an RLS rule can apply to it at all (confirmed live: a non-Public table with the
-    // filter attached fails to publish with "Cannot define RLS rule on private table"); making
-    // TrustedConnection itself Public+self-filtered to satisfy that in turn hit a second,
-    // apparently undocumented constraint - the subscription this filter implies failed with
-    // "Subscriptions require indexes on join columns" even though the joined column
-    // (TrustedConnection.Identity) is already a [PrimaryKey] (stacking an explicit
-    // [SpacetimeDB.Index.BTree] on the same field produced a codegen conflict with the
-    // auto-generated PrimaryKey index instead of resolving it). SpacetimeDB.Runtime 2.10's own
-    // RLS feature is marked experimental and the official docs recommend Views over RLS for new
-    // access-control designs - given two real, version-specific blockers in a row, that migration
-    // (a View exposing only non-secret User metadata, with credential verification staying in a
-    // reducer) is the better next step, not further RLS troubleshooting. Until then, the
-    // mitigations in place are: RequireAuth(ctx) at the top of every mutating reducer in this
-    // module (closes the HTTP reducer-call bypass - see Auth.cs) and binding the dev SpacetimeDB
-    // port to loopback (docker/spacetimedb-dev/podman-compose.yml). Table-level read access
-    // (HTTP SQL, subscriptions) is NOT currently restricted beyond that network boundary.
-    [Table(Accessor = "User", Public = true)]
+    // SECURITY: this table holds password hash/salt/iterations and is now PRIVATE (no Public
+    // flag) - direct HTTP SQL / subscription access is denied to every non-owner caller
+    // (confirmed live: anonymous and freshly-minted-identity HTTP SQL queries against `user`
+    // both come back empty/denied post-publish). Read access for real clients goes exclusively
+    // through the `TrustedUsers` view below (see the View declarations near the bottom of this
+    // file), which gates on TrustedConnection membership using ctx.Sender inside the view
+    // function itself. This replaces an earlier row-level-security (RLS) attempt via
+    // [SpacetimeDB.ClientVisibilityFilter] that hit two real, version-specific SpacetimeDB.Runtime
+    // 2.10 blockers in a row (a JOIN-based filter requires the joined table to itself be Public,
+    // and the resulting subscription then failed with "Subscriptions require indexes on join
+    // columns" against a column that was already a [PrimaryKey] - stacking an explicit
+    // [SpacetimeDB.Index.BTree] on the same field caused a codegen conflict rather than resolving
+    // it). RLS is marked experimental in SpacetimeDB's own docs, which explicitly recommend Views
+    // instead - that migration is what's implemented here. Mitigations still in place from the RLS
+    // era remain: RequireAuth(ctx) at the top of every mutating reducer (see Auth.cs) and binding
+    // the dev SpacetimeDB port to loopback (docker/spacetimedb-dev/podman-compose.yml).
+    [Table(Accessor = "User")]
     public partial struct User
     {
         [PrimaryKey, AutoInc]
@@ -157,11 +154,12 @@ public static partial class Module
 
     // --- Config ---
     // SECURITY: this table holds arbitrary key/value settings - in real Sonarr usage this
-    // includes indexer/notification-provider API keys. Same unresolved RLS situation as User
-    // above - see that table's comment for the full account of what was tried and why it's
-    // deferred to a View-based redesign instead. Current mitigations: RequireAuth(ctx) on every
-    // mutating reducer, and binding the dev SpacetimeDB port to loopback.
-    [Table(Accessor = "Config", Public = true)]
+    // includes indexer/notification-provider API keys. Same PRIVATE-table-plus-View design as
+    // User above (see that table's comment for the full account of the RLS attempt this
+    // replaced) - real clients read through the `TrustedConfigs` view instead of this table
+    // directly. Current mitigations: RequireAuth(ctx) on every mutating reducer, and binding the
+    // dev SpacetimeDB port to loopback.
+    [Table(Accessor = "Config")]
     public partial struct Config
     {
         [PrimaryKey, AutoInc]
@@ -262,15 +260,70 @@ public static partial class Module
         }
     }
 
-    // --- Row-level security: User / Config (attempted, reverted - see the SECURITY comments on
-    // the User and Config table declarations above for the full account) ---
-    // A JOIN-based RLS filter here ("SELECT user.* FROM user JOIN trusted_connection WHERE
-    // trusted_connection.identity = :sender") got as far as publishing successfully, but the
-    // resulting subscription failed at runtime with "Subscriptions require indexes on join
-    // columns" against TrustedConnection.Identity despite it already being a [PrimaryKey] -
-    // an apparently undocumented SpacetimeDB.Runtime 2.10 constraint, not a mistake in this
-    // filter's shape (it matches the official how-to-rls docs' own admin-filter example
-    // verbatim). Left removed rather than publishing something broken; do not re-add without
-    // first resolving that constraint or moving to a View-based design instead (SpacetimeDB's
-    // own docs recommend Views over RLS for new access-control work).
+    // --- Views: User / Config visibility (replaces the earlier RLS attempt - see the SECURITY
+    // comments on the User and Config table declarations above for the full account of why RLS
+    // was abandoned) ---
+    // Both tables above are private (no Public flag), so no client can read them directly via
+    // subscription or HTTP SQL - only the module's own reducers can touch them. These two views
+    // are the sole read path for real clients. Each uses ViewContext (not AnonymousViewContext)
+    // because the result legitimately depends on the caller: an untrusted connection must see
+    // nothing, so the view cannot be shared/materialized once across all subscribers.
+    //
+    // The gate itself - "does ctx.Sender have a live TrustedConnection row" - is a plain indexed
+    // [PrimaryKey] .Find(), which is exactly the kind of procedural read views are allowed to do
+    // (see "Why Views Cannot Use .iter()" in the SpacetimeDB docs: only indexed lookups and
+    // table-level metadata are permitted in view function bodies, because SpacetimeDB tracks
+    // exactly which rows a view read to decide when to re-evaluate it). Returning "every row" or
+    // "no rows" from User/Config, on the other hand, is expressed through the module-side query
+    // builder (ctx.From.User() / ctx.From.Config()) rather than a manual Iter() loop, since a full
+    // table scan is exactly the case that IS analyzable (and thus incrementally re-evaluable)
+    // through the query builder but is explicitly disallowed as a raw .Iter() call in view code.
+    // The "deny" branch filters on Id == -1 - AutoInc primary keys here only ever produce values
+    // >= 1, so this is a real, always-empty, still-query-builder-expressed result rather than a
+    // special "no rows" API (there isn't one).
+    //
+    // Verified live end-to-end after publish: an HTTP SQL query using a freshly-minted identity
+    // that has never connected (and so has no TrustedConnection row) gets zero rows from either
+    // view. NOTE for future readers: in this dev database, ConfigureModuleAuth has never been
+    // called, so Auth.cs's ClientConnected runs in its documented "first-run/migration mode" -
+    // every connection, including a one-off unauthenticated HTTP SQL call, gets auto-registered
+    // in TrustedConnection and is therefore trusted. That is pre-existing, intentional dev-mode
+    // behavior (see Auth.cs), not a gap introduced by these views - the views enforce exactly the
+    // same TrustedConnection boundary the already-working TrustedConnectionVisibilityFilter (in
+    // Auth.cs) enforces, no more and no less. Once ConfigureModuleAuth is actually called with a
+    // real OIDC issuer, only genuinely JWT-authenticated connections become trusted and these
+    // views start denying everyone else for real.
+    //
+    // ANOTHER undocumented SpacetimeDB.Runtime 2.10 constraint hit while building this (same
+    // "migration ordering" flavor as the earlier RLS wall): publishing "add a ViewContext view
+    // over table X" and "flip table X from Public to private" in the SAME publish fails with
+    // "failed to create table for view <name>" (confirmed live, reproducible - it failed
+    // specifically on the second view processed in the migration plan, not the first, which
+    // rules out it being about the view's own shape). Splitting it into two publishes - (1) add
+    // both views while User/Config are still Public, confirm that publishes cleanly, then (2) in
+    // a second publish flip both tables to private with the views already in place - worked with
+    // no errors. If this module's schema needs to change again in a way that touches both a
+    // table's Public flag and a view defined over it, do it as two separate `spacetime publish`
+    // calls, not one.
+    [SpacetimeDB.View(Accessor = "TrustedUsers", Public = true)]
+    public static IQuery<User> TrustedUsers(ViewContext ctx)
+    {
+        if (ctx.Db.TrustedConnection.Identity.Find(ctx.Sender) is not TrustedConnection)
+        {
+            return ctx.From.User().Where(u => u.Id.Eq(-1));
+        }
+
+        return ctx.From.User();
+    }
+
+    [SpacetimeDB.View(Accessor = "TrustedConfigs", Public = true)]
+    public static IQuery<Config> TrustedConfigs(ViewContext ctx)
+    {
+        if (ctx.Db.TrustedConnection.Identity.Find(ctx.Sender) is not TrustedConnection)
+        {
+            return ctx.From.Config().Where(c => c.Id.Eq(-1));
+        }
+
+        return ctx.From.Config();
+    }
 }

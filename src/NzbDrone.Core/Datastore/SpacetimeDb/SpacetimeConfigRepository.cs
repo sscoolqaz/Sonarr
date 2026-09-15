@@ -17,9 +17,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override RemoteTableHandle<EventContext, StdbConfig> Table => Conn.Connection.Db.Config;
+        // Reads go through the TrustedConfigs view (Sonarr.SpacetimeModule/spacetimedb/Batch1.cs),
+        // not the Config table directly - Config is a private table now, readable only by the
+        // module's own reducers. TrustedConfigs gates on TrustedConnection membership
+        // server-side and exposes the same row shape/primary key as Config, so the generated
+        // view handle here (TrustedConfigsHandle : RemoteTableHandle<EventContext, StdbConfig>)
+        // is a drop-in replacement for the old direct table handle. Writes are unaffected - they
+        // still go through the InsertConfig/UpdateConfig/DeleteConfig reducers below, which
+        // mutate the real (private) Config table.
+        protected override RemoteTableHandle<EventContext, StdbConfig> Table => Conn.Connection.Db.TrustedConfigs;
 
-        protected override StdbConfig FindRowById(int id) => Conn.Connection.Db.Config.Id.Find(id);
+        protected override StdbConfig FindRowById(int id) => Conn.Connection.Db.TrustedConfigs.Id.Find(id);
 
         protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed)
         {

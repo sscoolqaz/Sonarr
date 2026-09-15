@@ -552,7 +552,13 @@ namespace Sonarr.SpacetimeMigration
             CheckEmpty("Blocklist", () => target.Connection.Db.Blocklist.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
 
             CheckEmpty("CustomFormat", () => target.Connection.Db.CustomFormat.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
-            CheckEmpty("Config", () => target.Connection.Db.Config.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+
+            // Config/User are private tables (see the SECURITY comments on them in
+            // Sonarr.SpacetimeModule/spacetimedb/Batch1.cs) - this migration tool's own
+            // connection reads them, like any other client, through the TrustedConfigs/
+            // TrustedUsers views rather than the tables directly. Row shape and count are
+            // identical to the underlying table, so this emptiness check is unaffected.
+            CheckEmpty("Config", () => target.Connection.Db.TrustedConfigs.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("NamingConfig", () => target.Connection.Db.NamingConfig.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("RootFolder", () => target.Connection.Db.RootFolder.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("RemotePathMapping", () => target.Connection.Db.RemotePathMapping.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
@@ -567,7 +573,7 @@ namespace Sonarr.SpacetimeMigration
             CheckEmpty("ImportListExclusion", () => target.Connection.Db.ImportListExclusion.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("QualityDefinition", () => target.Connection.Db.QualityDefinition.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("AutoTag", () => target.Connection.Db.AutoTag.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
-            CheckEmpty("User", () => target.Connection.Db.User.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
+            CheckEmpty("User", () => target.Connection.Db.TrustedUsers.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("PendingRelease", () => target.Connection.Db.PendingRelease.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("DownloadHistory", () => target.Connection.Db.DownloadHistory.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);
             CheckEmpty("MetadataFile", () => target.Connection.Db.MetadataFile.RemoteQuery(string.Empty).GetAwaiter().GetResult().Length);

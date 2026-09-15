@@ -13,20 +13,20 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteTables
     {
-        public sealed class UserHandle : RemoteTableHandle<EventContext, User>
+        public sealed class TrustedUsersHandle : RemoteTableHandle<EventContext, User>
         {
-            public override string RemoteTableName => "user";
+            public override string RemoteTableName => "trusted_users";
 
             public sealed class IdUniqueIndex : UniqueIndexBase<int>
             {
                 protected override int GetKey(User row) => row.Id;
 
-                public IdUniqueIndex(UserHandle table) : base(table) { }
+                public IdUniqueIndex(TrustedUsersHandle table) : base(table) { }
             }
 
             public readonly IdUniqueIndex Id;
 
-            internal UserHandle(DbConnection conn) : base(conn)
+            internal TrustedUsersHandle(DbConnection conn) : base(conn)
             {
                 Id = new(this);
             }
@@ -34,10 +34,10 @@ namespace SpacetimeDB.Types
             protected override object GetPrimaryKey(User row) => row.Id;
         }
 
-        public readonly UserHandle User;
+        public readonly TrustedUsersHandle TrustedUsers;
     }
 
-    public sealed class UserCols
+    public sealed class TrustedUsersCols
     {
         public global::SpacetimeDB.Col<User, int> Id { get; }
         public global::SpacetimeDB.Col<User, string> Identifier { get; }
@@ -46,7 +46,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Col<User, string> Salt { get; }
         public global::SpacetimeDB.Col<User, int> Iterations { get; }
 
-        public UserCols(string tableName)
+        public TrustedUsersCols(string tableName)
         {
             Id = new global::SpacetimeDB.Col<User, int>(tableName, "id");
             Identifier = new global::SpacetimeDB.Col<User, string>(tableName, "identifier");
@@ -57,11 +57,11 @@ namespace SpacetimeDB.Types
         }
     }
 
-    public sealed class UserIxCols
+    public sealed class TrustedUsersIxCols
     {
         public global::SpacetimeDB.IxCol<User, int> Id { get; }
 
-        public UserIxCols(string tableName)
+        public TrustedUsersIxCols(string tableName)
         {
             Id = new global::SpacetimeDB.IxCol<User, int>(tableName, "id");
         }

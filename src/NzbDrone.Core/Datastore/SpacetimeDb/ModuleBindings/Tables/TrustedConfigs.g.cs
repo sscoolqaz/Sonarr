@@ -13,20 +13,20 @@ namespace SpacetimeDB.Types
 {
     public sealed partial class RemoteTables
     {
-        public sealed class ConfigHandle : RemoteTableHandle<EventContext, Config>
+        public sealed class TrustedConfigsHandle : RemoteTableHandle<EventContext, Config>
         {
-            public override string RemoteTableName => "config";
+            public override string RemoteTableName => "trusted_configs";
 
             public sealed class IdUniqueIndex : UniqueIndexBase<int>
             {
                 protected override int GetKey(Config row) => row.Id;
 
-                public IdUniqueIndex(ConfigHandle table) : base(table) { }
+                public IdUniqueIndex(TrustedConfigsHandle table) : base(table) { }
             }
 
             public readonly IdUniqueIndex Id;
 
-            internal ConfigHandle(DbConnection conn) : base(conn)
+            internal TrustedConfigsHandle(DbConnection conn) : base(conn)
             {
                 Id = new(this);
             }
@@ -34,16 +34,16 @@ namespace SpacetimeDB.Types
             protected override object GetPrimaryKey(Config row) => row.Id;
         }
 
-        public readonly ConfigHandle Config;
+        public readonly TrustedConfigsHandle TrustedConfigs;
     }
 
-    public sealed class ConfigCols
+    public sealed class TrustedConfigsCols
     {
         public global::SpacetimeDB.Col<Config, int> Id { get; }
         public global::SpacetimeDB.Col<Config, string> Key { get; }
         public global::SpacetimeDB.Col<Config, string> Value { get; }
 
-        public ConfigCols(string tableName)
+        public TrustedConfigsCols(string tableName)
         {
             Id = new global::SpacetimeDB.Col<Config, int>(tableName, "id");
             Key = new global::SpacetimeDB.Col<Config, string>(tableName, "key");
@@ -51,11 +51,11 @@ namespace SpacetimeDB.Types
         }
     }
 
-    public sealed class ConfigIxCols
+    public sealed class TrustedConfigsIxCols
     {
         public global::SpacetimeDB.IxCol<Config, int> Id { get; }
 
-        public ConfigIxCols(string tableName)
+        public TrustedConfigsIxCols(string tableName)
         {
             Id = new global::SpacetimeDB.IxCol<Config, int>(tableName, "id");
         }

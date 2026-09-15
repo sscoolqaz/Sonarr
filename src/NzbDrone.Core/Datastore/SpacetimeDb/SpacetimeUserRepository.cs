@@ -17,9 +17,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
         }
 
-        protected override RemoteTableHandle<EventContext, StdbUser> Table => Conn.Connection.Db.User;
+        // Reads go through the TrustedUsers view (Sonarr.SpacetimeModule/spacetimedb/Batch1.cs),
+        // not the User table directly - User is a private table now, readable only by the
+        // module's own reducers. TrustedUsers gates on TrustedConnection membership server-side
+        // and exposes the same row shape/primary key as User, so the generated view handle here
+        // (TrustedUsersHandle : RemoteTableHandle<EventContext, StdbUser>) is a drop-in
+        // replacement for the old direct table handle. Writes are unaffected - they still go
+        // through the InsertUser/UpdateUser/DeleteUser reducers below, which mutate the real
+        // (private) User table.
+        protected override RemoteTableHandle<EventContext, StdbUser> Table => Conn.Connection.Db.TrustedUsers;
 
-        protected override StdbUser FindRowById(int id) => Conn.Connection.Db.User.Id.Find(id);
+        protected override StdbUser FindRowById(int id) => Conn.Connection.Db.TrustedUsers.Id.Find(id);
 
         protected override IDisposable SubscribeOwnUpdateCommitted(Action<int> onCommitted, Action<Exception> onFailed)
         {
