@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using NLog;
 
@@ -39,6 +40,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// counts/startup latency become an issue" choice, not a hard requirement - it trades a
     /// slower app startup (one full sync of the whole database) for not having to keep a
     /// per-table subscription list in sync with the entity list as it grows.
+    ///
+    /// A spot-check of this session's dev database found current row counts trivial (Episode
+    /// ~82, EpisodeFile ~2, History ~3, Command ~3, Series ~3, Tag ~18) - that database is a
+    /// fresh test install, not representative of real usage, and this measurement does NOT
+    /// settle the question for a real user's library (which could plausibly have thousands of
+    /// Episode/History rows). "Measure and revisit" therefore remains a genuinely open question
+    /// this session's spot-check did not resolve, not something confirmed fine at scale.
     /// </summary>
     public interface ISpacetimeDbConnection
     {
@@ -69,8 +77,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// public (IBasicRepository) methods use: the calling thread (an ASP.NET request thread,
         /// ultimately) is freed to do other work while the actor thread pump handles the queued
         /// item on its own schedule, rather than parking a thread-pool thread for the duration.
-        /// Called from the actor thread itself runs inline via Task.FromResult, same reasoning as
-        /// RunOnActor's own inline case.
+        /// Called from the actor thread itself runs inline, returning an already-completed Task,
+        /// same reasoning as RunOnActor's own inline case.
         /// </summary>
         Task<T> RunOnActorAsync<T>(Func<T> work);
 
@@ -91,12 +99,43 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
     public class SpacetimeDbConnection : ISpacetimeDbConnection, IDisposable
     {
+        // Safety-net bound on the actor's work queue, not a throttle - at Sonarr's realistic
+        // scale this should never come close to being hit; it exists purely so a caller pileup
+        // (something enqueuing work faster than the single actor thread's FrameTick()+drain loop
+        // can process it) applies backpressure instead of growing the queue without limit.
+        private const int WorkQueueCapacity = 4096;
+
         private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
         private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan SubscribeTimeout = TimeSpan.FromSeconds(60);
 
         private readonly Thread _actorThread;
-        private readonly BlockingCollection<Action> _workQueue = new BlockingCollection<Action>();
+
+        // A bounded System.Threading.Channels.Channel<Action>, not a bounded BlockingCollection -
+        // chosen specifically because RunOnActorAsync (used by every SpacetimeBasicRepository
+        // public method) is documented to not block its caller's thread at all; a bounded
+        // BlockingCollection.Add() blocking synchronously when full would undercut that contract
+        // the moment the queue is ever actually full. Channel<T>.Writer.WriteAsync gives
+        // RunOnActorAsync a genuinely non-blocking (awaitable) enqueue under backpressure, while
+        // RunOnActor - the still-used synchronous variant (e.g. constructor-time setup) - awaits
+        // the same WriteAsync via .GetAwaiter().GetResult(): blocking the calling thread when the
+        // queue is full, same as the bounded BlockingCollection.Add() this replaced would have.
+        // That's an intentional, judgment-call choice for RunOnActor specifically: it already
+        // blocks its caller until the queued work completes, so blocking it a little longer for
+        // queue space is consistent with its existing contract, not a new one - a TryAdd-with-
+        // timeout-and-throw alternative would surface a new "actor overloaded" failure mode that
+        // nothing in this codebase currently expects or handles, for a capacity that should never
+        // realistically be exhausted at this app's scale. FullMode.Wait (rather than DropOldest/
+        // DropWrite) is deliberate too: silently dropping a queued repository operation would be
+        // silent data loss, not a load-shedding tradeoff worth making here.
+        private readonly Channel<Action> _workQueue = Channel.CreateBounded<Action>(
+            new BoundedChannelOptions(WorkQueueCapacity)
+            {
+                FullMode = BoundedChannelFullMode.Wait,
+                SingleReader = true,
+                SingleWriter = false
+            });
+
         private readonly CancellationTokenSource _pumpCts = new CancellationTokenSource();
         private readonly ConcurrentDictionary<object, Action<Exception>> _pendingOperations = new ConcurrentDictionary<object, Action<Exception>>();
 
@@ -157,7 +196,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             catch
             {
                 _pumpCts.Cancel();
-                _workQueue.CompleteAdding();
+                _workQueue.Writer.Complete();
                 _actorThread.Join();
                 Connection.Disconnect();
                 throw;
@@ -173,7 +212,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
             var tcs = new TaskCompletionSource<T>();
 
-            _workQueue.Add(() =>
+            // Blocks the calling thread if the queue is full (see _workQueue's own remarks for
+            // why that's an accepted tradeoff here) - .GetAwaiter().GetResult() rather than
+            // .Wait() purely to avoid wrapping any exception in an AggregateException, matching
+            // how the unbounded BlockingCollection.Add() this replaced never threw either.
+            _workQueue.Writer.WriteAsync(() =>
             {
                 try
                 {
@@ -183,7 +226,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 {
                     tcs.SetException(ex);
                 }
-            });
+            }).AsTask().GetAwaiter().GetResult();
 
             return tcs.Task.GetAwaiter().GetResult();
         }
@@ -194,16 +237,20 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return null;
         });
 
-        public Task<T> RunOnActorAsync<T>(Func<T> work)
+        public async Task<T> RunOnActorAsync<T>(Func<T> work)
         {
             if (Thread.CurrentThread == _actorThread)
             {
-                return Task.FromResult(work());
+                return work();
             }
 
             var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            _workQueue.Add(() =>
+            // Genuinely non-blocking even under backpressure: awaiting WriteAsync only yields
+            // the calling thread back to its pool instead of blocking it when the queue is full,
+            // preserving RunOnActorAsync's documented contract that the caller's own thread is
+            // never parked for the duration (see the interface doc comment on this method).
+            await _workQueue.Writer.WriteAsync(() =>
             {
                 try
                 {
@@ -215,7 +262,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 }
             });
 
-            return tcs.Task;
+            return await tcs.Task;
         }
 
         public Task RunOnActorAsync(Action work) => RunOnActorAsync<object>(() =>
@@ -263,15 +310,18 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         {
             // Always drains whatever is in the queue, even on the iteration where cancellation is
             // first observed - a naive `while (!cancelled) { drain; FrameTick(); }` can accept an
-            // item into _workQueue (via RunOnActor, right up until Dispose calls CompleteAdding)
+            // item into _workQueue (via RunOnActor, right up until Dispose completes the writer)
             // and then never run it: if Cancel() lands between that item being queued and the
             // next drain, the outer loop condition is already false and would exit without ever
             // taking it, leaving that RunOnActor caller blocked on its TaskCompletionSource
             // forever. Draining unconditionally before checking cancellation, and once more after
             // the loop exits, means anything successfully queued is guaranteed to run.
+            //
+            // Reader.TryRead is the Channel<T> equivalent of the previous BlockingCollection's
+            // TryTake(out action, 0) - a non-blocking, immediate check, not a wait.
             while (true)
             {
-                while (_workQueue.TryTake(out var action, 0))
+                while (_workQueue.Reader.TryRead(out var action))
                 {
                     action();
                 }
@@ -285,7 +335,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 Thread.Sleep(5);
             }
 
-            while (_workQueue.TryTake(out var action, 0))
+            while (_workQueue.Reader.TryRead(out var action))
             {
                 action();
             }
@@ -294,7 +344,7 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         public void Dispose()
         {
             _pumpCts.Cancel();
-            _workQueue.CompleteAdding();
+            _workQueue.Writer.Complete();
 
             // Deliberately unbounded - actor work items are quick (queue drains/registration, not
             // long-running calls), and joining unconditionally instead of on a fixed timeout means

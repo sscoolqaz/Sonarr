@@ -44,22 +44,39 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
     /// (SubscribeOwnUpdateCommitted / SubscribeOwnDeleteCommitted) - that single channel already
     /// reports Status.Committed for a genuine no-op update that would otherwise produce no
     /// row-delta event at all, and reports failure (Status.Failed/OutOfEnergy) immediately for a
-    /// rejected reducer call, so a row-event watch alongside it would be redundant, not additive;
-    /// neither Update nor Delete registers a Table.OnUpdate/OnDelete handler. Insert is the one
-    /// write that still needs two channels: the server assigns the row's id itself
-    /// (auto-increment), and only the Table.OnInsert row event ever carries it back, so that
-    /// event remains the sole, authoritative source of a successful insert's id. Insert's own
-    /// reducer-committed channel (SubscribeOwnInsertCommitted) is wired for failure-fast only
-    /// (Status.Failed/OutOfEnergy) - its onCommitted callback is deliberately a no-op, so a
-    /// successful reducer-committed result can never race ahead of the row event and resolve the
-    /// wait before insertedRow has actually been populated. All callback registration/
-    /// unregistration and every Table/Db touch happens via Conn.RunOnActorAsync, which serializes
-    /// it against the connection's FrameTick() pump on one dedicated thread - the SDK's own
-    /// generated event-listener storage is an unsynchronized List/Dictionary, so registering or
-    /// invoking a callback from two different threads at once is a real race, not just a style
-    /// concern. Writes are additionally serialized per repository instance with _writeLock, so
-    /// only one entity's table is blocked at a time; a different entity's repository (sharing the
-    /// same underlying connection) writes independently.
+    /// rejected reducer call, so a row-event watch alongside it would be redundant, not additive
+    /// FOR CONFIRMATION PURPOSES; neither Update's nor Delete's own confirmation wait registers
+    /// its own Table.OnUpdate/OnDelete handler the way Insert's confirmation wait registers
+    /// Table.OnInsert. Insert is the one write that still needs two channels for its OWN
+    /// confirmation: the server assigns the row's id itself (auto-increment), and only the
+    /// Table.OnInsert row event ever carries it back, so that event remains the sole,
+    /// authoritative source of a successful insert's id. Insert's own reducer-committed channel
+    /// (SubscribeOwnInsertCommitted) is wired for failure-fast only (Status.Failed/OutOfEnergy) -
+    /// its onCommitted callback is deliberately a no-op, so a successful reducer-committed result
+    /// can never race ahead of the row event and resolve the wait before insertedRow has actually
+    /// been populated. All callback registration/unregistration and every Table/Db touch happens
+    /// via Conn.RunOnActorAsync, which serializes it against the connection's FrameTick() pump on
+    /// one dedicated thread - the SDK's own generated event-listener storage is an unsynchronized
+    /// List/Dictionary, so registering or invoking a callback from two different threads at once
+    /// is a real race, not just a style concern. Writes are additionally serialized per
+    /// repository instance with _writeLock, so only one entity's table is blocked at a time; a
+    /// different entity's repository (sharing the same underlying connection) writes
+    /// independently.
+    ///
+    /// Event ownership beyond this connection's own writes: separately from the per-write
+    /// confirmation channels above, EnsureRowEventListenersRegisteredAsync registers one
+    /// ALWAYS-ON Table.OnInsert/OnUpdate/OnDelete handler per repository instance (once, lazily,
+    /// on first use - see that method's remarks) that watches for row changes THIS connection did
+    /// NOT cause (a scheduled/bulk reducer, another writer sharing the database, a migration
+    /// tool) and publishes a ModelEvent&lt;TModel&gt; for them via PublishModelEvent, gated by
+    /// IsOwnConnectionEvent so a self-caused write - already published by the explicit
+    /// PublishModelEvent call after Insert/Update/SetFields/Delete confirms - is never published
+    /// twice. This is what makes Sonarr's own ModelEvent&lt;TModel&gt; (driving UI SignalR pushes,
+    /// cache invalidation, etc.) fire for externally-caused row changes too, not just this
+    /// connection's own confirmed writes. See that method and OnForeignRowInserted/
+    /// OnForeignRowUpdated/OnForeignRowDeleted for the full remarks, including the accepted
+    /// register-once-never-unregister simplification for this codebase's singleton-lifetime
+    /// repositories.
     /// </summary>
     public abstract class SpacetimeBasicRepository<TModel, TStdbRow> : IBasicRepository<TModel>
         where TModel : ModelBase, new()
@@ -68,6 +85,13 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         protected readonly ISpacetimeDbConnection Conn;
         private readonly IEventAggregator _eventAggregator;
         private readonly SemaphoreSlim _writeLock = new SemaphoreSlim(1, 1);
+
+        // Guards EnsureRowEventListenersRegisteredAsync's one-time registration (see that
+        // method's remarks) - a separate lock from _writeLock, since registering the
+        // always-on row-event listeners has nothing to do with write serialization and
+        // shouldn't contend with it.
+        private readonly SemaphoreSlim _rowEventListenerRegistrationLock = new SemaphoreSlim(1, 1);
+        private volatile bool _rowEventListenersRegistered;
 
         protected SpacetimeBasicRepository(ISpacetimeDbConnection connection, IEventAggregator eventAggregator)
         {
@@ -135,18 +159,34 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
 
         protected virtual bool PublishModelEvents => false;
 
-        public virtual async Task<IEnumerable<TModel>> All() =>
-            await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).ToList());
-
-        public async Task<int> Count() => await Conn.RunOnActorAsync(() => Table.Count);
-
-        public async Task<bool> HasItems() => await Conn.RunOnActorAsync(() => Table.Count > 0);
-
-        public async Task<TModel> Find(int id) => await Conn.RunOnActorAsync(() =>
+        public virtual async Task<IEnumerable<TModel>> All()
         {
-            var row = FindRowById(id);
-            return row == null ? null : ToModel(row);
-        });
+            await EnsureRowEventListenersRegisteredAsync();
+            return await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).ToList());
+        }
+
+        public async Task<int> Count()
+        {
+            await EnsureRowEventListenersRegisteredAsync();
+            return await Conn.RunOnActorAsync(() => Table.Count);
+        }
+
+        public async Task<bool> HasItems()
+        {
+            await EnsureRowEventListenersRegisteredAsync();
+            return await Conn.RunOnActorAsync(() => Table.Count > 0);
+        }
+
+        public async Task<TModel> Find(int id)
+        {
+            await EnsureRowEventListenersRegisteredAsync();
+
+            return await Conn.RunOnActorAsync(() =>
+            {
+                var row = FindRowById(id);
+                return row == null ? null : ToModel(row);
+            });
+        }
 
         public async Task<TModel> Get(int id)
         {
@@ -169,6 +209,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
                 return Array.Empty<TModel>();
             }
 
+            await EnsureRowEventListenersRegisteredAsync();
+
             var result = await Conn.RunOnActorAsync(() => Table.Iter().Where(r => idSet.Contains(GetRowId(r))).Select(ToModel).ToList());
 
             if (result.Count != idSet.Count)
@@ -179,9 +221,17 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             return result;
         }
 
-        public async Task<TModel> Single() => await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).Single());
+        public async Task<TModel> Single()
+        {
+            await EnsureRowEventListenersRegisteredAsync();
+            return await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).Single());
+        }
 
-        public async Task<TModel> SingleOrDefault() => await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).SingleOrDefault());
+        public async Task<TModel> SingleOrDefault()
+        {
+            await EnsureRowEventListenersRegisteredAsync();
+            return await Conn.RunOnActorAsync(() => Table.Iter().Select(ToModel).SingleOrDefault());
+        }
 
         /// <summary>
         /// Runs a read against the locally subscribed cache, materializing the result before it
@@ -192,8 +242,11 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// actor thread, since enumerating it concurrently with FrameTick() is exactly the race
         /// this class exists to avoid.
         /// </summary>
-        protected Task<TResult> Query<TResult>(Func<RemoteTableHandle<EventContext, TStdbRow>, TResult> query) =>
-            Conn.RunOnActorAsync(() => query(Table));
+        protected async Task<TResult> Query<TResult>(Func<RemoteTableHandle<EventContext, TStdbRow>, TResult> query)
+        {
+            await EnsureRowEventListenersRegisteredAsync();
+            return await Conn.RunOnActorAsync(() => query(Table));
+        }
 
         // Opt-in hook for the migration tool (Sonarr.SpacetimeMigration) cutting an existing
         // SQLite-backed install over to SpacetimeDB - unlike Insert(), which always assigns a
@@ -221,6 +274,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         /// </summary>
         protected async Task InvokeAndWaitForMigrateInsert(int id, Action invokeReducer)
         {
+            await EnsureRowEventListenersRegisteredAsync();
+
             await _writeLock.WaitAsync();
 
             try
@@ -338,6 +393,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             {
                 throw new InvalidOperationException("Can't insert model with existing ID " + model.Id);
             }
+
+            await EnsureRowEventListenersRegisteredAsync();
 
             await _writeLock.WaitAsync();
 
@@ -480,6 +537,107 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             reducerCase.ReducerEvent.CallerIdentity == Conn.Connection.Identity &&
             reducerCase.ReducerEvent.CallerConnectionId == Conn.Connection.ConnectionId;
 
+        // Gap fix: event ownership. Every write method below (Insert/Update/SetFields/Delete)
+        // already publishes a ModelEvent<TModel> for its OWN confirmed write via an explicit
+        // PublishModelEvent call after that write completes. That leaves a hole: if some OTHER
+        // writer mutates this same table - a scheduled/bulk reducer running independently, a
+        // different Sonarr instance sharing the database (not a real deployment topology today,
+        // but architecturally possible), or a future migration/admin tool - the row changes in
+        // this connection's local subscription cache (the generated Table.OnInsert/OnUpdate/
+        // OnDelete events fire for ANY row change, not just ones this connection caused), but
+        // nothing ever turns that into a ModelEvent<TModel>, since the only listeners on those
+        // events used to be the transient per-write confirmation handlers that get registered
+        // and torn down around each individual write.
+        //
+        // The fix is these three always-on handlers, registered once per repository instance
+        // (see EnsureRowEventListenersRegisteredAsync) rather than per-write, and left
+        // registered for the lifetime of the instance. Each checks IsOwnConnectionEvent and
+        // returns early for a self-caused change - that case is already handled by the
+        // explicit PublishModelEvent call the write method itself makes once its own write is
+        // confirmed, and publishing here too would double-publish the same change. Only a
+        // change this connection did NOT cause reaches PublishModelEvent from here - which is
+        // exactly the case nothing previously published for.
+        //
+        // Registration lifecycle: repository instances are registered as DryIoc singletons (see
+        // CompositionExtensions.Register, Reuse.Singleton) with no observed Dispose/teardown
+        // path in this codebase's DI setup, so they live for the whole app lifetime. On that
+        // basis, "register once at first use, never unregister" is treated as acceptable here,
+        // not an oversight - if a shorter-lived repository lifetime is ever introduced, this
+        // would need an IDisposable on the repository that runs
+        // Conn.RunOnActor(() => { Table.OnInsert -= ...; Table.OnUpdate -= ...; Table.OnDelete -= ...; })
+        // to unregister these three handlers.
+        private void OnForeignRowInserted(EventContext ctx, TStdbRow row)
+        {
+            if (IsOwnConnectionEvent(ctx))
+            {
+                return;
+            }
+
+            PublishModelEvent(ToModel(row), ModelAction.Created);
+        }
+
+        private void OnForeignRowUpdated(EventContext ctx, TStdbRow oldRow, TStdbRow newRow)
+        {
+            if (IsOwnConnectionEvent(ctx))
+            {
+                return;
+            }
+
+            PublishModelEvent(ToModel(newRow), ModelAction.Updated);
+        }
+
+        private void OnForeignRowDeleted(EventContext ctx, TStdbRow row)
+        {
+            if (IsOwnConnectionEvent(ctx))
+            {
+                return;
+            }
+
+            PublishModelEvent(ToModel(row), ModelAction.Deleted);
+        }
+
+        // One-time (per repository instance) registration of the three always-on handlers
+        // above. Called defensively from every public method that touches Table (reads and
+        // writes alike) so the listeners come alive on this instance's first real use rather
+        // than at construction time - Table is an abstract property a leaf subclass's
+        // constructor may not have fully wired up yet, and eagerly touching it from this base
+        // class's own constructor would also make it impossible to unit-test the Table-free
+        // parts of this class in isolation (see SpacetimeBasicRepositoryPlumbingFixture, whose
+        // TestableSpacetimeRepository deliberately throws from Table since it's never meant to
+        // be touched by those tests). The volatile bool fast-paths every call after the first
+        // without taking the lock; the lock only matters for the handful of calls racing to be
+        // first.
+        private async Task EnsureRowEventListenersRegisteredAsync()
+        {
+            if (_rowEventListenersRegistered)
+            {
+                return;
+            }
+
+            await _rowEventListenerRegistrationLock.WaitAsync();
+
+            try
+            {
+                if (_rowEventListenersRegistered)
+                {
+                    return;
+                }
+
+                await Conn.RunOnActorAsync(() =>
+                {
+                    Table.OnInsert += OnForeignRowInserted;
+                    Table.OnUpdate += OnForeignRowUpdated;
+                    Table.OnDelete += OnForeignRowDeleted;
+                });
+
+                _rowEventListenersRegistered = true;
+            }
+            finally
+            {
+                _rowEventListenerRegistrationLock.Release();
+            }
+        }
+
         public async Task InsertMany(IList<TModel> models)
         {
             if (models.Any(x => x.Id != 0))
@@ -499,6 +657,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             {
                 throw new InvalidOperationException("Can't update model with ID 0");
             }
+
+            await EnsureRowEventListenersRegisteredAsync();
 
             await _writeLock.WaitAsync();
 
@@ -555,6 +715,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
             // lock closes the other half of the same problem: without it, the next SetFields
             // call in line for the lock could still read a not-yet-applied row.
             TModel current;
+
+            await EnsureRowEventListenersRegisteredAsync();
 
             await _writeLock.WaitAsync();
 
@@ -651,6 +813,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // overload's own comment describes, without re-entering the lock.
         public async Task SetFields(IList<TModel> models, params Expression<Func<TModel, object>>[] properties)
         {
+            await EnsureRowEventListenersRegisteredAsync();
+
             await _writeLock.WaitAsync();
 
             try
@@ -686,6 +850,8 @@ namespace NzbDrone.Core.Datastore.SpacetimeDb
         // confirmation signal on its own. Caller must already hold _writeLock.
         public async Task Delete(int id)
         {
+            await EnsureRowEventListenersRegisteredAsync();
+
             await _writeLock.WaitAsync();
 
             try
