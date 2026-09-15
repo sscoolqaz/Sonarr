@@ -230,8 +230,11 @@ namespace NzbDrone.Core.Jobs
 
                 var cached = _cache.Find(scheduledTask.TypeName);
 
-                cached.LastExecution = lastExecution;
-                cached.LastStartTime = startTime;
+                if (cached != null)
+                {
+                    cached.LastExecution = lastExecution;
+                    cached.LastStartTime = startTime;
+                }
             }
         }
 
